@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
@@ -8,6 +8,17 @@ const currentTimeframe: DashboardTimeframe = {
   from: null,
   to: null,
 };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.resetModules();
+});
+
+function stubSupabaseEnv() {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+}
 
 describe("filterHeroProjectsByTimeframe", () => {
   const projects = [
@@ -78,18 +89,141 @@ describe("filterHeroProjectsByTimeframe", () => {
 });
 
 describe("getDashboardTabData", () => {
-  it("returns sample data even if a HERO_API_KEY is present", async () => {
+  it("falls back to sample data when HERO_API_KEY is missing", async () => {
+    stubSupabaseEnv();
+
+    const { getDashboardTabData } = await import("./dashboard-data");
+    const data = await getDashboardTabData("GESAMT", currentTimeframe);
+
+    expect(data.source).toBe("sample");
+    expect(data.projectList.length).toBeGreaterThan(0);
+    expect(data.notice).toContain("HERO_API_KEY fehlt oder ist leer");
+  });
+
+  it("prefers live Hero data when the GraphQL read succeeds", async () => {
+    stubSupabaseEnv();
     vi.stubEnv("HERO_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: {
+            project_matches: [
+              {
+                id: 101,
+                project_nr: "PV24-101",
+                project_title: "PV Live Projekt",
+                project_type: "Photovoltaik",
+                created: "2026-04-09T10:00:00+00:00",
+                modified: "2026-04-15T14:00:00+00:00",
+                measure: {
+                  short: "Dachanlage",
+                  name: "PV Komplettpaket",
+                },
+                customer: {
+                  company_name: "JMX Solar GmbH",
+                  email: "kontakt@example.invalid",
+                },
+                contact: {
+                  first_name: "Max",
+                  last_name: "Solar",
+                  email: "max@example.invalid",
+                  phone_home: "+49 40 123456",
+                },
+                address: {
+                  street: "Musterstraße 1",
+                  zipcode: "20095",
+                  city: "Hamburg",
+                },
+                customer_documents: [
+                  {
+                    id: 501,
+                    nr: "PV24-101-D1",
+                    type: "invoice",
+                    status_code: 100,
+                    status_name: "Offen",
+                    value: 2400,
+                    created: "2026-04-15T16:00:00+00:00",
+                    file_upload: {
+                      url: "https://files.example.invalid/PV24-101-D1.pdf",
+                    },
+                    document_type: {
+                      base_type: "invoice",
+                      name: "Rechnung",
+                    },
+                  },
+                ],
+                current_project_match_status: {
+                  name: "Aktiv",
+                  maturity_date: "2026-04-20T00:00:00+00:00",
+                },
+              },
+              {
+                id: 202,
+                project_nr: "PV24-202",
+                project_title: "PV Altes Projekt",
+                created: "2026-03-01T10:00:00+00:00",
+                modified: "2026-03-05T14:00:00+00:00",
+                current_project_match_status: {
+                  name: "Aktiv",
+                },
+              },
+            ],
+          },
+        }),
+      })
+    );
 
-    try {
-      const { getDashboardTabData } = await import("./dashboard-data");
-      const data = await getDashboardTabData("GESAMT", currentTimeframe);
+    const { getDashboardTabData } = await import("./dashboard-data");
+    const data = await getDashboardTabData("PV", {
+      mode: "frei",
+      from: "2026-04-01",
+      to: "2026-04-30",
+    });
 
-      expect(data.source).toBe("sample");
-      expect(data.projectList.length).toBeGreaterThan(0);
-      expect(data.notice).toContain("Hero Live-Daten sind vorübergehend pausiert");
-    } finally {
-      vi.unstubAllEnvs();
-    }
+    expect(data.source).toBe("hero");
+    expect(data.historicData).toEqual([]);
+    expect(data.projectList).toHaveLength(1);
+    expect(data.projectList[0]).toMatchObject({
+      id: "101",
+      projectNumber: "PV24-101",
+      projectName: "PV Live Projekt",
+      department: "PV",
+      customerName: "JMX Solar GmbH",
+      customerContactName: "Max Solar",
+    });
+    expect(data.projectList[0]?.customerDocuments).toMatchObject([
+      {
+        documentNumber: "PV24-101-D1",
+        baseType: "invoice",
+        fileName: "PV24-101-D1.pdf",
+      },
+    ]);
+    expect(data.kpiData.activeProjects).toBe(1);
+    expect(data.kpiProjectGroups.activeProjects.map((project) => project.id)).toEqual(
+      data.projectList.map((project) => project.id)
+    );
+  });
+
+  it("falls back to sample data when the live Hero read fails", async () => {
+    stubSupabaseEnv();
+    vi.stubEnv("HERO_API_KEY", "test-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+      })
+    );
+
+    const { getDashboardTabData } = await import("./dashboard-data");
+    const data = await getDashboardTabData("PV", currentTimeframe);
+
+    expect(data.source).toBe("sample");
+    expect(data.projectList.length).toBeGreaterThan(0);
+    expect(data.notice).toContain("Der Live-Abruf ist fehlgeschlagen");
+    expect(data.notice).toContain("Hero API request failed: 401 Unauthorized");
   });
 });

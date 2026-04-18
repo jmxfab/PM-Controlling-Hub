@@ -112,7 +112,7 @@ describe("normalizeHeroProject", () => {
       ],
       completion_date: null,
       accounting_date: null,
-      accounting_amount: null,
+      accounting_amount: 1250,
       rework_status: null,
       rework_scheduled_date: null,
       customer_commitment_status: null,

@@ -50,6 +50,16 @@ export interface HeroCustomerDocument {
   document_type?: HeroDocumentType | null;
 }
 
+export interface HeroProjectMatchStatus {
+  id?: string | number | null;
+  status_code?: string | number | null;
+  name?: string | null;
+  short_name?: string | null;
+  created?: string | null;
+  modified?: string | null;
+  maturity_date?: string | null;
+}
+
 export interface HeroProject {
   id: string;
   project_number: string | null;
@@ -65,6 +75,7 @@ export interface HeroProject {
   contact?: HeroParty | null;
   address?: HeroAddress | null;
   customer_documents?: HeroCustomerDocument[];
+  project_match_statuses?: HeroProjectMatchStatus[];
   // Additional fields populated after schema discovery / later mapping work
   completion_date?: string | null;
   accounting_date?: string | null;
@@ -150,14 +161,44 @@ interface HeroProjectMatchRaw {
   contact?: HeroParty | null;
   address?: HeroAddress | null;
   customer_documents?: HeroCustomerDocument[] | null;
+  project_match_statuses?: HeroProjectMatchStatus[] | null;
   current_project_match_status?: {
     id?: string | number | null;
+    status_code?: string | number | null;
     name?: string | null;
+    short_name?: string | null;
+    created?: string | null;
+    modified?: string | null;
     maturity_date?: string | null;
   } | null;
 }
 
 export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProject {
+  const projectStatuses = rawProject.project_match_statuses ?? [];
+  const completionStatus = findLatestStatusByName(projectStatuses, [
+    "abgeschlossen",
+    "fertig",
+    "done",
+    "finished",
+    "archiviert",
+  ]);
+  const accountingStatus = findLatestStatusByName(projectStatuses, [
+    "kundenrechnung",
+    "schlussrechnung",
+    "fakturiert",
+    "buchhaltung",
+  ]);
+  const reworkStatus = findLatestStatusByName(projectStatuses, [
+    "reklamation",
+    "nacharbeit",
+  ]);
+  const commitmentStatus = findLatestStatusByName(projectStatuses, [
+    "auftragsbestätigung",
+  ]);
+  const closingStatus = findLatestStatusByName(projectStatuses, [
+    "vor-ort termin",
+    "vor ort termin",
+  ]);
   const customerName =
     rawProject.customer?.company_name?.trim() ||
     [rawProject.customer?.first_name, rawProject.customer?.last_name]
@@ -199,13 +240,7 @@ export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProje
     address: rawProject.address ?? null,
     customer_documents: rawProject.customer_documents ?? [],
     customerDocuments: rawProject.customer_documents ?? [],
-    completion_date: null,
-    accounting_date: null,
-    accounting_amount: null,
-    rework_status: null,
-    rework_scheduled_date: null,
-    customer_commitment_status: null,
-    closing_appointment_date: null,
+    project_match_statuses: projectStatuses,
     customer_name: customerName,
     customer_contact_name: contactName,
     customer_phone:
@@ -220,7 +255,48 @@ export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProje
     customerEmail:
       rawProject.contact?.email ?? rawProject.customer?.email ?? null,
     customerAddress: customerAddress || null,
+    completion_date: completionStatus?.created ?? null,
+    accounting_date: accountingStatus?.created ?? null,
+    accounting_amount: sumInvoiceDocumentValues(rawProject.customer_documents ?? []),
+    rework_status: reworkStatus?.name ?? null,
+    rework_scheduled_date: reworkStatus?.maturity_date ?? null,
+    customer_commitment_status: commitmentStatus?.name ?? null,
+    closing_appointment_date: closingStatus?.maturity_date ?? null,
   };
+}
+
+function findLatestStatusByName(
+  statuses: HeroProjectMatchStatus[],
+  patterns: string[]
+): HeroProjectMatchStatus | null {
+  const matchingStatuses = statuses.filter((status) => {
+    const value = `${status.name ?? ""} ${status.short_name ?? ""}`.toLowerCase();
+    return patterns.some((pattern) => value.includes(pattern));
+  });
+
+  if (matchingStatuses.length === 0) {
+    return null;
+  }
+
+  return matchingStatuses.sort((leftStatus, rightStatus) => {
+    const leftTime = Date.parse(leftStatus.created ?? leftStatus.modified ?? "") || 0;
+    const rightTime = Date.parse(rightStatus.created ?? rightStatus.modified ?? "") || 0;
+    return rightTime - leftTime;
+  })[0] ?? null;
+}
+
+function sumInvoiceDocumentValues(documents: HeroCustomerDocument[]): number | null {
+  const invoiceSum = documents.reduce((sum, document) => {
+    const typeValue = `${document.type ?? ""} ${document.document_type?.name ?? ""} ${document.document_type?.base_type ?? ""}`.toLowerCase();
+
+    if (!typeValue.includes("invoice") && !typeValue.includes("rechnung")) {
+      return sum;
+    }
+
+    return sum + (document.value ?? 0);
+  }, 0);
+
+  return invoiceSum > 0 ? invoiceSum : null;
 }
 
 /** Fetch all projects with relevant fields from Hero */
@@ -281,7 +357,20 @@ export async function fetchAllHeroProjects(): Promise<HeroProject[]> {
         }
         current_project_match_status {
           id
+          status_code
           name
+          short_name
+          created
+          modified
+          maturity_date
+        }
+        project_match_statuses {
+          id
+          status_code
+          name
+          short_name
+          created
+          modified
           maturity_date
         }
       }

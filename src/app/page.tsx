@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { SyncButton } from "@/components/dashboard/sync-button";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
 import {
@@ -12,7 +13,7 @@ import {
 export const metadata: Metadata = {
   title: "Controlling Dashboard | JMX",
   description:
-    "Projektcontrolling für PV, Wärmepumpen und Haustechnik im intentionalen Hero-Beispieldatenmodus",
+    "Projektcontrolling für PV, Wärmepumpen und Haustechnik mit Live-Lesezugriff auf Hero und sicherem Sample-Fallback",
 };
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const timeframe = parseDashboardTimeframe(resolvedSearchParams);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
+  const liveHeroAvailable = Boolean(process.env.HERO_API_KEY?.trim());
+  const liveHeroDisabledReason = liveHeroAvailable
+    ? undefined
+    : "Live-Hero-Daten können erst geladen werden, wenn HERO_API_KEY gesetzt ist.";
 
   const tabContents = {
     GESAMT: (
@@ -70,7 +75,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Controlling Dashboard
@@ -79,6 +84,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             Operativer Überblick über Projekte, Status, Dokumente und Verlauf.
           </p>
         </div>
+        <SyncButton
+          liveHeroAvailable={liveHeroAvailable}
+          disabledReason={liveHeroDisabledReason}
+        />
       </div>
 
       <DashboardShell
