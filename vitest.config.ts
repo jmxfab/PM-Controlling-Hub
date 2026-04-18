@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
@@ -8,10 +8,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    exclude: [...configDefaults.exclude, 'tests/**'],
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      'server-only': resolve(__dirname, './src/test/server-only.ts'),
     },
   },
 })

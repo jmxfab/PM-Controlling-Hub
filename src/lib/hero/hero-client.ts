@@ -13,12 +13,59 @@ const HERO_ENDPOINT = "https://login.hero-software.de/api/external/v7/graphql";
 
 export type HeroDepartment = "PV" | "WP" | "HAUSTECHNIK";
 
+export interface HeroParty {
+  id?: string | number | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  company_name?: string | null;
+  email?: string | null;
+  phone_home?: string | null;
+}
+
+export interface HeroAddress {
+  street?: string | null;
+  city?: string | null;
+  zipcode?: string | null;
+}
+
+export interface HeroDocumentType {
+  base_type?: string | null;
+  name?: string | null;
+}
+
+export interface HeroFileUpload {
+  url?: string | null;
+}
+
+export interface HeroCustomerDocument {
+  id?: string | number | null;
+  nr?: string | null;
+  type?: string | null;
+  status_code?: string | number | null;
+  status_name?: string | null;
+  value?: number | null;
+  vat?: number | null;
+  created?: string | null;
+  file_upload?: HeroFileUpload | null;
+  document_type?: HeroDocumentType | null;
+}
+
 export interface HeroProject {
   id: string;
   project_number: string | null;
   name: string | null;
   status: string | null;
-  // Additional fields populated after schema discovery
+  project_type?: string | null;
+  measure_short?: string | null;
+  measure_name?: string | null;
+  created_at?: string | null;
+  modified_at?: string | null;
+  maturity_date?: string | null;
+  customer?: HeroParty | null;
+  contact?: HeroParty | null;
+  address?: HeroAddress | null;
+  customer_documents?: HeroCustomerDocument[];
+  // Additional fields populated after schema discovery / later mapping work
   completion_date?: string | null;
   accounting_date?: string | null;
   accounting_amount?: number | null;
@@ -26,6 +73,17 @@ export interface HeroProject {
   rework_scheduled_date?: string | null;
   customer_commitment_status?: string | null;
   closing_appointment_date?: string | null;
+  customer_name?: string | null;
+  customer_contact_name?: string | null;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_address?: string | null;
+  customerName?: string | null;
+  customerContactName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  customerAddress?: string | null;
+  customerDocuments?: HeroCustomerDocument[] | null;
 }
 
 /** Determines the department from a project number prefix */
@@ -76,30 +134,181 @@ async function heroGraphQL<T = unknown>(
   return json.data as T;
 }
 
+interface HeroProjectMatchRaw {
+  id: string | number;
+  project_id?: string | number | null;
+  project_nr?: string | null;
+  project_title?: string | null;
+  project_type?: string | null;
+  created?: string | null;
+  modified?: string | null;
+  measure?: {
+    short?: string | null;
+    name?: string | null;
+  } | null;
+  customer?: HeroParty | null;
+  contact?: HeroParty | null;
+  address?: HeroAddress | null;
+  customer_documents?: HeroCustomerDocument[] | null;
+  current_project_match_status?: {
+    id?: string | number | null;
+    name?: string | null;
+    maturity_date?: string | null;
+  } | null;
+}
+
+export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProject {
+  const customerName =
+    rawProject.customer?.company_name?.trim() ||
+    [rawProject.customer?.first_name, rawProject.customer?.last_name]
+      .filter((value): value is string => !!value && value.trim().length > 0)
+      .join(" ") ||
+    null;
+
+  const contactName =
+    [rawProject.contact?.first_name, rawProject.contact?.last_name]
+      .filter((value): value is string => !!value && value.trim().length > 0)
+      .join(" ") ||
+    null;
+
+  const customerAddress = [
+    rawProject.address?.street,
+    [rawProject.address?.zipcode, rawProject.address?.city]
+      .filter((value): value is string => !!value && value.trim().length > 0)
+      .join(" "),
+  ]
+    .filter((value): value is string => !!value && value.trim().length > 0)
+    .join(", ");
+
+  return {
+    id: String(rawProject.id ?? rawProject.project_id ?? rawProject.project_nr ?? ""),
+    project_number: rawProject.project_nr ?? null,
+    name: rawProject.project_title ?? null,
+    status:
+      rawProject.current_project_match_status?.name ??
+      rawProject.project_type ??
+      null,
+    project_type: rawProject.project_type ?? null,
+    measure_short: rawProject.measure?.short ?? null,
+    measure_name: rawProject.measure?.name ?? null,
+    created_at: rawProject.created ?? null,
+    modified_at: rawProject.modified ?? null,
+    maturity_date: rawProject.current_project_match_status?.maturity_date ?? null,
+    customer: rawProject.customer ?? null,
+    contact: rawProject.contact ?? null,
+    address: rawProject.address ?? null,
+    customer_documents: rawProject.customer_documents ?? [],
+    customerDocuments: rawProject.customer_documents ?? [],
+    completion_date: null,
+    accounting_date: null,
+    accounting_amount: null,
+    rework_status: null,
+    rework_scheduled_date: null,
+    customer_commitment_status: null,
+    closing_appointment_date: null,
+    customer_name: customerName,
+    customer_contact_name: contactName,
+    customer_phone:
+      rawProject.contact?.phone_home ?? rawProject.customer?.phone_home ?? null,
+    customer_email:
+      rawProject.contact?.email ?? rawProject.customer?.email ?? null,
+    customer_address: customerAddress || null,
+    customerName,
+    customerContactName: contactName,
+    customerPhone:
+      rawProject.contact?.phone_home ?? rawProject.customer?.phone_home ?? null,
+    customerEmail:
+      rawProject.contact?.email ?? rawProject.customer?.email ?? null,
+    customerAddress: customerAddress || null,
+  };
+}
+
 /** Fetch all projects with relevant fields from Hero */
 export async function fetchAllHeroProjects(): Promise<HeroProject[]> {
-  // We query all projects and determine department via prefix filter in JS.
-  // Hero doesn't provide a direct aggregation endpoint, so we count manually.
+  // Hero supports first/offset style pagination. We page through the full
+  // result set so the dashboard is not capped at the first page.
   const query = `
-    query GetAllProjects {
-      project_matches {
+    query GetAllProjects($first: Int!, $offset: Int!) {
+      project_matches(first: $first, offset: $offset, orderBy: "id") {
         id
-        project_number
-        name
-        status
-        completion_date
-        accounting_date
-        accounting_amount
-        rework_status
-        rework_scheduled_date
-        customer_commitment_status
-        closing_appointment_date
+        project_id
+        project_nr
+        project_title
+        project_type
+        created
+        modified
+        measure {
+          short
+          name
+        }
+        customer {
+          id
+          first_name
+          last_name
+          company_name
+          email
+          phone_home
+        }
+        contact {
+          id
+          first_name
+          last_name
+          company_name
+          email
+          phone_home
+        }
+        address {
+          street
+          city
+          zipcode
+        }
+        customer_documents {
+          id
+          nr
+          type
+          status_code
+          status_name
+          value
+          vat
+          created
+          file_upload {
+            url
+          }
+          document_type {
+            base_type
+            name
+          }
+        }
+        current_project_match_status {
+          id
+          name
+          maturity_date
+        }
       }
     }
   `;
 
-  const data = await heroGraphQL<{ project_matches: HeroProject[] }>(query);
-  return data.project_matches ?? [];
+  const pageSize = 100;
+  const projects: HeroProject[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const data = await heroGraphQL<{ project_matches: HeroProjectMatchRaw[] }>(
+      query,
+      {
+        first: pageSize,
+        offset,
+      }
+    );
+
+    const page = (data.project_matches ?? []).map(normalizeHeroProject);
+    projects.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+  }
+
+  return projects;
 }
 
 /**

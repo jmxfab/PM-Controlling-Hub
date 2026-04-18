@@ -15,6 +15,8 @@
 | ID | Feature | Status | Spec | Created |
 |----|---------|--------|------|---------|
 
+| PROJ-1 | Read-only controlling dashboard baseline | In Progress | [Spec](./PROJ-1-controlling-dashboard-read-only-baseline.md) | 2026-04-17 |
+
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-1
+## Next Available ID: PROJ-2

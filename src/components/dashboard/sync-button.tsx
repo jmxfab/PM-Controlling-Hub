@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 
@@ -11,11 +12,28 @@ interface SyncResult {
   error?: string;
 }
 
-export function SyncButton() {
+interface SyncButtonProps {
+  manualSyncEnabled: boolean;
+  disabledReason?: string;
+}
+
+export function SyncButton({
+  manualSyncEnabled,
+  disabledReason,
+}: SyncButtonProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
+  const router = useRouter();
 
   async function handleSync() {
+    if (!manualSyncEnabled) {
+      setResult({
+        success: false,
+        error: disabledReason ?? "Manueller Sync ist derzeit deaktiviert.",
+      });
+      return;
+    }
+
     setLoading(true);
     setResult(null);
 
@@ -23,6 +41,10 @@ export function SyncButton() {
       const response = await fetch("/api/cron/sync-hero", { method: "POST" });
       const data: SyncResult = await response.json();
       setResult(data);
+
+      if (response.ok && data.success) {
+        router.refresh();
+      }
     } catch {
       setResult({ success: false, error: "Netzwerkfehler" });
     } finally {
@@ -59,9 +81,10 @@ export function SyncButton() {
         variant="outline"
         size="sm"
         onClick={handleSync}
-        disabled={loading}
+        disabled={loading || !manualSyncEnabled}
         className="flex items-center gap-2"
         id="sync-hero-button"
+        title={!manualSyncEnabled ? disabledReason : undefined}
       >
         <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         {loading ? "Wird synchronisiert…" : "Jetzt synchronisieren"}

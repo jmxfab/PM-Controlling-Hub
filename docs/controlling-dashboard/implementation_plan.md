@@ -1,15 +1,18 @@
 # Project Tracking Dashboard Plan
 
+> [!WARNING]
+> Dieses Dokument beschreibt zu großen Teilen den früher geplanten Live-Integrationspfad. Der aktuell ausgelieferte Stand des Dashboards nutzt **bewusst Hero-Beispieldaten** und **keinen aktiven Hero-Live-Read-Pfad**, bis eine neue REST/OpenAPI-Integration umgesetzt ist.
+
 Das Ziel dieses Plans ist der Aufbau eines strukturierten Dashboards als Teil des "Controlling Hub" zur Auswertung der wesentlichen Projekt-Kennzahlen (KPIs) für die Hauptbereiche **PV**, **WP** und **Haustechnik**. 
 
 ## User Review Required
 
 > [!WARNING]
-> Dieses Projekt setzt eine intakte Schnittstelle zur **Hero API** (GraphQL) und eine eingerichtete **Supabase-Datenbank** voraus. Bitte überprüfen Sie die untenstehenden "Offenen Fragen", bevor wir mit der Ausführung starten.
+> Dieses Projekt setzt für den hier beschriebenen zukünftigen Ausbau eine neue, verifizierte Hero-Integration und optional Supabase-Persistenz voraus. Für den aktuell produktiven Dashboard-Baseline-Stand sind diese Voraussetzungen **nicht** nötig.
 
 ## Ansatz und Architektur
 
-Wir werden den Stack **Next.js (React), TailwindCSS, shadcn/ui** für das Frontend nutzen. Als Backend/Datenbank dient **Supabase**, und die Datenquelle ist die **Hero GraphQL API**. 
+Wir nutzen **Next.js (React), TailwindCSS, shadcn/ui** für das Frontend. Historisch beschreibt dieses Dokument einen Ausbau mit **Supabase** und der früher angenommenen **Hero GraphQL API**; der aktuelle Baseline-Stand verwendet jedoch bewusst Sample-Daten.
 
 ### 1. Datenmodell (Supabase)
 Um eine Historie und eine klare "Wochenübersicht" zu haben, empfiehlt es sich, täglich oder wöchentlich "Snapshots" der KPIs in einer Supabase-Tabelle (z. B. `weekly_kpis`) zu speichern. 
@@ -26,8 +29,8 @@ Um eine Historie und eine klare "Wochenübersicht" zu haben, empfiehlt es sich, 
     - `open_customer_commitments` (Int)
     - `scheduled_closings` (Int)
 
-### 2. Datenbeschaffung (API-Route)
-Wir erstellen einen Next.js API-Endpoint, der sich mit der Hero GraphQL API verbindet (z. B. `/api/cron/update-metrics`).
+### 2. Datenbeschaffung (zukünftiger API-/Sync-Pfad)
+Für einen späteren Ausbau kann ein Next.js API-Endpoint entstehen, der eine verifizierte Hero-REST/OpenAPI-Anbindung nutzt (z. B. `/api/cron/update-metrics`).
 - Diese Route fragt die Projekt-Daten für die unterschiedlichen Abteilungen (PV/WP/Haustechnik) aus Hero ab.
 - Die zurückgegebenen Projekte werden evaluiert (z.b. anhand von Projekt-Status) und aggregiert.
 - Anschließend werden die zusammengefassten Kennzahlen in die Supabase `kpi_snapshots` Tabelle geschrieben.
@@ -64,7 +67,7 @@ Ersetzen der aktuellen Placeholder-Page mit dem Haupt-Dashboard-Layout (Tabs fü
 ### API & Daten-Service
 
 #### [NEW] src/lib/hero/hero-client.ts
-Ein GraphQL-Client für Hero, zum Abfragen von Projekten mit den entsprechenden Filtern und Abteilungen.
+Historischer Integrationsversuch für Hero. Der aktuell aktive Dashboard-Pfad hängt **nicht** von dieser Live-Integration ab.
 
 #### [NEW] src/app/api/cron/sync-hero/route.ts
 API-Endpoint, der die regelmäßige Synchronisation anstößt und die Daten in Supabase aggregiert speichert.
@@ -78,10 +81,9 @@ Hilfsfunktionen um die gespeicherten KPIs aus Supabase wiederum für das Dashboa
 > Alle offenen Fragen wurden beantwortet. Der Plan ist bereit zur vollständigen Umsetzung.
 
 ### 1. Hero Software API
-- **Endpoint:** `https://login.hero-software.de/api/external/v7/graphql`
-- **Auth:** `Authorization: Bearer YOUR_API_KEY` (in `.env.local` hinterlegen)
-- **Ansatz:** Wir fragen via `project_matches` alle Projekte ab und berechnen die KPI-Zähler selbst anhand des Projektstatus-Feldes (kein direkter Aggregations-Endpoint vorhanden)
-- **Schema-Discovery:** Beim ersten Start läuft eine Introspection-Query, um alle verfügbaren Felder zu ermitteln
+- Der hier beschriebene GraphQL-Ansatz ist **nicht** mehr der aktuell freigegebene Produktpfad.
+- Für die nächste echte Live-Integration soll die offiziell dokumentierte **Hero REST/OpenAPI** neu bewertet und separat umgesetzt werden.
+- Bis dahin bleibt das Dashboard absichtlich im Sample-Mode.
 
 ### 2. Abteilungstrennung
 - **Projektnummer-Präfix** als Filter:
@@ -93,7 +95,7 @@ Hilfsfunktionen um die gespeicherten KPIs aus Supabase wiederum für das Dashboa
 
 ### 3. Supabase Anbindung
 - Lokale Supabase-Instanz auf **Proxmox** (LXC)
-- Benötigte Werte (bitte in `.env.local` eintragen):
+- Benötigte Werte (nur für einen späteren Live-/Sync-Ausbau, nicht für die aktuelle Baseline):
   ```
   NEXT_PUBLIC_SUPABASE_URL=https://db.fabwagen.de  (oder deine interne IP/Domain)
   NEXT_PUBLIC_SUPABASE_ANON_KEY=...               (aus Supabase Dashboard → API)
@@ -106,17 +108,20 @@ Hilfsfunktionen um die gespeicherten KPIs aus Supabase wiederum für das Dashboa
 - **Manuell**: "Jetzt synchronisieren"-Button im Dashboard-Header
 - KPIs werden in Supabase mit Datum gespeichert → Verlaufsgraph über Wochen möglich
 
+> [!NOTE]
+> Der aktuelle ausgelieferte Stand führt diesen Sync bewusst **nicht** aktiv aus. Cron- und Schreibpfade bleiben deaktiviert bzw. read-only.
+
 ---
 
-## Nächste Umsetzungsschritte
+## Nächste Umsetzungsschritte (zukünftiger Ausbau)
 
-1. **Hero GraphQL Client** (`src/lib/hero/hero-client.ts`) – Introspection + `project_matches` Query mit allen relevanten Feldern
-2. **Sync Route** (`src/app/api/cron/sync-hero/route.ts`) – Verarbeitung der Projekte, Zählung nach Status + Präfix-Filter, Upsert in Supabase
+1. **Hero REST/OpenAPI Client** – verifizierte neue Anbindung statt Wiederbelebung des alten GraphQL-Pfads
+2. **Sync Route** (`src/app/api/cron/sync-hero/route.ts`) – erst nach expliziter Freigabe für Schreib-/Persistenzpfade
 3. **Supabase Queries** (`src/lib/supabase/dashboard-queries.ts`) – Abruf der gespeicherten KPIs für die UI
 4. **Manual Sync Button** im Dashboard-Header für sofortige Updates
 5. **Vercel Cron Config** (`vercel.json`) für den täglichen 6-Uhr-Job
 
 ## Verification Plan
-1. **Introspection-Skript**: Einmalig alle Hero-Felder ausgeben, um das Schema zu verstehen
-2. **Sync-Test**: Manuell den `/api/cron/sync-hero` Endpoint aufrufen und Supabase-Einträge prüfen
-3. **Dashboard-Anzeige**: Sicherstellen, dass Live-Daten korrekt nach Abteilung aufgeteilt werden
+1. **Sample-Mode Smoke-Test**: Dashboard lädt mit Hinweis auf Hero-Beispieldatenmodus
+2. **UI-Verifikation**: Tabs, Zeiträume und Projektliste reagieren konsistent auf die Sample-Daten
+3. **Späterer Live-Test**: Erst nach neuer REST/OpenAPI-Integration und expliziter Freigabe

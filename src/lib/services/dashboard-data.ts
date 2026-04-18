@@ -1,93 +1,69 @@
+import "server-only";
+
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 import { HistoricDataPoint } from "@/components/dashboard/dashboard-charts";
-import { getLatestKPIs, getHistoricKPIs } from "@/lib/supabase/dashboard-queries";
+import { type DashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
+import { type DashboardProjectListItem, type Department } from "@/lib/dashboard/dashboard-types";
+import { buildHeroSampleDashboardData } from "@/lib/hero/hero-sample-data";
 
-export type Department = "GESAMT" | "PV" | "WP" | "HAUSTECHNIK";
+const HERO_SAMPLE_MODE_NOTICE =
+  "Hero Live-Daten sind vorübergehend pausiert. Bis die offizielle REST/OpenAPI-Integration umgesetzt ist, nutzt das Dashboard bewusst Hero-Beispieldaten.";
 
-const SUPABASE_CONFIGURED =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const EMPTY_KPIS: KPIData = {
+  activeProjects: 0,
+  completedProjectsWeek: 0,
+  accountingTransferredCount: 0,
+  accountingTransferredAmount: 0,
+  openReworks: 0,
+  scheduledReworks: 0,
+  openCustomerCommitments: 0,
+  scheduledClosings: 0,
+};
 
-// ---------------------------------------------------------------------------
-// Mock data (used when Supabase is not yet configured)
-// ---------------------------------------------------------------------------
-
-function getMockKPIs(department: Department): KPIData {
-  const m = { GESAMT: 1, PV: 0.5, WP: 0.3, HAUSTECHNIK: 0.2 }[department];
-  return {
-    activeProjects: Math.floor(124 * m),
-    completedProjectsWeek: Math.floor(15 * m),
-    accountingTransferredCount: Math.floor(12 * m),
-    accountingTransferredAmount: Math.floor(185000 * m),
-    openReworks: Math.floor(28 * m),
-    scheduledReworks: Math.floor(14 * m),
-    openCustomerCommitments: Math.floor(35 * m),
-    scheduledClosings: Math.floor(8 * m),
-  };
-}
-
-function getMockHistoric(department: Department): HistoricDataPoint[] {
-  const m = { GESAMT: 1, PV: 0.5, WP: 0.3, HAUSTECHNIK: 0.2 }[department];
-  const result: HistoricDataPoint[] = [];
-  const today = new Date();
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i * 7);
-    const rf = 0.8 + Math.random() * 0.4;
-    result.push({
-      date: `KW ${getWeekNumber(d)}`,
-      active: Math.floor(120 * m * rf),
-      completed: Math.floor(12 * m * rf),
-      accounting: Math.floor(10 * m * rf),
-    });
-  }
-  return result;
+export interface DashboardTabData {
+  kpiData: KPIData;
+  historicData: HistoricDataPoint[];
+  projectList: DashboardProjectListItem[];
+  source: "hero" | "sample" | "empty";
+  notice?: string;
+  projectListNotice?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function getKPIData(department: Department): Promise<KPIData> {
-  if (SUPABASE_CONFIGURED) {
-    try {
-      const data = await getLatestKPIs(department);
-      if (data) return data;
-      // No snapshot yet → fall through to mocks
-    } catch (err) {
-      console.warn("[dashboard-data] Supabase unavailable, using mocks:", err);
-    }
-  }
-  // Simulate async for UX consistency
-  await new Promise((r) => setTimeout(r, 200));
-  return getMockKPIs(department);
+export async function getDashboardTabData(
+  department: Department,
+  timeframe: DashboardTimeframe
+): Promise<DashboardTabData> {
+  return getFallbackData(department, timeframe, HERO_SAMPLE_MODE_NOTICE);
 }
 
-export async function getHistoricData(
-  department: Department
-): Promise<HistoricDataPoint[]> {
-  if (SUPABASE_CONFIGURED) {
-    try {
-      const data = await getHistoricKPIs(department);
-      if (data.length > 0) return data;
-    } catch (err) {
-      console.warn("[dashboard-data] Supabase unavailable, using mocks:", err);
-    }
+function getFallbackData(
+  department: Department,
+  timeframe: DashboardTimeframe,
+  reason: string
+): DashboardTabData {
+  const sampleData = buildHeroSampleDashboardData(department, timeframe);
+
+  if (!sampleData.hasDataInRange) {
+    return {
+      kpiData: EMPTY_KPIS,
+      historicData: [],
+      projectList: [],
+      source: "sample",
+      notice: `${reason} Für den gewählten Zeitraum sind in den Hero-Beispieldaten keine Snapshots vorhanden.`,
+      projectListNotice:
+        "Im gewählten Zeitraum wurden keine Beispielprojekte gefunden.",
+    };
   }
-  await new Promise((r) => setTimeout(r, 150));
-  return getMockHistoric(department);
-}
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-function getWeekNumber(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil(
-    ((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-  );
+  return {
+    kpiData: sampleData.kpiData,
+    historicData: sampleData.historicData,
+    projectList: sampleData.projectList,
+    source: "sample",
+    notice: `${reason} Es werden Hero-Beispieldaten angezeigt, bis ein read-only Hero-Zugriff verfügbar ist.`,
+  };
 }

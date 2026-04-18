@@ -22,7 +22,7 @@ If you need a backend:
 1. Create Supabase Project: [supabase.com](https://supabase.com)
 2. Copy `.env.local.example` to `.env.local`
 3. Add your Supabase credentials
-4. Uncomment the Supabase client in `src/lib/supabase.ts`
+4. Add the required server-side secret in `.env.local` for dashboard reads and sync jobs
 
 Skip this step if you're building frontend-only (landing pages, portfolios, etc.)
 
@@ -32,7 +32,7 @@ Skip this step if you're building frontend-only (landing pages, portfolios, etc.
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3010](http://localhost:3010) in your browser.
 
 ### 4. Initialize Your Project
 
@@ -210,6 +210,7 @@ When you're ready to deploy, the `/deploy` skill guides you through:
 - Performance monitoring with Lighthouse
 
 See `docs/production/` for detailed setup guides.
+For the current dashboard deployment runbook, see `docs/production/vercel.md`.
 
 ---
 

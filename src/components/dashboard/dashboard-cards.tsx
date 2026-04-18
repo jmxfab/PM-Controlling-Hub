@@ -1,8 +1,6 @@
-import React from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -30,9 +28,14 @@ export interface KPIData {
 interface DashboardCardsProps {
   data: KPIData;
   departmentName: string;
+  snapshotContextLabel: string;
 }
 
-export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
+export function DashboardCards({
+  data,
+  departmentName,
+  snapshotContextLabel,
+}: DashboardCardsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card>
@@ -45,7 +48,7 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
         <CardContent>
           <div className="text-2xl font-bold">{data.activeProjects}</div>
           <p className="text-xs text-muted-foreground">
-            Laufende Projekte ({departmentName})
+            {departmentName} · Stand aus dem {snapshotContextLabel}
           </p>
         </CardContent>
       </Card>
@@ -53,14 +56,14 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">
-            Abgeschlossen (Diese Woche)
+            Abgeschlossen (7 Tage)
           </CardTitle>
           <CheckCircle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data.completedProjectsWeek}</div>
           <p className="text-xs text-muted-foreground">
-            Inkl. Nacharbeiten abgeschlossen
+            7-Tage-Wert aus dem {snapshotContextLabel}
           </p>
         </CardContent>
       </Card>
@@ -74,8 +77,8 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
           <div className="text-2xl font-bold">{data.accountingTransferredCount}</div>
           <p className="text-xs text-muted-foreground">
             {data.accountingTransferredAmount 
-              ? `Wert: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(data.accountingTransferredAmount)}`
-              : 'Übergaben diese Woche'}
+              ? `Wert aus dem ${snapshotContextLabel}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(data.accountingTransferredAmount)}`
+              : `Übergaben aus dem ${snapshotContextLabel}`}
           </p>
         </CardContent>
       </Card>
@@ -87,7 +90,9 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data.openCustomerCommitments}</div>
-          <p className="text-xs text-muted-foreground">Offene Rückfragen</p>
+          <p className="text-xs text-muted-foreground">
+            Offene Zusagen im {snapshotContextLabel}
+          </p>
         </CardContent>
       </Card>
 
@@ -98,7 +103,9 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data.openReworks}</div>
-          <p className="text-xs text-muted-foreground">Ungelöste Tickets</p>
+          <p className="text-xs text-muted-foreground">
+            Ungelöste Tickets im {snapshotContextLabel}
+          </p>
         </CardContent>
       </Card>
 
@@ -109,18 +116,22 @@ export function DashboardCards({ data, departmentName }: DashboardCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data.scheduledReworks}</div>
-          <p className="text-xs text-muted-foreground">Eingeplante Termine</p>
+          <p className="text-xs text-muted-foreground">
+            Eingeplante Termine im {snapshotContextLabel}
+          </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Abschlussgespräche</CardTitle>
+          <CardTitle className="text-sm font-medium">Terminierte Zusagen</CardTitle>
           <CalendarCheck className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{data.scheduledClosings}</div>
-          <p className="text-xs text-muted-foreground">Terminiert anstehend</p>
+          <p className="text-xs text-muted-foreground">
+            Kundentermine im {snapshotContextLabel}
+          </p>
         </CardContent>
       </Card>
       

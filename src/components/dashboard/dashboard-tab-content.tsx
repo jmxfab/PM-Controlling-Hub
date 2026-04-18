@@ -1,23 +1,89 @@
-import React from "react";
 import { DashboardCards } from "./dashboard-cards";
 import { DashboardCharts } from "./dashboard-charts";
-import { Department, getKPIData, getHistoricData } from "@/lib/services/dashboard-data";
+import { DashboardProjectList } from "./dashboard-project-list";
+import {
+  getDashboardTabData,
+} from "@/lib/services/dashboard-data";
+import {
+  getDashboardTimeframeLabel,
+  getDashboardHistoricDescription,
+  getDashboardSnapshotContextLabel,
+  type DashboardTimeframe,
+} from "@/lib/dashboard/dashboard-timeframe";
+import {
+  DASHBOARD_DEPARTMENT_NAMES,
+  type Department,
+} from "@/lib/dashboard/dashboard-types";
 
-export async function DashboardTabContent({ department }: { department: Department }) {
-  const kpiData = await getKPIData(department);
-  const historicData = await getHistoricData(department);
+export async function DashboardTabContent({
+  department,
+  heroProjectLinkTemplate,
+  timeframe,
+}: {
+  department: Department;
+  heroProjectLinkTemplate: string | null;
+  timeframe: DashboardTimeframe;
+}) {
+  const {
+    kpiData,
+    historicData,
+    projectList,
+    source,
+  } = await getDashboardTabData(department, timeframe);
 
-  const displayNames = {
-    "GESAMT": "Gesamtunternehmen",
-    "PV": "Photovoltaik (PV)",
-    "WP": "Wärmepumpen (WP)",
-    "HAUSTECHNIK": "Haustechnik"
-  };
+  const departmentName = DASHBOARD_DEPARTMENT_NAMES[department];
+  const snapshotContextLabel =
+    source === "hero"
+      ? timeframe.mode === "current"
+        ? "aktuellen Hero-Stand"
+        : `Zeitraum ${getDashboardTimeframeLabel(timeframe)}`
+      : getDashboardSnapshotContextLabel(timeframe);
+  const historicDescription = getDashboardHistoricDescription(timeframe);
+  const emptyHistoricMessage =
+    timeframe.mode === "current"
+      ? "Noch keine historischen Daten vorhanden."
+      : "Im gewählten Zeitraum liegen noch keine historischen Daten vor.";
+  const statusNotice = getDashboardStatusNotice(source);
 
   return (
     <div className="space-y-4">
-      <DashboardCards data={kpiData} departmentName={displayNames[department]} />
-      <DashboardCharts historicData={historicData} departmentName={displayNames[department]} />
+      {statusNotice ? (
+        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          {statusNotice}
+        </div>
+      ) : null}
+      <DashboardCards
+        data={kpiData}
+        departmentName={departmentName}
+        snapshotContextLabel={snapshotContextLabel}
+      />
+      <DashboardCharts
+        historicData={historicData}
+        historicDescription={historicDescription}
+        departmentName={departmentName}
+        emptyMessage={emptyHistoricMessage}
+      />
+      <DashboardProjectList
+        departmentName={departmentName}
+        heroProjectLinkTemplate={heroProjectLinkTemplate}
+        projects={projectList}
+        source={source}
+        timeframe={timeframe}
+      />
     </div>
   );
+}
+
+function getDashboardStatusNotice(
+  source: "hero" | "sample" | "empty"
+): string | null {
+  if (source === "sample") {
+    return "Derzeit läuft das Dashboard bewusst im Hero-Beispieldatenmodus, bis die offizielle Hero-REST-Integration umgesetzt ist.";
+  }
+
+  if (source === "empty") {
+    return "Für den gewählten Zeitraum wurden keine Projekte gefunden.";
+  }
+
+  return null;
 }

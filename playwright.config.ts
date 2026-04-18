@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const localBaseUrl = 'http://localhost:3010'
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -7,7 +9,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: localBaseUrl,
     trace: 'on-first-retry',
   },
   projects: [
@@ -16,7 +18,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: localBaseUrl,
     reuseExistingServer: !process.env.CI,
   },
 })

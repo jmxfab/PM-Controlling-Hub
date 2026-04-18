@@ -1,27 +1,24 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 import { HistoricDataPoint } from "@/components/dashboard/dashboard-charts";
-import { Department } from "@/lib/services/dashboard-data";
+import {
+  getDashboardTimeframeRange,
+  type DashboardTimeframe,
+} from "@/lib/dashboard/dashboard-timeframe";
+import { type Department } from "@/lib/dashboard/dashboard-types";
+import { aggregateSnapshotsByWeek } from "@/lib/supabase/dashboard-historic";
 
 type SupabaseDepartment = "PV" | "WP" | "HAUSTECHNIK";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key =
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
-    );
-  }
-  return createClient(url, key);
-}
-
-function supabasePublic() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY"
     );
   }
   return createClient(url, key);
@@ -68,15 +65,27 @@ export async function upsertKpiSnapshot(
 }
 
 /** Fetch the latest KPI snapshot for a given department */
-export async function getLatestKPIs(department: Department): Promise<KPIData | null> {
-  const supabase = supabasePublic();
-  const { data, error } = await supabase
+export async function getLatestKPIs(
+  department: Department,
+  timeframe: DashboardTimeframe
+): Promise<KPIData | null> {
+  const supabase = supabaseAdmin();
+  const timeframeRange = getDashboardTimeframeRange(timeframe);
+
+  let query = supabase
     .from("kpi_snapshots")
     .select("*")
     .eq("department", department)
     .order("snapshot_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (timeframeRange) {
+    query = query
+      .gte("snapshot_date", timeframeRange.from)
+      .lte("snapshot_date", timeframeRange.to);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) throw new Error(`Supabase query error: ${error.message}`);
   if (!data) return null;
@@ -95,40 +104,31 @@ export async function getLatestKPIs(department: Department): Promise<KPIData | n
 
 /** Fetch the last 8 weekly snapshots for trend chart */
 export async function getHistoricKPIs(
-  department: Department
+  department: Department,
+  timeframe: DashboardTimeframe
 ): Promise<HistoricDataPoint[]> {
-  const supabase = supabasePublic();
-  const { data, error } = await supabase
+  const supabase = supabaseAdmin();
+  const timeframeRange = getDashboardTimeframeRange(timeframe);
+
+  let query = supabase
     .from("kpi_snapshots")
     .select(
       "snapshot_date, active_projects, completed_projects_week, accounting_transferred_count"
     )
     .eq("department", department)
     .order("snapshot_date", { ascending: false })
-    .limit(8);
+    .limit(56);
+
+  if (timeframeRange) {
+    query = query
+      .gte("snapshot_date", timeframeRange.from)
+      .lte("snapshot_date", timeframeRange.to);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`Supabase query error: ${error.message}`);
   if (!data) return [];
 
-  // Reverse so oldest is leftmost on chart
-  return data.reverse().map((row) => ({
-    date: formatDateLabel(row.snapshot_date),
-    active: row.active_projects,
-    completed: row.completed_projects_week,
-    accounting: row.accounting_transferred_count,
-  }));
-}
-
-function formatDateLabel(isoDate: string): string {
-  const d = new Date(isoDate);
-  const weekNum = getWeekNumber(d);
-  return `KW ${weekNum}`;
-}
-
-function getWeekNumber(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return aggregateSnapshotsByWeek(data).slice(-8);
 }

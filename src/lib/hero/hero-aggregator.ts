@@ -1,5 +1,4 @@
 import {
-  fetchAllHeroProjects,
   getDepartmentFromProjectNumber,
   HeroDepartment,
   HeroProject,
@@ -13,6 +12,9 @@ const ACTIVE_STATUSES = [
   "in_bearbeitung",
   "aktiv",
   "laufend",
+  "erstkontakt",
+  "auftragsvergabe",
+  "neu",
 ];
 
 /** Status values that count as "completed this week" */
@@ -44,10 +46,10 @@ const REWORK_STATUSES = [
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-function isCompletedThisWeek(project: HeroProject): boolean {
+function isCompletedSince(project: HeroProject, referenceTime: number): boolean {
   if (!project.completion_date) return false;
   const completedAt = new Date(project.completion_date).getTime();
-  const weekAgo = Date.now() - ONE_WEEK_MS;
+  const weekAgo = referenceTime - ONE_WEEK_MS;
   return completedAt >= weekAgo;
 }
 
@@ -93,11 +95,18 @@ export function groupProjectsByDepartment(projects: HeroProject[]): ProjectsByDe
 
 /** Compute KPI metrics from a list of Hero projects */
 export function computeKPIsFromProjects(projects: HeroProject[]): KPIData {
-  const active = projects.filter((p) =>
-    matchesStatus(p, ACTIVE_STATUSES)
-  );
+  return computeKPIsFromProjectsAt(projects, Date.now());
+}
+
+export function computeKPIsFromProjectsAt(
+  projects: HeroProject[],
+  referenceDate: Date | number
+): KPIData {
+  const referenceTime =
+    typeof referenceDate === "number" ? referenceDate : referenceDate.getTime();
+  const active = projects.filter(isActiveProject);
   const completedWeek = projects.filter(
-    (p) => matchesStatus(p, COMPLETED_STATUSES) && isCompletedThisWeek(p)
+    (p) => matchesStatus(p, COMPLETED_STATUSES) && isCompletedSince(p, referenceTime)
   );
   const accountingProjects = projects.filter((p) =>
     matchesStatus(p, ACCOUNTING_STATUSES)
@@ -123,4 +132,20 @@ export function computeKPIsFromProjects(projects: HeroProject[]): KPIData {
     openCustomerCommitments: openCommitments.length,
     scheduledClosings: scheduledClosings.length,
   };
+}
+
+function isActiveProject(project: HeroProject): boolean {
+  if (matchesStatus(project, ACTIVE_STATUSES)) {
+    return true;
+  }
+
+  if (
+    matchesStatus(project, COMPLETED_STATUSES) ||
+    matchesStatus(project, ACCOUNTING_STATUSES) ||
+    matchesStatus(project, REWORK_STATUSES)
+  ) {
+    return false;
+  }
+
+  return !!project.status;
 }
