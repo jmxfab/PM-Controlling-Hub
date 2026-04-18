@@ -1,0 +1,21 @@
+# Controlling Dashboard Setup
+
+- `[x]` 1. Grund-Layout und Routing
+  - `[x]` Tab-Navigation (Gesamt, PV, WP, Haustechnik) integrieren
+  - `[x]` page.tsx so anpassen, dass das Dashboard als Startseite geladen wird
+- `[x]` 2. Shadcn/UI Komponenten einrichten
+  - `[x]` Überprüfen, ob benötigte Komponenten (Card, Tabs) via ui.shadcn.com im Projekt sind
+  - `[x]` Zusätzliche shadcn Komponenten (Chart etc.) bereitstellen
+- `[x]` 3. Dashboard Widgets bauen
+  - `[x]` `dashboard-cards.tsx`: KPI-Kacheln (Aktive Projekte, etc.)
+  - `[x]` `dashboard-charts.tsx`: Verlaufsgraph für wöchentliche Kennzahlen
+- `[x]` 4. Mock-Data & Hero-Abstraktion
+  - `[x]` Einen Daten-Service erstellen, der vorübergehend Mock-Daten liefert
+  - `[x]` Vorbereitung der GraphQL-Aufrufe (Typen & abstrakte fetcher)
+- `[x]` 5. Hero GraphQL Client + Sync-Route + Supabase Queries
+  - `[x]` `hero-client.ts`: GraphQL-Client mit Präfix-Filter
+  - `[x]` `sync-hero/route.ts`: Sync-Endpoint + Upsert nach Supabase
+  - `[x]` `dashboard-queries.ts`: KPI-Abruf aus Supabase für UI
+  - `[x]` Manual Sync Button im Dashboard-Header
+  - `[x]` `vercel.json`: Täglicher Cron-Job 6:00 Uhr
+  - `[x]` `.env.local.example` aktualisieren

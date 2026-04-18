@@ -4,7 +4,7 @@
   "description": "AI Coding Starter Kit with AI Agent Team System for Claude Code",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3010",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -46,6 +46,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.71.1",
+    "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.2.0",
     "zod": "^4.3.5"
