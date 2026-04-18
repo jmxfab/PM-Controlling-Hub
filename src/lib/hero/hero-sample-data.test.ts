@@ -27,4 +27,37 @@ describe("hero sample data", () => {
     expect(gesamt.historicData).toHaveLength(8);
     expect(pv.historicData.at(-1)?.date).toBe("KW 16");
   });
+
+  it("keeps KPI modal groups aligned with KPI counts from the latest snapshot", () => {
+    const pv = buildHeroSampleDashboardData(
+      "PV",
+      {
+        mode: "14d",
+        from: null,
+        to: null,
+      },
+      referenceDate
+    );
+
+    expect(pv.kpiProjectGroups.activeProjects).toHaveLength(pv.kpiData.activeProjects);
+    expect(pv.kpiProjectGroups.completedProjectsWeek).toHaveLength(
+      pv.kpiData.completedProjectsWeek
+    );
+    expect(pv.kpiProjectGroups.accountingTransferredCount).toHaveLength(
+      pv.kpiData.accountingTransferredCount
+    );
+    expect(pv.kpiProjectGroups.openReworks).toHaveLength(pv.kpiData.openReworks);
+    expect(pv.kpiProjectGroups.scheduledReworks).toHaveLength(
+      pv.kpiData.scheduledReworks
+    );
+    expect(pv.kpiProjectGroups.openCustomerCommitments).toHaveLength(
+      pv.kpiData.openCustomerCommitments
+    );
+    expect(pv.kpiProjectGroups.scheduledClosings).toHaveLength(
+      pv.kpiData.scheduledClosings
+    );
+    expect(
+      new Set(pv.kpiProjectGroups.activeProjects.map((project) => project.snapshotDate))
+    ).toEqual(new Set(["2026-04-16"]));
+  });
 });

@@ -1,9 +1,7 @@
-import { DashboardCards } from "./dashboard-cards";
 import { DashboardCharts } from "./dashboard-charts";
+import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
-import {
-  getDashboardTabData,
-} from "@/lib/services/dashboard-data";
+import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
   getDashboardHistoricDescription,
@@ -28,6 +26,8 @@ export async function DashboardTabContent({
     kpiData,
     historicData,
     projectList,
+    kpiProjectGroups,
+    notice,
     source,
   } = await getDashboardTabData(department, timeframe);
 
@@ -40,10 +40,12 @@ export async function DashboardTabContent({
       : getDashboardSnapshotContextLabel(timeframe);
   const historicDescription = getDashboardHistoricDescription(timeframe);
   const emptyHistoricMessage =
-    timeframe.mode === "current"
+    source === "hero"
+      ? "Für Live-Hero-Lesungen sind aktuell keine historischen Verlaufssnapshots verfügbar."
+      : timeframe.mode === "current"
       ? "Noch keine historischen Daten vorhanden."
       : "Im gewählten Zeitraum liegen noch keine historischen Daten vor.";
-  const statusNotice = getDashboardStatusNotice(source);
+  const statusNotice = notice ?? getDashboardStatusNotice(source);
 
   return (
     <div className="space-y-4">
@@ -52,10 +54,14 @@ export async function DashboardTabContent({
           {statusNotice}
         </div>
       ) : null}
-      <DashboardCards
+      <DashboardKpiDialog
         data={kpiData}
         departmentName={departmentName}
         snapshotContextLabel={snapshotContextLabel}
+        heroProjectLinkTemplate={heroProjectLinkTemplate}
+        kpiProjectGroups={kpiProjectGroups}
+        source={source}
+        timeframe={timeframe}
       />
       <DashboardCharts
         historicData={historicData}
@@ -78,7 +84,7 @@ function getDashboardStatusNotice(
   source: "hero" | "sample" | "empty"
 ): string | null {
   if (source === "sample") {
-    return "Derzeit läuft das Dashboard bewusst im Hero-Beispieldatenmodus, bis die offizielle Hero-REST-Integration umgesetzt ist.";
+    return "Hero Live-Daten sind aktuell nicht verfügbar. Das Dashboard zeigt automatisch Hero-Beispieldaten als Fallback.";
   }
 
   if (source === "empty") {

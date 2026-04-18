@@ -48,6 +48,7 @@ interface DashboardProjectListProps {
   projects: DashboardProjectListItem[];
   source: "hero" | "sample" | "empty";
   timeframe: DashboardTimeframe;
+  variant?: "card" | "embedded";
 }
 
 interface NormalizedProjectDocument {
@@ -75,6 +76,7 @@ export function DashboardProjectList({
   projects,
   source,
   timeframe,
+  variant = "card",
 }: DashboardProjectListProps) {
   const [expandedProjectKey, setExpandedProjectKey] = useState<string | null>(null);
 
@@ -100,6 +102,22 @@ export function DashboardProjectList({
   );
 
   if (projectRows.length === 0) {
+    const emptyState = (
+      <div className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
+        <Link2Off className="h-5 w-5 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Keine Projekte im gewählten Zeitraum</p>
+          <p className="text-sm text-muted-foreground">
+            {getEmptyStateDescription(source)}
+          </p>
+        </div>
+      </div>
+    );
+
+    if (variant === "embedded") {
+      return emptyState;
+    }
+
     return (
       <Card>
         <CardHeader>
@@ -113,18 +131,409 @@ export function DashboardProjectList({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
-            <Link2Off className="h-5 w-5 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Keine Projekte im gewählten Zeitraum</p>
-              <p className="text-sm text-muted-foreground">
-                {getEmptyStateDescription(source)}
-              </p>
-            </div>
-          </div>
+          {emptyState}
         </CardContent>
       </Card>
     );
+  }
+
+  const projectListContent = (
+    <div className="space-y-3">
+      {projectRows.map((project) => {
+        const isExpanded = expandedProjectKey === project.rowKey;
+        const contextSummary = getProjectContextSummary(project);
+        const customerSummary = getProjectCustomerSummary(project);
+        const contactSummary = getProjectContactSummary(project);
+        const addressSummary = getProjectAddressSummary(project);
+        const contactSecondary = getContactSecondary(project);
+        const openInvoiceDocuments = getOpenInvoiceDocuments(project.documents);
+
+        return (
+          <Collapsible
+            key={project.rowKey}
+            open={isExpanded}
+            onOpenChange={(open) =>
+              setExpandedProjectKey(open ? project.rowKey : null)
+            }
+          >
+            <div className="overflow-hidden rounded-lg border bg-background">
+              <div className="flex flex-col gap-4 p-4 sm:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="space-y-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
+                          {project.projectName ?? "Ohne Projektname"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          {project.projectNumber ? (
+                            <Badge variant="outline" className="font-medium text-foreground">
+                              {project.projectNumber}
+                            </Badge>
+                          ) : (
+                            <span>Ohne Projektnummer</span>
+                          )}
+                          <span>{DASHBOARD_DEPARTMENT_SHORT_LABELS[project.department]}</span>
+                          {project.maturityDate ? (
+                            <>
+                              <span aria-hidden="true">•</span>
+                              <span>Fällig {formatDate(project.maturityDate)}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <SummaryBlock
+                        label="Kontext"
+                        primary={contextSummary ?? "Kein Kontext verfügbar"}
+                        secondary={
+                          project.maturityDate
+                            ? `Fällig ${formatDate(project.maturityDate)}`
+                            : null
+                        }
+                        muted={!contextSummary}
+                      />
+                      <SummaryBlock
+                        label="Kunde"
+                        icon={User}
+                        primary={customerSummary ?? "Keine Kundendaten"}
+                        secondary={addressSummary}
+                        muted={!customerSummary && !addressSummary}
+                      />
+                      <SummaryBlock
+                        label="Kontakt"
+                        icon={Phone}
+                        primary={contactSummary ?? "Keine Kontaktdaten"}
+                        secondary={contactSecondary}
+                        muted={!contactSummary && !contactSecondary}
+                      />
+                      <SummaryBlock
+                        label="Dokumente"
+                        icon={FileText}
+                        primary={formatDocumentSummary(project.documents)}
+                        secondary={
+                          openInvoiceDocuments.length > 0
+                            ? formatOpenInvoiceSummary(openInvoiceDocuments)
+                            : getLatestDocumentLabel(project.documents)
+                        }
+                        muted={project.documents.length === 0}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                    <Badge variant={getStatusBadgeVariant(project.status)}>
+                      {formatStatusLabel(project.status)}
+                    </Badge>
+                    {project.heroLink ? (
+                      <Button asChild size="sm" variant="outline">
+                        <a
+                          href={project.heroLink}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Hero öffnen
+                        </a>
+                      </Button>
+                    ) : null}
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        aria-label={`Details zu ${project.projectName ?? project.projectNumber ?? "Projekt"}`}
+                      >
+                        Details
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                  </div>
+                </div>
+              </div>
+
+              <CollapsibleContent>
+                <div className="border-t bg-muted/20 px-4 py-4 sm:px-5">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
+                      <DetailSection title="Projektdetails">
+                        <DetailList
+                          items={[
+                            {
+                              label: "Projektname",
+                              value: project.projectName ?? "–",
+                            },
+                            {
+                              label: "Projektnummer",
+                              value: project.projectNumber ?? "–",
+                            },
+                            {
+                              label: "Status",
+                              value: formatStatusLabel(project.status),
+                            },
+                            {
+                              label: "Abteilung",
+                              value: DASHBOARD_DEPARTMENT_SHORT_LABELS[project.department],
+                            },
+                            {
+                              label: "Maßnahme",
+                              value: getProjectMeasureShort(project) ?? "–",
+                            },
+                            {
+                              label: "Projektart",
+                              value: getProjectType(project) ?? "–",
+                            },
+                            {
+                              label: "Erstellt",
+                              value: formatDate(project.createdAt),
+                            },
+                            {
+                              label: "Letzte Änderung",
+                              value: formatDate(project.modifiedAt),
+                            },
+                            {
+                              label: "Fälligkeit",
+                              value: formatDate(project.maturityDate),
+                            },
+                          ]}
+                        />
+                      </DetailSection>
+
+                      <DetailSection title="Kunde & Kontakt">
+                        <DetailList
+                          items={[
+                            {
+                              label: "Kunde",
+                              value: getProjectCustomerSummary(project) ?? "–",
+                            },
+                            {
+                              label: "Ansprechperson",
+                              value: getProjectContactSummary(project) ?? "–",
+                            },
+                            {
+                              label: "Telefon",
+                              value: getProjectPhone(project) ?? "–",
+                            },
+                            {
+                              label: "E-Mail",
+                              value: getProjectEmail(project) ?? "–",
+                            },
+                            {
+                              label: "Adresse",
+                              value: getProjectAddressSummary(project) ?? "–",
+                            },
+                          ]}
+                        />
+                      </DetailSection>
+                    </div>
+
+                    <DetailSection
+                      title={`Offene Rechnungen${openInvoiceDocuments.length > 0 ? ` (${openInvoiceDocuments.length})` : ""}`}
+                    >
+                      {openInvoiceDocuments.length > 0 ? (
+                        <div className="space-y-3">
+                          {openInvoiceDocuments.map((document) => (
+                            <div
+                              key={`open-${document.id}`}
+                              className="rounded-md border bg-background p-3"
+                            >
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-semibold">
+                                      {getInvoiceLabel(document)}
+                                    </p>
+                                    <Badge variant="destructive">Offen</Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {formatDocumentType(document)}
+                                  </p>
+                                </div>
+                                <div className="space-y-1 text-sm sm:text-right">
+                                  <p className="font-semibold">{formatCurrency(document.value)}</p>
+                                  <p className="text-muted-foreground">
+                                    {formatDocumentStatus(document) ?? "Ohne Status"}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    Erstellt {formatDate(document.createdAt)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {document.fileUrl ? (
+                                <Button asChild size="sm" variant="outline" className="mt-3">
+                                  <a
+                                    href={document.fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Rechnung öffnen
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-md border border-dashed bg-background/80 px-4 py-6 text-sm text-muted-foreground">
+                          Für dieses Projekt wurden aktuell keine offenen Rechnungen erkannt.
+                        </div>
+                      )}
+                    </DetailSection>
+
+                    <DetailSection
+                      title={`Dokumente${project.documents.length > 0 ? ` (${project.documents.length})` : ""}`}
+                    >
+                      {project.documents.length > 0 ? (
+                        <>
+                          <div className="hidden md:block">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Dokument</TableHead>
+                                  <TableHead>Typ</TableHead>
+                                  <TableHead>Wert</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Erstellt</TableHead>
+                                  <TableHead className="text-right">Datei</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {project.documents.map((document) => (
+                                  <TableRow key={document.id}>
+                                    <TableCell className="font-medium">
+                                      <div className="space-y-1">
+                                        <p>{getInvoiceLabel(document)}</p>
+                                        {isInvoiceLikeDocument(document) ? (
+                                          <p className="text-xs text-muted-foreground">
+                                            {isOpenInvoiceDocument(document)
+                                              ? "Offene Rechnung"
+                                              : "Rechnungsdokument"}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="space-y-1">
+                                        <p>{document.type ?? "–"}</p>
+                                        {document.baseType &&
+                                        document.baseType !== document.type ? (
+                                          <p className="text-xs text-muted-foreground">
+                                            {document.baseType}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>{formatCurrency(document.value)}</TableCell>
+                                    <TableCell>
+                                      <div className="space-y-1">
+                                        <p>{formatDocumentStatus(document) ?? "–"}</p>
+                                        {isInvoiceLikeDocument(document) ? (
+                                          <p className="text-xs text-muted-foreground">
+                                            {getInvoiceLabel(document)}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>{formatDate(document.createdAt)}</TableCell>
+                                    <TableCell className="text-right">
+                                      {document.fileUrl ? (
+                                        <Button asChild size="sm" variant="ghost">
+                                          <a
+                                            href={document.fileUrl}
+                                            target="_blank"
+                                            rel="noreferrer noopener"
+                                          >
+                                            <ExternalLink className="h-4 w-4" />
+                                            Datei
+                                          </a>
+                                        </Button>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground">–</span>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          <div className="grid gap-3 md:hidden">
+                            {project.documents.map((document) => (
+                              <div key={document.id} className="rounded-md border bg-background p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-medium">
+                                      {getInvoiceLabel(document)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {formatDocumentType(document)}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline">
+                                    {isOpenInvoiceDocument(document)
+                                      ? "Offen"
+                                      : formatDocumentStatus(document) ?? "Ohne Status"}
+                                  </Badge>
+                                </div>
+                                <dl className="mt-3 space-y-2 text-sm">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <dt className="text-muted-foreground">Wert</dt>
+                                    <dd>{formatCurrency(document.value)}</dd>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <dt className="text-muted-foreground">Erstellt</dt>
+                                    <dd>{formatDate(document.createdAt)}</dd>
+                                  </div>
+                                </dl>
+                                {document.fileUrl ? (
+                                  <Button asChild size="sm" variant="ghost" className="mt-3 px-0">
+                                    <a
+                                      href={document.fileUrl}
+                                      target="_blank"
+                                      rel="noreferrer noopener"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                      Datei öffnen
+                                    </a>
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-background/80 px-6 py-8 text-center">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">
+                              Keine verknüpften Dokumente vorhanden
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Sobald Hero Dokumente liefert, erscheinen sie hier mit Status,
+                              Wert und Datei-Link.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </DetailSection>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+
+  if (variant === "embedded") {
+    return projectListContent;
   }
 
   return (
@@ -143,398 +552,7 @@ export function DashboardProjectList({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {projectRows.map((project) => {
-          const isExpanded = expandedProjectKey === project.rowKey;
-          const contextSummary = getProjectContextSummary(project);
-          const customerSummary = getProjectCustomerSummary(project);
-          const contactSummary = getProjectContactSummary(project);
-          const addressSummary = getProjectAddressSummary(project);
-          const contactSecondary = getContactSecondary(project);
-          const openInvoiceDocuments = getOpenInvoiceDocuments(project.documents);
-
-          return (
-            <Collapsible
-              key={project.rowKey}
-              open={isExpanded}
-              onOpenChange={(open) =>
-                setExpandedProjectKey(open ? project.rowKey : null)
-              }
-            >
-              <div className="overflow-hidden rounded-lg border bg-background">
-                <div className="flex flex-col gap-4 p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="space-y-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
-                            {project.projectName ?? "Ohne Projektname"}
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            {project.projectNumber ? (
-                              <Badge variant="outline" className="font-medium text-foreground">
-                                {project.projectNumber}
-                              </Badge>
-                            ) : (
-                              <span>Ohne Projektnummer</span>
-                            )}
-                            <span>{DASHBOARD_DEPARTMENT_SHORT_LABELS[project.department]}</span>
-                            {project.maturityDate ? (
-                              <>
-                                <span aria-hidden="true">•</span>
-                                <span>Fällig {formatDate(project.maturityDate)}</span>
-                              </>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <SummaryBlock
-                          label="Kontext"
-                          primary={contextSummary ?? "Kein Kontext verfügbar"}
-                          secondary={
-                            project.maturityDate
-                              ? `Fällig ${formatDate(project.maturityDate)}`
-                              : null
-                          }
-                          muted={!contextSummary}
-                        />
-                        <SummaryBlock
-                          label="Kunde"
-                          icon={User}
-                          primary={customerSummary ?? "Keine Kundendaten"}
-                          secondary={addressSummary}
-                          muted={!customerSummary && !addressSummary}
-                        />
-                        <SummaryBlock
-                          label="Kontakt"
-                          icon={Phone}
-                          primary={contactSummary ?? "Keine Kontaktdaten"}
-                          secondary={contactSecondary}
-                          muted={!contactSummary && !contactSecondary}
-                        />
-                        <SummaryBlock
-                          label="Dokumente"
-                          icon={FileText}
-                          primary={formatDocumentSummary(project.documents)}
-                          secondary={
-                            openInvoiceDocuments.length > 0
-                              ? formatOpenInvoiceSummary(openInvoiceDocuments)
-                              : getLatestDocumentLabel(project.documents)
-                          }
-                          muted={project.documents.length === 0}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                      <Badge variant={getStatusBadgeVariant(project.status)}>
-                        {formatStatusLabel(project.status)}
-                      </Badge>
-                      {project.heroLink ? (
-                        <Button asChild size="sm" variant="outline">
-                          <a
-                            href={project.heroLink}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Hero öffnen
-                          </a>
-                        </Button>
-                      ) : null}
-                      <CollapsibleTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          aria-label={`Details zu ${project.projectName ?? project.projectNumber ?? "Projekt"}`}
-                        >
-                          Details
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                          />
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                </div>
-
-                <CollapsibleContent>
-                  <div className="border-t bg-muted/20 px-4 py-4 sm:px-5">
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
-                        <DetailSection title="Projektdetails">
-                          <DetailList
-                            items={[
-                              {
-                                label: "Projektname",
-                                value: project.projectName ?? "–",
-                              },
-                              {
-                                label: "Projektnummer",
-                                value: project.projectNumber ?? "–",
-                              },
-                              {
-                                label: "Status",
-                                value: formatStatusLabel(project.status),
-                              },
-                              {
-                                label: "Abteilung",
-                                value: DASHBOARD_DEPARTMENT_SHORT_LABELS[project.department],
-                              },
-                              {
-                                label: "Maßnahme",
-                                value: getProjectMeasureShort(project) ?? "–",
-                              },
-                              {
-                                label: "Projektart",
-                                value: getProjectType(project) ?? "–",
-                              },
-                              {
-                                label: "Erstellt",
-                                value: formatDate(project.createdAt),
-                              },
-                              {
-                                label: "Letzte Änderung",
-                                value: formatDate(project.modifiedAt),
-                              },
-                              {
-                                label: "Fälligkeit",
-                                value: formatDate(project.maturityDate),
-                              },
-                            ]}
-                          />
-                        </DetailSection>
-
-                        <DetailSection title="Kunde & Kontakt">
-                          <DetailList
-                            items={[
-                              {
-                                label: "Kunde",
-                                value: getProjectCustomerSummary(project) ?? "–",
-                              },
-                              {
-                                label: "Ansprechperson",
-                                value: getProjectContactSummary(project) ?? "–",
-                              },
-                              {
-                                label: "Telefon",
-                                value: getProjectPhone(project) ?? "–",
-                              },
-                              {
-                                label: "E-Mail",
-                                value: getProjectEmail(project) ?? "–",
-                              },
-                              {
-                                label: "Adresse",
-                                value: getProjectAddressSummary(project) ?? "–",
-                              },
-                            ]}
-                          />
-                        </DetailSection>
-                      </div>
-
-                      <DetailSection
-                        title={`Offene Rechnungen${openInvoiceDocuments.length > 0 ? ` (${openInvoiceDocuments.length})` : ""}`}
-                      >
-                        {openInvoiceDocuments.length > 0 ? (
-                          <div className="space-y-3">
-                            {openInvoiceDocuments.map((document) => (
-                              <div
-                                key={`open-${document.id}`}
-                                className="rounded-md border bg-background p-3"
-                              >
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                  <div className="space-y-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <p className="text-sm font-semibold">
-                                        {getInvoiceLabel(document)}
-                                      </p>
-                                      <Badge variant="destructive">Offen</Badge>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">
-                                      {formatDocumentType(document)}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-1 text-sm sm:text-right">
-                                    <p className="font-semibold">{formatCurrency(document.value)}</p>
-                                    <p className="text-muted-foreground">
-                                      {formatDocumentStatus(document) ?? "Ohne Status"}
-                                    </p>
-                                    <p className="text-muted-foreground">
-                                      Erstellt {formatDate(document.createdAt)}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {document.fileUrl ? (
-                                  <Button asChild size="sm" variant="outline" className="mt-3">
-                                    <a
-                                      href={document.fileUrl}
-                                      target="_blank"
-                                      rel="noreferrer noopener"
-                                    >
-                                      <ExternalLink className="h-4 w-4" />
-                                      Rechnung öffnen
-                                    </a>
-                                  </Button>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="rounded-md border border-dashed bg-background/80 px-4 py-6 text-sm text-muted-foreground">
-                            Für dieses Projekt wurden aktuell keine offenen Rechnungen erkannt.
-                          </div>
-                        )}
-                      </DetailSection>
-
-                      <DetailSection
-                        title={`Dokumente${project.documents.length > 0 ? ` (${project.documents.length})` : ""}`}
-                      >
-                        {project.documents.length > 0 ? (
-                          <>
-                            <div className="hidden md:block">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Dokument</TableHead>
-                                    <TableHead>Typ</TableHead>
-                                    <TableHead>Wert</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Erstellt</TableHead>
-                                    <TableHead className="text-right">Datei</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {project.documents.map((document) => (
-                                    <TableRow key={document.id}>
-                                      <TableCell className="font-medium">
-                                        <div className="space-y-1">
-                                          <p>{getInvoiceLabel(document)}</p>
-                                          {isInvoiceLikeDocument(document) ? (
-                                            <p className="text-xs text-muted-foreground">
-                                              {isOpenInvoiceDocument(document)
-                                                ? "Offene Rechnung"
-                                                : "Rechnungsdokument"}
-                                            </p>
-                                          ) : null}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="space-y-1">
-                                          <p>{document.type ?? "–"}</p>
-                                          {document.baseType &&
-                                          document.baseType !== document.type ? (
-                                            <p className="text-xs text-muted-foreground">
-                                              {document.baseType}
-                                            </p>
-                                          ) : null}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>{formatCurrency(document.value)}</TableCell>
-                                      <TableCell>
-                                        <div className="space-y-1">
-                                          <p>{formatDocumentStatus(document) ?? "–"}</p>
-                                          {isInvoiceLikeDocument(document) ? (
-                                            <p className="text-xs text-muted-foreground">
-                                              {getInvoiceLabel(document)}
-                                            </p>
-                                          ) : null}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>{formatDate(document.createdAt)}</TableCell>
-                                      <TableCell className="text-right">
-                                        {document.fileUrl ? (
-                                          <Button asChild size="sm" variant="ghost">
-                                            <a
-                                              href={document.fileUrl}
-                                              target="_blank"
-                                              rel="noreferrer noopener"
-                                            >
-                                              <ExternalLink className="h-4 w-4" />
-                                              Datei
-                                            </a>
-                                          </Button>
-                                        ) : (
-                                          <span className="text-xs text-muted-foreground">–</span>
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-
-                            <div className="grid gap-3 md:hidden">
-                              {project.documents.map((document) => (
-                                <div key={document.id} className="rounded-md border bg-background p-3">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="text-sm font-medium">
-                                        {getInvoiceLabel(document)}
-                                      </p>
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        {formatDocumentType(document)}
-                                      </p>
-                                    </div>
-                                    <Badge variant="outline">
-                                      {isOpenInvoiceDocument(document)
-                                        ? "Offen"
-                                        : formatDocumentStatus(document) ?? "Ohne Status"}
-                                    </Badge>
-                                  </div>
-                                  <dl className="mt-3 space-y-2 text-sm">
-                                    <div className="flex items-center justify-between gap-4">
-                                      <dt className="text-muted-foreground">Wert</dt>
-                                      <dd>{formatCurrency(document.value)}</dd>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-4">
-                                      <dt className="text-muted-foreground">Erstellt</dt>
-                                      <dd>{formatDate(document.createdAt)}</dd>
-                                    </div>
-                                  </dl>
-                                  {document.fileUrl ? (
-                                    <Button asChild size="sm" variant="ghost" className="mt-3 px-0">
-                                      <a
-                                        href={document.fileUrl}
-                                        target="_blank"
-                                        rel="noreferrer noopener"
-                                      >
-                                        <ExternalLink className="h-4 w-4" />
-                                        Datei öffnen
-                                      </a>
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex min-h-[160px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-background/80 px-6 py-8 text-center">
-                            <FileText className="h-5 w-5 text-muted-foreground" />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">
-                                Keine verknüpften Dokumente vorhanden
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                Sobald Hero Dokumente liefert, erscheinen sie hier mit Status,
-                                Wert und Datei-Link.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </DetailSection>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
-          );
-        })}
-      </CardContent>
+      <CardContent>{projectListContent}</CardContent>
     </Card>
   );
 }

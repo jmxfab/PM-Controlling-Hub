@@ -21,6 +21,7 @@ const ACTIVE_STATUSES = [
 const COMPLETED_STATUSES = [
   "completed",
   "abgeschlossen",
+  "archiviert",
   "fertig",
   "done",
   "finished",
@@ -34,17 +35,52 @@ const ACCOUNTING_STATUSES = [
   "abgerechnet",
   "an_buchhaltung",
   "buchhaltung",
+  "kundenrechnung",
+  "schlussrechnung",
 ];
 
 /** Status values indicating open rework */
 const REWORK_STATUSES = [
   "rework",
+  "reklamation",
   "nacharbeit",
   "nacharbeiten",
   "in_nacharbeit",
 ];
 
+export const DASHBOARD_KPI_KEYS = [
+  "activeProjects",
+  "completedProjectsWeek",
+  "accountingTransferredCount",
+  "openReworks",
+  "scheduledReworks",
+  "openCustomerCommitments",
+  "scheduledClosings",
+] as const;
+
+export type DashboardKpiKey = (typeof DASHBOARD_KPI_KEYS)[number];
+
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+type DashboardKpiMatcher = (
+  project: HeroProject,
+  referenceTime: number
+) => boolean;
+
+type DashboardKpiProjectGroups = Record<DashboardKpiKey, HeroProject[]>;
+
+const DASHBOARD_KPI_MATCHERS: Record<DashboardKpiKey, DashboardKpiMatcher> = {
+  activeProjects: (project) => isActiveProject(project),
+  completedProjectsWeek: (project, referenceTime) =>
+    matchesStatus(project, COMPLETED_STATUSES) &&
+    isCompletedSince(project, referenceTime),
+  accountingTransferredCount: (project) => hasAccountingTransfer(project),
+  openReworks: (project) => matchesStatus(project, REWORK_STATUSES),
+  scheduledReworks: (project) =>
+    matchesStatus(project, REWORK_STATUSES) && isReworkScheduled(project),
+  openCustomerCommitments: (project) => isOpenCustomerCommitment(project),
+  scheduledClosings: (project) => isClosingScheduled(project),
+};
 
 function isCompletedSince(project: HeroProject, referenceTime: number): boolean {
   if (!project.completion_date) return false;
@@ -71,7 +107,17 @@ function isClosingScheduled(project: HeroProject): boolean {
 
 function isOpenCustomerCommitment(project: HeroProject): boolean {
   const val = (project.customer_commitment_status ?? "").toLowerCase();
-  return val.includes("open") || val.includes("offen") || val.includes("pending");
+  return (
+    val.includes("open") ||
+    val.includes("offen") ||
+    val.includes("pending") ||
+    val.includes("auftragsbestätigung") ||
+    val.includes("zusage")
+  );
+}
+
+function hasAccountingTransfer(project: HeroProject): boolean {
+  return matchesStatus(project, ACCOUNTING_STATUSES) || !!project.accounting_date;
 }
 
 type ProjectsByDept = Record<HeroDepartment | "GESAMT", HeroProject[]>;
@@ -98,40 +144,79 @@ export function computeKPIsFromProjects(projects: HeroProject[]): KPIData {
   return computeKPIsFromProjectsAt(projects, Date.now());
 }
 
+export function matchesProjectDashboardKpi(
+  project: HeroProject,
+  kpiKey: DashboardKpiKey,
+  referenceDate: Date | number = Date.now()
+): boolean {
+  return DASHBOARD_KPI_MATCHERS[kpiKey](project, toReferenceTime(referenceDate));
+}
+
+export function getDashboardKpiProjectGroupsFromProjects(
+  projects: HeroProject[]
+): DashboardKpiProjectGroups {
+  return getDashboardKpiProjectGroupsFromProjectsAt(projects, Date.now());
+}
+
+export function getDashboardKpiProjectGroupsFromProjectsAt(
+  projects: HeroProject[],
+  referenceDate: Date | number
+): DashboardKpiProjectGroups {
+  const referenceTime = toReferenceTime(referenceDate);
+  const groups = createEmptyDashboardKpiProjectGroups();
+
+  for (const project of projects) {
+    for (const kpiKey of DASHBOARD_KPI_KEYS) {
+      if (DASHBOARD_KPI_MATCHERS[kpiKey](project, referenceTime)) {
+        groups[kpiKey].push(project);
+      }
+    }
+  }
+
+  return groups;
+}
+
 export function computeKPIsFromProjectsAt(
   projects: HeroProject[],
   referenceDate: Date | number
 ): KPIData {
-  const referenceTime =
-    typeof referenceDate === "number" ? referenceDate : referenceDate.getTime();
-  const active = projects.filter(isActiveProject);
-  const completedWeek = projects.filter(
-    (p) => matchesStatus(p, COMPLETED_STATUSES) && isCompletedSince(p, referenceTime)
+  const kpiProjectGroups = getDashboardKpiProjectGroupsFromProjectsAt(
+    projects,
+    referenceDate
   );
-  const accountingProjects = projects.filter((p) =>
-    matchesStatus(p, ACCOUNTING_STATUSES)
-  );
-  const accountingAmount = accountingProjects.reduce(
+  const accountingAmount = kpiProjectGroups.accountingTransferredCount.reduce(
     (sum, p) => sum + (p.accounting_amount ?? 0),
     0
   );
-  const openReworks = projects.filter((p) =>
-    matchesStatus(p, REWORK_STATUSES)
-  );
-  const scheduledReworks = openReworks.filter(isReworkScheduled);
-  const openCommitments = projects.filter(isOpenCustomerCommitment);
-  const scheduledClosings = projects.filter(isClosingScheduled);
 
   return {
-    activeProjects: active.length,
-    completedProjectsWeek: completedWeek.length,
-    accountingTransferredCount: accountingProjects.length,
+    activeProjects: kpiProjectGroups.activeProjects.length,
+    completedProjectsWeek: kpiProjectGroups.completedProjectsWeek.length,
+    accountingTransferredCount: kpiProjectGroups.accountingTransferredCount.length,
     accountingTransferredAmount: accountingAmount,
-    openReworks: openReworks.length,
-    scheduledReworks: scheduledReworks.length,
-    openCustomerCommitments: openCommitments.length,
-    scheduledClosings: scheduledClosings.length,
+    openReworks: kpiProjectGroups.openReworks.length,
+    scheduledReworks: kpiProjectGroups.scheduledReworks.length,
+    openCustomerCommitments: kpiProjectGroups.openCustomerCommitments.length,
+    scheduledClosings: kpiProjectGroups.scheduledClosings.length,
   };
+}
+
+function createEmptyDashboardKpiProjectGroups(): DashboardKpiProjectGroups {
+  return {
+    activeProjects: [],
+    completedProjectsWeek: [],
+    accountingTransferredCount: [],
+    openReworks: [],
+    scheduledReworks: [],
+    openCustomerCommitments: [],
+    scheduledClosings: [],
+  };
+}
+
+function toReferenceTime(referenceDate: Date | number): number {
+  return typeof referenceDate === "number"
+    ? referenceDate
+    : referenceDate.getTime();
 }
 
 function isActiveProject(project: HeroProject): boolean {

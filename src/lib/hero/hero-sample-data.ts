@@ -10,8 +10,11 @@ import type {
 import { HistoricDataPoint } from "@/components/dashboard/dashboard-charts";
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 import {
+  DASHBOARD_KPI_KEYS,
   computeKPIsFromProjectsAt,
+  getDashboardKpiProjectGroupsFromProjectsAt,
   groupProjectsByDepartment,
+  type DashboardKpiKey,
 } from "@/lib/hero/hero-aggregator";
 import {
   getDepartmentFromProjectNumber,
@@ -45,6 +48,7 @@ interface HeroSampleDashboardData {
   kpiData: KPIData;
   historicData: HistoricDataPoint[];
   projectList: DashboardProjectListItem[];
+  kpiProjectGroups: Record<DashboardKpiKey, DashboardProjectListItem[]>;
   hasDataInRange: boolean;
 }
 
@@ -131,11 +135,21 @@ export function buildHeroSampleDashboardData(
       kpiData: EMPTY_SAMPLE_KPIS,
       historicData: [],
       projectList: [],
+      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
       hasDataInRange: false,
     };
   }
 
   const latestGrouped = groupProjectsByDepartment(latestSnapshot.projects);
+  const latestDepartmentProjects = latestGrouped[department];
+  const latestProjectList = buildProjectListForProjects(
+    latestDepartmentProjects,
+    latestSnapshot.snapshotDate
+  );
+  const latestKpiProjectGroups = getDashboardKpiProjectGroupsFromProjectsAt(
+    latestDepartmentProjects,
+    new Date(latestSnapshot.snapshotDate)
+  );
 
   const historicRows = snapshotsInRange.map((snapshot) => {
     const grouped = groupProjectsByDepartment(snapshot.projects);
@@ -157,11 +171,18 @@ export function buildHeroSampleDashboardData(
 
   return {
     kpiData: computeKPIsFromProjectsAt(
-      latestGrouped[department],
+      latestDepartmentProjects,
       new Date(latestSnapshot.snapshotDate)
     ),
     historicData: aggregateSnapshotsByWeek(historicRows).slice(-8),
-    projectList: buildProjectList(projectSnapshots, department),
+    projectList:
+      timeframe.mode === "current"
+        ? latestProjectList
+        : buildProjectList(projectSnapshots, department),
+    kpiProjectGroups: buildKpiProjectGroups(
+      latestProjectList,
+      latestKpiProjectGroups
+    ),
     hasDataInRange: true,
   };
 }
@@ -256,25 +277,69 @@ function buildProjectList(
     .flatMap((snapshot) => {
       const grouped = groupProjectsByDepartment(snapshot.projects);
 
-      return grouped[department].map((project, index) => ({
-        id: project.id,
-        projectNumber: project.project_number,
-        projectName: project.name,
-        status: project.status,
-        department: getDepartmentFromProjectNumber(project.project_number),
-        snapshotDate: snapshot.snapshotDate,
-        ...buildSampleProjectDetails(project, snapshot.snapshotDate, index),
-      }));
+      return buildProjectListForProjects(grouped[department], snapshot.snapshotDate);
     })
-    .sort((leftProject, rightProject) => {
-      if (leftProject.snapshotDate !== rightProject.snapshotDate) {
-        return rightProject.snapshotDate.localeCompare(leftProject.snapshotDate);
-      }
+    .sort(compareDashboardProjects);
+}
 
-      return (leftProject.projectNumber ?? "").localeCompare(
-        rightProject.projectNumber ?? ""
-      );
-    });
+function buildProjectListForProjects(
+  projects: HeroProject[],
+  snapshotDate: string
+): DashboardProjectListItem[] {
+  return projects
+    .map((project, index) => ({
+      id: project.id,
+      projectNumber: project.project_number,
+      projectName: project.name,
+      status: project.status,
+      department: getDepartmentFromProjectNumber(project.project_number),
+      snapshotDate,
+      ...buildSampleProjectDetails(project, snapshotDate, index),
+    }))
+    .sort(compareDashboardProjects);
+}
+
+function buildKpiProjectGroups(
+  latestProjectList: DashboardProjectListItem[],
+  kpiProjectGroups: Record<DashboardKpiKey, HeroProject[]>
+): Record<DashboardKpiKey, DashboardProjectListItem[]> {
+  return DASHBOARD_KPI_KEYS.reduce<Record<DashboardKpiKey, DashboardProjectListItem[]>>(
+    (result, kpiKey) => {
+      const projectIds = new Set(kpiProjectGroups[kpiKey].map((project) => project.id));
+
+      result[kpiKey] = latestProjectList.filter((project) => projectIds.has(project.id));
+      return result;
+    },
+    createEmptyDashboardKpiProjectGroups()
+  );
+}
+
+function createEmptyDashboardKpiProjectGroups(): Record<
+  DashboardKpiKey,
+  DashboardProjectListItem[]
+> {
+  return {
+    activeProjects: [],
+    completedProjectsWeek: [],
+    accountingTransferredCount: [],
+    openReworks: [],
+    scheduledReworks: [],
+    openCustomerCommitments: [],
+    scheduledClosings: [],
+  };
+}
+
+function compareDashboardProjects(
+  leftProject: DashboardProjectListItem,
+  rightProject: DashboardProjectListItem
+): number {
+  if (leftProject.snapshotDate !== rightProject.snapshotDate) {
+    return rightProject.snapshotDate.localeCompare(leftProject.snapshotDate);
+  }
+
+  return (leftProject.projectNumber ?? "").localeCompare(
+    rightProject.projectNumber ?? ""
+  );
 }
 
 function buildSampleProjectDetails(
