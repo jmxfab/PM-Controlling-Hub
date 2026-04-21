@@ -3,11 +3,17 @@
  * Endpoint: https://login.hero-software.de/api/external/v7/graphql
  * Auth: Authorization: Bearer YOUR_API_KEY
  *
+ * API-Key-Auflösung (DB-first, env-fallback):
+ *  1. `app_settings.hero_api_key` (UI-verwaltet)
+ *  2. `process.env.HERO_API_KEY` (Dev-Fallback)
+ *
  * Abteilung wird über Projektnummer-Präfix ermittelt:
  *  - PV...  → Photovoltaik
  *  - WÄP... → Wärmepumpen
  *  - Rest   → Haustechnik
  */
+
+import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
 
 const HERO_ENDPOINT = "https://login.hero-software.de/api/external/v7/graphql";
 
@@ -113,9 +119,11 @@ async function heroGraphQL<T = unknown>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
-  const apiKey = process.env.HERO_API_KEY;
+  const apiKey = await getActiveHeroApiKey();
   if (!apiKey) {
-    throw new Error("HERO_API_KEY is not set in environment variables.");
+    throw new Error(
+      "Hero API Key ist nicht gesetzt. Bitte im Dashboard unter 'Hero Read-only Status' eintragen oder HERO_API_KEY als Umgebungsvariable setzen."
+    );
   }
 
   const response = await fetch(HERO_ENDPOINT, {

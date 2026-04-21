@@ -24,6 +24,7 @@ import {
   type HeroProject,
 } from "@/lib/hero/hero-client";
 import { buildHeroSampleDashboardData } from "@/lib/hero/hero-sample-data";
+import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
 
 const HERO_SAMPLE_MODE_NOTICE =
@@ -58,13 +59,13 @@ export async function getDashboardTabData(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<DashboardTabData> {
-  const heroApiKey = process.env.HERO_API_KEY?.trim();
+  const heroApiKey = await getActiveHeroApiKey();
 
   if (!heroApiKey) {
     return getFallbackData(
       department,
       timeframe,
-      `${HERO_SAMPLE_MODE_NOTICE} HERO_API_KEY fehlt oder ist leer.`
+      `${HERO_SAMPLE_MODE_NOTICE} HERO_API_KEY fehlt oder ist leer (weder im Dashboard hinterlegt noch als Umgebungsvariable gesetzt).`
     );
   }
 

@@ -14,9 +14,9 @@
 
 | ID | Feature | Status | Spec | Created |
 |----|---------|--------|------|---------|
-
 | PROJ-1 | Read-only controlling dashboard baseline | In Progress | [Spec](./PROJ-1-controlling-dashboard-read-only-baseline.md) | 2026-04-17 |
+| PROJ-2 | Hero API Key UI Management | In Progress | [Spec](./PROJ-2-hero-api-key-ui-management.md) | 2026-04-21 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-2
+## Next Available ID: PROJ-3

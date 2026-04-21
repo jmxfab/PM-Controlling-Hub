@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { HeroAdminPanel } from "@/components/dashboard/hero-admin-panel";
 import { SyncButton } from "@/components/dashboard/sync-button";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
@@ -9,6 +10,7 @@ import {
   type Department,
   parseDashboardDepartmentParam,
 } from "@/lib/dashboard/dashboard-types";
+import { getHeroApiKeyStatus } from "@/lib/settings/hero-settings";
 
 export const metadata: Metadata = {
   title: "Controlling Dashboard | JMX",
@@ -29,10 +31,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const timeframe = parseDashboardTimeframe(resolvedSearchParams);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
-  const liveHeroAvailable = Boolean(process.env.HERO_API_KEY?.trim());
+  const heroApiKeyStatus = await getHeroApiKeyStatus().catch(() => ({
+    configured: Boolean(process.env.HERO_API_KEY?.trim()),
+    maskedKey: null,
+    source: "none" as const,
+    updatedAt: null,
+  }));
+  const liveHeroAvailable = heroApiKeyStatus.configured;
   const liveHeroDisabledReason = liveHeroAvailable
     ? undefined
-    : "Live-Hero-Daten können erst geladen werden, wenn HERO_API_KEY gesetzt ist.";
+    : "Live-Hero-Daten können erst geladen werden, wenn ein Hero API Key hinterlegt ist.";
 
   const tabContents = {
     GESAMT: (
@@ -89,6 +97,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           disabledReason={liveHeroDisabledReason}
         />
       </div>
+
+      <HeroAdminPanel
+        heroReadOnlyConfigured={heroApiKeyStatus.configured}
+        heroProjectLinkTemplateConfigured={Boolean(heroProjectLinkTemplate)}
+        initialStatus={heroApiKeyStatus}
+      />
 
       <DashboardShell
         department={department}
