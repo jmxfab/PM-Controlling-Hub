@@ -181,7 +181,7 @@ export function getDashboardTimeframeLabel(
   timeframe: DashboardTimeframe
 ): string {
   if (timeframe.mode === "current") {
-    return "Aktueller Stand";
+    return "Jetzt (Momentaufnahme)";
   }
 
   if (timeframe.mode === "morgen") return "Morgen fällig";

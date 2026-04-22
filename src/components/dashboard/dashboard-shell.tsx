@@ -34,6 +34,17 @@ const departmentIcons = {
   GEBAEUDETECHNIK: Wrench,
 } as const;
 
+const FUTURE_TIMEFRAME_MODES = new Set<DashboardTimeframeMode>([
+  "morgen",
+  "next3d",
+  "next7d",
+  "30d",
+]);
+
+function isFutureMode(mode: DashboardTimeframeMode): boolean {
+  return FUTURE_TIMEFRAME_MODES.has(mode);
+}
+
 export function DashboardShell({
   department,
   departments,
@@ -141,9 +152,9 @@ export function DashboardShell({
             <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
               <TabsTrigger
                 value="current"
-                title="Momentaufnahme: was ist JETZT in welchem Step"
+                title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen/überfällig/in Abrechnung sind, und in welchem Step sie aktuell stehen."
               >
-                Aktueller Stand
+                Jetzt
               </TabsTrigger>
               <TabsTrigger value="morgen" title="Termin: morgen fällig">
                 Morgen
@@ -193,8 +204,11 @@ export function DashboardShell({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Kennzahlen, Verlauf und Projektliste werden gemeinsam auf diesen
-            Zeitraum gefiltert.
+            {timeframe.mode === "current"
+              ? "Jetzt = Momentaufnahme, kein Zeitfilter. Zeigt wie viele Projekte aktuell offen / überfällig / in Abrechnung sind."
+              : isFutureMode(timeframe.mode)
+              ? "Termin-Fenster: zeigt nur Projekte deren Fälligkeitsdatum in diesem Zeitraum liegt."
+              : "Änderungs-Fenster: zeigt zusätzlich wie viele Projekte in diesem Zeitraum neu angelegt / abgeschlossen / in Abrechnung / in Nacharbeit gegangen sind."}
           </p>
         )}
       </div>
