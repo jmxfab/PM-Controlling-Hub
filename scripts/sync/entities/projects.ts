@@ -188,6 +188,7 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
             id
             name
             sort_order
+            status_code
           }
         }
         project_match_statuses {
@@ -198,6 +199,12 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
           created
           modified
           maturity_date
+          step {
+            id
+            name
+            sort_order
+            status_code
+          }
         }
       }
     }

@@ -13,6 +13,7 @@ interface ProjectStatusStepRaw {
   id?: string | number | null;
   name?: string | null;
   sort_order?: number | null;
+  status_code?: number | null;
 }
 
 interface ProjectTypeRaw {
@@ -52,6 +53,7 @@ export const projectTypesRichSync: HeroEntitySync<ProjectTypeRaw, ProjectTypeRow
           id
           name
           sort_order
+          status_code
         }
       }
     }
