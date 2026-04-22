@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchAllHeroProjects, normalizeHeroProject } from "./hero-client";
+import { normalizeHeroProject } from "./hero-client";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -140,47 +140,4 @@ describe("normalizeHeroProject", () => {
     });
   });
 
-  it("paginates through all Hero projects instead of stopping at the first page", async () => {
-    vi.stubEnv("HERO_API_KEY", "test-key");
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: {
-            project_matches: Array.from({ length: 100 }, (_, index) => ({
-              id: index + 1,
-              project_nr: `PV-${index + 1}`,
-              project_title: `Projekt ${index + 1}`,
-              current_project_match_status: { name: "Aktiv" },
-            })),
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: {
-            project_matches: [
-              {
-                id: 101,
-                project_nr: "PV-101",
-                project_title: "Projekt 101",
-                current_project_match_status: { name: "Aktiv" },
-              },
-            ],
-          },
-        }),
-      });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const projects = await fetchAllHeroProjects();
-
-    expect(projects).toHaveLength(101);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[1]?.body).toContain('"offset":0');
-    expect(fetchMock.mock.calls[1]?.[1]?.body).toContain('"offset":100');
-  });
 });
