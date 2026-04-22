@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   CheckCircle2,
   RotateCcw,
@@ -209,7 +210,7 @@ export function HeroPipelinePanel({
                     <TableHead>Projekt-Nr.</TableHead>
                     <TableHead>Titel</TableHead>
                     <TableHead>Kunde</TableHead>
-                    <TableHead>Step</TableHead>
+                    <TableHead>Step (vorher → aktuell)</TableHead>
                     <TableHead>Fällig</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -238,7 +239,28 @@ export function HeroPipelinePanel({
                         {project.customerName ?? "–"}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {project.stepName ?? "–"}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {project.previousStepName ? (
+                            <>
+                              <span
+                                className="text-muted-foreground"
+                                title={
+                                  project.previousStepAt
+                                    ? `bis ${new Date(
+                                        project.previousStepAt
+                                      ).toLocaleDateString("de-DE")}`
+                                    : undefined
+                                }
+                              >
+                                {project.previousStepName}
+                              </span>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            </>
+                          ) : null}
+                          <span className="font-medium">
+                            {project.stepName ?? "–"}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {project.maturityDate

@@ -50,7 +50,12 @@ interface DashboardProjectRow {
   step_id: string | null;
   step_name: string | null;
   step_sort_order: number | null;
+  step_status_code: number | null;
+  step_order: number | null;
   step_group: string | null;
+  previous_step_name: string | null;
+  previous_step_id: string | null;
+  previous_step_at: string | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -100,7 +105,7 @@ const fetchDashboardProjectRows = unstable_cache(
     }
     return all.filter((row) => row.department_key != null);
   },
-  ["hero_dashboard_projects_v2"],
+  ["hero_dashboard_projects_v4"],
   { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
 

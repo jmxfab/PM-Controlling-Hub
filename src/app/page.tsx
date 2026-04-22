@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { SyncInProgressBanner } from "@/components/dashboard/sync-in-progress-banner";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
+import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
 import {
   DASHBOARD_DEPARTMENTS,
@@ -34,7 +35,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
       (
-        <Suspense fallback={<DashboardSkeleton />}>
+        <Suspense fallback={<DashboardInitialLoader />}>
           <DashboardTabContent
             department={dept}
             heroProjectLinkTemplate={heroProjectLinkTemplate}

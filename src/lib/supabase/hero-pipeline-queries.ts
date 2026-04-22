@@ -41,6 +41,8 @@ export interface HeroPipelineStep {
   isFinished: boolean;
   overdueCount: number;
   reopenedCount: number;
+  /** Pipeline-order key derived from Hero's status_code + sort_order. */
+  stepOrder: number;
 }
 
 export interface HeroPipelineKpis {
@@ -92,6 +94,7 @@ export const loadHeroPipeline = cache(
         projectCount: number;
         overdueCount: number;
         reopenedCount: number;
+        stepOrder: number;
       }
     >();
     let totalOpen = 0;
@@ -109,7 +112,17 @@ export const loadHeroPipeline = cache(
         projectCount: 0,
         overdueCount: 0,
         reopenedCount: 0,
+        stepOrder: row.step_order ?? Number.MAX_SAFE_INTEGER,
       };
+      // Keep the *smallest* step_order across rows in the same bucket
+      // (GESAMT merges steps across departments; we show them in pipeline
+      // order of the earliest matching department step).
+      if (
+        row.step_order != null &&
+        row.step_order < bucket.stepOrder
+      ) {
+        bucket.stepOrder = row.step_order;
+      }
       bucket.projectCount += 1;
       const open = !row.is_finished;
       if (open) {
@@ -151,10 +164,13 @@ export const loadHeroPipeline = cache(
         isFinished: isFinishedStep(meta.name),
         overdueCount: meta.overdueCount,
         reopenedCount: meta.reopenedCount,
+        stepOrder: meta.stepOrder,
       }))
+      // Sort by Hero pipeline order: finished states last, then by
+      // status_code*1e6 + sort_order*1e3 (derived in the view).
       .sort((a, b) => {
         if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
-        return b.projectCount - a.projectCount;
+        return a.stepOrder - b.stepOrder;
       });
 
     return {
@@ -177,6 +193,8 @@ export interface PipelineProjectRow {
   projectName: string | null;
   customerName: string | null;
   stepName: string | null;
+  previousStepName: string | null;
+  previousStepAt: string | null;
   maturityDate: string | null;
   department: ProjectDepartment | null;
   wasReopened: boolean;
@@ -202,6 +220,8 @@ export async function loadProjectsForSteps(
       projectName: row.project_name,
       customerName: row.customer_name,
       stepName: row.step_name,
+      previousStepName: row.previous_step_name ?? null,
+      previousStepAt: row.previous_step_at ?? null,
       maturityDate: row.maturity_date,
       department: row.department_key ?? null,
       wasReopened: row.was_reopened ?? false,
