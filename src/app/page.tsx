@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HeroAdminPanel } from "@/components/dashboard/hero-admin-panel";
 import { SyncButton } from "@/components/dashboard/sync-button";
 import { SyncInProgressBanner } from "@/components/dashboard/sync-in-progress-banner";
+import { SyncStatusPanel } from "@/components/dashboard/sync-status-panel";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
 import {
@@ -109,6 +110,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         heroProjectLinkTemplateConfigured={Boolean(heroProjectLinkTemplate)}
         initialStatus={heroApiKeyStatus}
       />
+
+      <Suspense fallback={null}>
+        <SyncStatusPanel />
+      </Suspense>
 
       <DashboardShell
         department={department}
