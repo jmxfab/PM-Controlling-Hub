@@ -68,7 +68,29 @@ function isFinishedStep(name: string | null | undefined): boolean {
   return FINISHED_NAME_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * Jumax reporting week: Friday 00:00 → Thursday 23:59:59.999.
+ *
+ * Returns [currentWeekStart, lastWeekStart] for counting:
+ *   - completedLastWeek: lastWeekStart ≤ completion_date < currentWeekStart
+ *   - newThisWeek: created_at_hero ≥ currentWeekStart
+ *
+ * Done with a single local-time Date so daylight-savings transitions and
+ * server timezone don't shift the boundary off the Friday morning.
+ */
+function getJumaxWeekBoundaries(now = new Date()): {
+  currentWeekStart: number;
+  lastWeekStart: number;
+} {
+  const start = new Date(now);
+  const dayOfWeek = start.getDay(); // 0=Sun, 1=Mon, … 5=Fri, 6=Sat
+  const daysSinceFriday = (dayOfWeek - 5 + 7) % 7;
+  start.setDate(start.getDate() - daysSinceFriday);
+  start.setHours(0, 0, 0, 0);
+  const currentWeekStart = start.getTime();
+  const lastWeekStart = currentWeekStart - 7 * 24 * 60 * 60 * 1000;
+  return { currentWeekStart, lastWeekStart };
+}
 
 function rowsFor(
   rows: DashboardProjectRow[],
@@ -85,7 +107,7 @@ export const loadHeroPipeline = cache(
     const all = await fetchDashboardProjectRows();
     const projects = rowsFor(all, department);
     const now = Date.now();
-    const weekAgo = now - ONE_WEEK_MS;
+    const { currentWeekStart, lastWeekStart } = getJumaxWeekBoundaries();
 
     const stepMap = new Map<
       string,
@@ -141,16 +163,24 @@ export const loadHeroPipeline = cache(
       }
       stepMap.set(stepKey, bucket);
 
+      // Jumax reporting week = Friday morning → Thursday evening.
+      // "Letzte Woche abgeschlossen": completion_date inside the previous
+      // [Fri,Thu] window. "Neu diese Woche": created_at_hero inside the
+      // current [Fri,Thu] window.
       if (row.is_finished && row.completion_date) {
         const completedAt = Date.parse(row.completion_date);
-        if (Number.isFinite(completedAt) && completedAt >= weekAgo) {
+        if (
+          Number.isFinite(completedAt) &&
+          completedAt >= lastWeekStart &&
+          completedAt < currentWeekStart
+        ) {
           completedLastWeek += 1;
         }
       }
 
       if (row.created_at_hero) {
         const createdAt = Date.parse(row.created_at_hero);
-        if (Number.isFinite(createdAt) && createdAt >= weekAgo) {
+        if (Number.isFinite(createdAt) && createdAt >= currentWeekStart) {
           newThisWeek += 1;
         }
       }
