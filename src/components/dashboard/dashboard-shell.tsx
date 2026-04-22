@@ -146,34 +146,50 @@ export function DashboardShell({
     <div className="space-y-4">
       {isPending ? <NavigatingOverlay /> : null}
       <div className="rounded-lg border bg-card p-4 space-y-4">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label>Zeitraum</Label>
           <Tabs value={timeframe.mode} onValueChange={handleTimeframeChange}>
-            <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-              <TabsTrigger
-                value="current"
-                title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen/überfällig/in Abrechnung sind, und in welchem Step sie aktuell stehen."
-              >
-                Jetzt
-              </TabsTrigger>
-              <TabsTrigger value="morgen" title="Termin: morgen fällig">
-                Morgen
-              </TabsTrigger>
-              <TabsTrigger value="next3d" title="Termin: in den nächsten 3 Tagen fällig">
-                In 3 Tagen
-              </TabsTrigger>
-              <TabsTrigger value="next7d" title="Termin: in den nächsten 7 Tagen fällig">
-                Nächste Woche
-              </TabsTrigger>
-              <TabsTrigger value="gestern">Gestern</TabsTrigger>
-              <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
-              <TabsTrigger value="7d" title="Jumax-Woche: Fr 00:00 → Do 23:59">
-                Woche (Fr→Do)
-              </TabsTrigger>
-              <TabsTrigger value="14d">Letzte 14 Tage</TabsTrigger>
-              <TabsTrigger value="30d">30 Tage</TabsTrigger>
-              <TabsTrigger value="frei">Frei</TabsTrigger>
-            </TabsList>
+            <div className="flex flex-wrap gap-3">
+              <TimeframeGroup label="Momentaufnahme">
+                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
+                  <TabsTrigger
+                    value="current"
+                    title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen/überfällig/in Abrechnung sind."
+                  >
+                    Jetzt
+                  </TabsTrigger>
+                </TabsList>
+              </TimeframeGroup>
+
+              <TimeframeGroup label="Termine (Zukunft)">
+                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
+                  <TabsTrigger value="morgen" title="Termin: morgen fällig">
+                    Morgen
+                  </TabsTrigger>
+                  <TabsTrigger value="next3d" title="Termin: in den nächsten 3 Tagen fällig">
+                    In 3 Tagen
+                  </TabsTrigger>
+                  <TabsTrigger value="next7d" title="Termin: in den nächsten 7 Tagen fällig">
+                    Nächste Woche
+                  </TabsTrigger>
+                  <TabsTrigger value="30d" title="Termin: nächste 30 Tage">
+                    30 Tage
+                  </TabsTrigger>
+                </TabsList>
+              </TimeframeGroup>
+
+              <TimeframeGroup label="Änderungen (Vergangenheit)">
+                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
+                  <TabsTrigger value="gestern">Gestern</TabsTrigger>
+                  <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
+                  <TabsTrigger value="7d" title="Jumax-Woche: Fr 00:00 → Do 23:59">
+                    Woche (Fr→Do)
+                  </TabsTrigger>
+                  <TabsTrigger value="14d">14 Tage</TabsTrigger>
+                  <TabsTrigger value="frei">Frei</TabsTrigger>
+                </TabsList>
+              </TimeframeGroup>
+            </div>
           </Tabs>
         </div>
 
@@ -239,6 +255,23 @@ export function DashboardShell({
           </TabsContent>
         ))}
       </Tabs>
+    </div>
+  );
+}
+
+function TimeframeGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">
+        {label}
+      </span>
+      {children}
     </div>
   );
 }
