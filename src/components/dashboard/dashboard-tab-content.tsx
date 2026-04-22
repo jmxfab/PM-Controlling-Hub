@@ -64,12 +64,14 @@ export async function DashboardTabContent({
         source={source}
         timeframe={timeframe}
       />
-      <DashboardCharts
-        historicData={historicData}
-        historicDescription={historicDescription}
-        departmentName={departmentName}
-        emptyMessage={emptyHistoricMessage}
-      />
+      {historicData.length > 0 ? (
+        <DashboardCharts
+          historicData={historicData}
+          historicDescription={historicDescription}
+          departmentName={departmentName}
+          emptyMessage={emptyHistoricMessage}
+        />
+      ) : null}
       {pipeline ? (
         <HeroPipelinePanel department={department} pipeline={pipeline} />
       ) : null}

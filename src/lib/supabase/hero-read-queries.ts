@@ -107,7 +107,7 @@ const fetchDashboardProjectRows = unstable_cache(
     }
     return all.filter((row) => row.department_key != null);
   },
-  ["hero_dashboard_projects_v5"],
+  ["hero_dashboard_projects_v6"],
   { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
 
