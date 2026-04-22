@@ -22,6 +22,13 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -37,6 +44,7 @@ import {
 } from "@/components/ui/tooltip";
 import type {
   HeroPipelineDto,
+  PipelineKpi,
   PipelineProjectRow,
 } from "@/lib/supabase/hero-pipeline-queries";
 import {
@@ -55,6 +63,21 @@ interface HeroPipelinePanelProps {
   heroProjectLinkTemplate?: string | null;
 }
 
+const KPI_LABELS: Record<PipelineKpi, string> = {
+  all_open: "Alle Offenen",
+  overdue: "Überfällig",
+  accounting_open: "Buchhaltung offen",
+  completed_last_week: "Letzte Woche abgeschlossen",
+  new_this_week: "Neu diese Woche",
+  reopens: "Reopens (Nacharbeit)",
+  delta_new: "Neu angelegt",
+  delta_completed: "Abgeschlossen",
+  delta_accounting: "In Abrechnung",
+  delta_rework: "Nacharbeit-Starts",
+  delta_reopens: "Reopens (Zeitraum)",
+  delta_overdue_became: "Neu überfällig",
+};
+
 export function HeroPipelinePanel({
   department,
   pipeline,
@@ -64,6 +87,38 @@ export function HeroPipelinePanel({
     if (!heroProjectLinkTemplate || !projectId) return null;
     return heroProjectLinkTemplate.replace("{projectId}", projectId);
   };
+
+  // KPI-Detail-Dialog: zeigt die Projekte hinter einer Kachelzahl.
+  const [activeKpi, setActiveKpi] = useState<PipelineKpi | null>(null);
+  const [kpiProjects, setKpiProjects] = useState<PipelineProjectRow[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(false);
+
+  async function openKpi(kpi: PipelineKpi) {
+    setActiveKpi(kpi);
+    setKpiProjects([]);
+    setKpiLoading(true);
+    try {
+      const params = new URLSearchParams({ department, kpi });
+      if (pipeline.timeframeDelta) {
+        params.set("rangeFrom", pipeline.timeframeDelta.fromIso);
+        params.set("rangeTo", pipeline.timeframeDelta.toIso);
+        params.set("rangeDirection", "past");
+      }
+      const response = await fetch(
+        `/api/dashboard/pipeline-kpi-projects?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          projects: PipelineProjectRow[];
+        };
+        setKpiProjects(payload.projects ?? []);
+      }
+    } catch {
+      setKpiProjects([]);
+    } finally {
+      setKpiLoading(false);
+    }
+  }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [projects, setProjects] = useState<PipelineProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,6 +193,7 @@ export function HeroPipelinePanel({
           value={pipeline.totalOpen}
           hint={`von ${pipeline.totalProjects} Projekten`}
           explain={`Anzahl Projekte deren aktueller Step weder "Abgeschlossen" noch "Archiviert" ist. Von insgesamt ${pipeline.totalProjects} Projekten im Department. Momentaufnahme, unabhängig vom gewählten Zeitraum.`}
+          onClick={() => openKpi("all_open")}
         />
         <KpiTile
           label="Überfällig"
@@ -146,6 +202,7 @@ export function HeroPipelinePanel({
           icon={<AlertTriangle className="h-4 w-4" />}
           hint="offen & Fälligkeitsdatum < heute"
           explain="Offene Projekte deren Fälligkeitsdatum (current_project_match_status.maturity_date) bereits in der Vergangenheit liegt. Signal für Projekte die ein neues Zieldatum brauchen."
+          onClick={() => openKpi("overdue")}
         />
         <KpiTile
           label="Buchhaltung offen"
@@ -160,6 +217,7 @@ export function HeroPipelinePanel({
               : "keine Projekte in Abrechnungs-Step"
           }
           explain={`Summe der offenen Rechnungsbeträge (Hero status_code 100 "Erstellt" + 200 "Versendet"; storniert/gelöscht ausgeschlossen) aller Projekte die AKTUELL in einem Abrechnungs-Step stehen: Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG (1./2./…), Teilrechnung.`}
+          onClick={() => openKpi("accounting_open")}
         />
         <KpiTile
           label="Letzte Woche abgeschlossen"
@@ -168,6 +226,7 @@ export function HeroPipelinePanel({
           icon={<CheckCircle2 className="h-4 w-4" />}
           hint="Fr 00:00 → Do 23:59"
           explain="Projekte die in der letzten Jumax-Berichtswoche (Freitag 00:00 bis Donnerstag 23:59 der Vorwoche) auf Abgeschlossen/Archiviert gesetzt wurden. Quelle: Hero-Status-Historie, completion_date."
+          onClick={() => openKpi("completed_last_week")}
         />
         <KpiTile
           label="Neu diese Woche"
@@ -176,6 +235,7 @@ export function HeroPipelinePanel({
           icon={<ArrowDownRight className="h-4 w-4" />}
           hint="Fr 00:00 → heute"
           explain="Projekte die seit letztem Freitag 00:00 (Beginn der aktuellen Jumax-Woche) in Hero neu angelegt wurden. Quelle: created_at aus Hero (nicht das Supabase-Sync-Datum)."
+          onClick={() => openKpi("new_this_week")}
         />
         <KpiTile
           label="Reopens (Nacharbeit)"
@@ -184,6 +244,7 @@ export function HeroPipelinePanel({
           icon={<RotateCcw className="h-4 w-4" />}
           hint="nach bereits erreichtem Abgeschlossen"
           explain="Offene Projekte die in ihrer Status-Historie einmal auf Abgeschlossen oder Archiviert standen und jetzt wieder in einem offenen Step sind (typisch Nacharbeit/Reklamation). Erkennung: last_rework_at > last_finish_at in project_match_statuses."
+          onClick={() => openKpi("reopens")}
         />
       </div>
 
@@ -211,6 +272,7 @@ export function HeroPipelinePanel({
                 tone="attention"
                 icon={<ArrowDownRight className="h-4 w-4" />}
                 explain="Projekte deren allererster Status-Eintrag in Hero im gewählten Zeitraum liegt. Damit ist das Projekt in diesem Fenster neu aufgenommen worden."
+                onClick={() => openKpi("delta_new")}
               />
               <KpiTile
                 label="Abgeschlossen"
@@ -218,6 +280,7 @@ export function HeroPipelinePanel({
                 tone="good"
                 icon={<CheckCircle2 className="h-4 w-4" />}
                 explain="Status-Wechsel IN den Step Abgeschlossen oder Archiviert im Zeitraum. Ein Projekt kann mehrfach zählen wenn es reopened und wieder abgeschlossen wurde."
+                onClick={() => openKpi("delta_completed")}
               />
               <KpiTile
                 label="In Abrechnung"
@@ -225,6 +288,7 @@ export function HeroPipelinePanel({
                 tone="neutral"
                 icon={<Euro className="h-4 w-4" />}
                 explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum."
+                onClick={() => openKpi("delta_accounting")}
               />
               <KpiTile
                 label="Nacharbeit-Starts"
@@ -232,6 +296,7 @@ export function HeroPipelinePanel({
                 tone="warning"
                 icon={<RotateCcw className="h-4 w-4" />}
                 explain="Status-Wechsel in einen Nacharbeits- oder Reklamations-Step im Zeitraum. Inklusive erste Nacharbeit + Reopens."
+                onClick={() => openKpi("delta_rework")}
               />
               <KpiTile
                 label="Reopens"
@@ -240,6 +305,7 @@ export function HeroPipelinePanel({
                 icon={<RotateCcw className="h-4 w-4" />}
                 hint="nach vorher Abgeschlossen"
                 explain="Teilmenge der Nacharbeit-Starts: das Projekt war zum Start-Zeitpunkt des Zeitraums schon einmal in Abgeschlossen oder Archiviert. Signal für zurückgerollte Projekte."
+                onClick={() => openKpi("delta_reopens")}
               />
               <KpiTile
                 label="Neu überfällig"
@@ -252,6 +318,7 @@ export function HeroPipelinePanel({
                 icon={<AlertTriangle className="h-4 w-4" />}
                 hint="Fälligkeit im Zeitraum"
                 explain="Projekte deren aktuelles Fälligkeitsdatum im gewählten Zeitraum liegt UND die aktuell noch offen sind — also Termine die in diesem Fenster verstrichen sind (oder bevorstehen, falls Zeitraum in der Zukunft)."
+                onClick={() => openKpi("delta_overdue_became")}
               />
             </div>
           </CardContent>
@@ -460,6 +527,123 @@ export function HeroPipelinePanel({
           </CardContent>
         </Card>
       </div>
+
+      {/* KPI-Detail-Dialog: Projekte hinter einer Kachelzahl. */}
+      <Dialog
+        open={activeKpi !== null}
+        onOpenChange={(open) => {
+          if (!open) setActiveKpi(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {activeKpi ? KPI_LABELS[activeKpi] : ""} ·{" "}
+              {DASHBOARD_DEPARTMENT_NAMES[department]}
+            </DialogTitle>
+            <DialogDescription>
+              {kpiLoading
+                ? "Lade Projekte…"
+                : `${kpiProjects.length} Projekt${
+                    kpiProjects.length === 1 ? "" : "e"
+                  } in dieser KPI.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto">
+            {kpiLoading ? (
+              <div className="text-sm text-muted-foreground py-12 text-center">
+                Lade Projekte…
+              </div>
+            ) : kpiProjects.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-12 text-center border border-dashed rounded-md">
+                Keine Projekte in dieser KPI.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Projekt-Nr.</TableHead>
+                    <TableHead>Titel</TableHead>
+                    <TableHead>Kunde</TableHead>
+                    <TableHead>Step</TableHead>
+                    <TableHead>Fällig</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {kpiProjects.map((project) => {
+                    const heroHref = buildHeroHref(project.id);
+                    return (
+                      <TableRow
+                        key={project.id}
+                        className={
+                          heroHref
+                            ? "cursor-pointer hover:bg-accent/40"
+                            : undefined
+                        }
+                        onClick={
+                          heroHref
+                            ? () =>
+                                window.open(
+                                  heroHref,
+                                  "_blank",
+                                  "noopener,noreferrer"
+                                )
+                            : undefined
+                        }
+                        title={heroHref ? "Im Hero öffnen" : undefined}
+                      >
+                        <TableCell>
+                          <HeroProjectLink
+                            projectId={project.id}
+                            projectNumber={project.projectNumber}
+                            linkTemplate={heroProjectLinkTemplate ?? null}
+                          />
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span>{project.projectName ?? "–"}</span>
+                            {project.isOverdue ? (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-orange-500 text-orange-600"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                Überfällig
+                              </Badge>
+                            ) : null}
+                            {project.wasReopened ? (
+                              <Badge
+                                variant="outline"
+                                className="gap-1 border-yellow-500 text-yellow-600"
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                                Reopen
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {project.customerName ?? "–"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {project.stepName ?? "–"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {project.maturityDate
+                            ? new Date(
+                                project.maturityDate
+                              ).toLocaleDateString("de-DE")
+                            : "–"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -482,6 +666,7 @@ function KpiTile({
   icon,
   tone = "neutral",
   explain,
+  onClick,
 }: {
   label: string;
   value?: number;
@@ -491,6 +676,8 @@ function KpiTile({
   tone?: KpiTone;
   /** Detaillierter Erklärtext beim Hover über die ganze Kachel. */
   explain?: string;
+  /** Wenn gesetzt, wird die Kachel zum Button und öffnet den Detail-Dialog. */
+  onClick?: () => void;
 }) {
   const toneClass = {
     neutral: "",
@@ -499,8 +686,12 @@ function KpiTile({
     attention: "text-rose-600",
   }[tone];
 
-  const card = (
-    <Card className="cursor-help transition-colors hover:border-primary/40">
+  const cursorClass = onClick
+    ? "cursor-pointer hover:border-primary hover:shadow-sm"
+    : "cursor-help hover:border-primary/40";
+
+  const innerCard = (
+    <Card className={`transition-all ${cursorClass}`}>
       <CardContent className="pt-4 pb-4 space-y-1">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{label}</span>
@@ -518,6 +709,18 @@ function KpiTile({
     </Card>
   );
 
+  const card = onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+    >
+      {innerCard}
+    </button>
+  ) : (
+    innerCard
+  );
+
   if (!explain) return card;
 
   return (
@@ -527,6 +730,9 @@ function KpiTile({
         <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
           <p className="font-semibold mb-1">{label}</p>
           <p>{explain}</p>
+          {onClick ? (
+            <p className="mt-1 text-primary">Klicken → Projekte anzeigen</p>
+          ) : null}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

@@ -532,6 +532,267 @@ export interface PipelineProjectRow {
   isFinished: boolean;
 }
 
+/**
+ * Mappt eine DashboardProjectRow auf unseren UI-Projekt-Datensatz. Shared
+ * zwischen loadProjectsForSteps und loadKpiProjects.
+ */
+function toPipelineProjectRow(
+  row: DashboardProjectRow,
+  options?: { periodFrom?: number | null; periodTo?: number | null; now?: number }
+): PipelineProjectRow {
+  const now = options?.now ?? Date.now();
+  const createdTs = row.created_at_hero ? Date.parse(row.created_at_hero) : NaN;
+  const completionTs = row.completion_date
+    ? Date.parse(row.completion_date)
+    : NaN;
+  const maturityTs = row.maturity_date ? Date.parse(row.maturity_date) : NaN;
+
+  const isFinished = row.is_finished ?? false;
+  const isOverdue =
+    !isFinished && Number.isFinite(maturityTs) && maturityTs < now;
+  const periodFrom = options?.periodFrom ?? null;
+  const periodTo = options?.periodTo ?? null;
+  const isNewInPeriod =
+    periodFrom != null &&
+    periodTo != null &&
+    Number.isFinite(createdTs) &&
+    createdTs >= periodFrom &&
+    createdTs < periodTo;
+  const isCompletedInPeriod =
+    periodFrom != null &&
+    periodTo != null &&
+    isFinished &&
+    Number.isFinite(completionTs) &&
+    completionTs >= periodFrom &&
+    completionTs < periodTo;
+
+  return {
+    id: row.id,
+    projectNumber: row.project_number,
+    projectName: cleanProjectTitle(row.project_name, {
+      customerName: row.customer_name,
+      projectNumber: row.project_number,
+    }),
+    customerName: row.customer_name,
+    stepName: row.step_name,
+    previousStepName: row.previous_step_name ?? null,
+    previousStepAt: row.previous_step_at ?? null,
+    maturityDate: row.maturity_date,
+    createdAtHero: row.created_at_hero ?? null,
+    completionDate: row.completion_date ?? null,
+    isOverdue,
+    isNewInPeriod,
+    isCompletedInPeriod,
+    isFinished,
+    department: row.department_key ?? null,
+    wasReopened: row.was_reopened ?? false,
+    openInvoiceAmount: Number(row.accounting_open_amount ?? 0) || 0,
+    openInvoiceCount: Number(row.accounting_open_count ?? 0) || 0,
+    isAccountingOpen: row.is_accounting_open ?? false,
+  };
+}
+
+export type PipelineKpi =
+  // Snapshot-KPIs (oberste Leiste)
+  | "all_open"
+  | "overdue"
+  | "accounting_open"
+  | "completed_last_week"
+  | "new_this_week"
+  | "reopens"
+  // Zeitraum-Deltas (zweite Leiste)
+  | "delta_new"
+  | "delta_completed"
+  | "delta_accounting"
+  | "delta_rework"
+  | "delta_reopens"
+  | "delta_overdue_became";
+
+/**
+ * Projektliste hinter einer KPI-Kachel. Jede Kachel im Pipeline-Panel
+ * zeigt eine Zahl — diese Funktion gibt die Projekte zurück, die diese
+ * Zahl ergeben haben. Für Delta-KPIs muss ein timeframeRange (past)
+ * übergeben werden.
+ */
+export async function loadKpiProjects(
+  department: Department,
+  kpi: PipelineKpi,
+  options?: { timeframeRange?: TimeframeRangeIso }
+): Promise<PipelineProjectRow[]> {
+  const all = await fetchDashboardProjectRows();
+  const rows = rowsFor(all, department);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const now = Date.now();
+  const periodFrom =
+    options?.timeframeRange?.direction === "past"
+      ? new Date(options.timeframeRange.fromIso).getTime()
+      : null;
+  const periodTo =
+    options?.timeframeRange?.direction === "past"
+      ? new Date(options.timeframeRange.toIso).getTime()
+      : null;
+  const mapRow = (r: DashboardProjectRow) =>
+    toPipelineProjectRow(r, { periodFrom, periodTo, now });
+
+  // Snapshot-KPIs — direkt aus hero_dashboard_projects filtern.
+  if (kpi === "all_open") {
+    return rows.filter((r) => !r.is_finished).map(mapRow).sort(sortByNumber);
+  }
+  if (kpi === "overdue") {
+    return rows
+      .filter((r) => {
+        if (r.is_finished) return false;
+        if (!r.maturity_date) return false;
+        const t = Date.parse(r.maturity_date);
+        return Number.isFinite(t) && t < now;
+      })
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+  if (kpi === "accounting_open") {
+    return rows
+      .filter((r) => !r.is_finished && r.is_accounting_open)
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+  if (kpi === "completed_last_week") {
+    const { currentWeekStart, lastWeekStart } = getJumaxWeekBoundaries();
+    return rows
+      .filter((r) => {
+        if (!r.is_finished || !r.completion_date) return false;
+        const t = Date.parse(r.completion_date);
+        return (
+          Number.isFinite(t) && t >= lastWeekStart && t < currentWeekStart
+        );
+      })
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+  if (kpi === "new_this_week") {
+    const { currentWeekStart } = getJumaxWeekBoundaries();
+    return rows
+      .filter((r) => {
+        if (!r.created_at_hero) return false;
+        const t = Date.parse(r.created_at_hero);
+        return Number.isFinite(t) && t >= currentWeekStart;
+      })
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+  if (kpi === "reopens") {
+    return rows
+      .filter((r) => !r.is_finished && r.was_reopened)
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+
+  // Delta-KPIs — brauchen timeframeRange und lesen hero_status_transitions.
+  if (!options?.timeframeRange) return [];
+  const range = options.timeframeRange;
+  const supabase = supabaseAdmin();
+
+  if (kpi === "delta_overdue_became") {
+    // Projekte deren maturity_date im Zeitraum liegt UND noch offen sind.
+    // hero_dashboard_projects direkt filtern.
+    let q = supabase
+      .from("hero_dashboard_projects")
+      .select("id")
+      .gte("maturity_date", range.fromIso)
+      .lt("maturity_date", range.toIso)
+      .eq("is_finished", false);
+    if (department !== "GESAMT") q = q.eq("department_key", department);
+    else q = q.not("department_key", "is", null);
+    const ids = new Set<string>();
+    for (let offset = 0; offset < 10000; offset += 1000) {
+      const { data, error } = await q.range(offset, offset + 999);
+      if (error) break;
+      const chunk = (data ?? []) as Array<{ id: string }>;
+      for (const row of chunk) ids.add(row.id);
+      if (chunk.length < 1000) break;
+    }
+    return Array.from(ids)
+      .map((id) => byId.get(id))
+      .filter((r): r is DashboardProjectRow => !!r)
+      .map(mapRow)
+      .sort(sortByNumber);
+  }
+
+  // Status-Transitions-basierte KPIs: delta_new, delta_completed,
+  // delta_accounting, delta_rework, delta_reopens.
+  let tq = supabase
+    .from("hero_status_transitions")
+    .select("project_match_id, step_name, entered_at, history_index")
+    .gte("entered_at", range.fromIso)
+    .lt("entered_at", range.toIso)
+    .not("step_name", "is", null);
+  if (department !== "GESAMT") tq = tq.eq("department_key", department);
+  else tq = tq.not("department_key", "is", null);
+
+  const transitions: Array<{
+    project_match_id: string;
+    step_name: string | null;
+    history_index: number | null;
+  }> = [];
+  for (let offset = 0; offset < 30000; offset += 1000) {
+    const { data, error } = await tq.range(offset, offset + 999);
+    if (error) break;
+    const chunk = (data ?? []) as typeof transitions;
+    transitions.push(...chunk);
+    if (chunk.length < 1000) break;
+  }
+
+  // Für Reopens brauchen wir zusätzlich, welche Projekte VOR dem Zeitraum
+  // schon mal Abgeschlossen waren (last_finish_at < fromIso).
+  const finishedBefore = new Set<string>();
+  if (kpi === "delta_reopens") {
+    const { data } = await supabase
+      .from("hero_dashboard_projects")
+      .select("id, last_finish_at")
+      .lt("last_finish_at", range.fromIso);
+    for (const r of (data ?? []) as Array<{
+      id: string;
+      last_finish_at: string | null;
+    }>) {
+      if (r.last_finish_at) finishedBefore.add(r.id);
+    }
+  }
+
+  const matchIds = new Set<string>();
+  for (const t of transitions) {
+    if (!t.step_name) continue;
+    const n = t.step_name.toLowerCase();
+    const isFinished = /abgeschlossen|archiviert/.test(n);
+    const isRework = /nacharbeit|reklamation/.test(n);
+    const isAccount = /abschlussrechnung|kundenrechnung|schlussrechnung|teil-rg|teilrechnung/.test(n);
+
+    if (kpi === "delta_new" && t.history_index === 1) {
+      matchIds.add(t.project_match_id);
+    } else if (kpi === "delta_completed" && isFinished) {
+      matchIds.add(t.project_match_id);
+    } else if (kpi === "delta_accounting" && isAccount) {
+      matchIds.add(t.project_match_id);
+    } else if (kpi === "delta_rework" && isRework) {
+      matchIds.add(t.project_match_id);
+    } else if (
+      kpi === "delta_reopens" &&
+      isRework &&
+      finishedBefore.has(t.project_match_id)
+    ) {
+      matchIds.add(t.project_match_id);
+    }
+  }
+
+  return Array.from(matchIds)
+    .map((id) => byId.get(id))
+    .filter((r): r is DashboardProjectRow => !!r)
+    .map(mapRow)
+    .sort(sortByNumber);
+}
+
+function sortByNumber(a: PipelineProjectRow, b: PipelineProjectRow): number {
+  return (a.projectNumber ?? "").localeCompare(b.projectNumber ?? "");
+}
+
 export async function loadProjectsForSteps(
   department: Department,
   stepKeys: string[],
@@ -557,62 +818,6 @@ export async function loadProjectsForSteps(
       const key = row.step_group ?? row.step_name ?? row.step_id;
       return key != null && stepKeySet.has(key);
     })
-    .map((row) => {
-      const createdTs = row.created_at_hero
-        ? Date.parse(row.created_at_hero)
-        : NaN;
-      const completionTs = row.completion_date
-        ? Date.parse(row.completion_date)
-        : NaN;
-      const maturityTs = row.maturity_date
-        ? Date.parse(row.maturity_date)
-        : NaN;
-
-      const isFinished = row.is_finished ?? false;
-      const isOverdue =
-        !isFinished &&
-        Number.isFinite(maturityTs) &&
-        maturityTs < now;
-      const isNewInPeriod =
-        periodFrom != null &&
-        periodTo != null &&
-        Number.isFinite(createdTs) &&
-        createdTs >= periodFrom &&
-        createdTs < periodTo;
-      const isCompletedInPeriod =
-        periodFrom != null &&
-        periodTo != null &&
-        isFinished &&
-        Number.isFinite(completionTs) &&
-        completionTs >= periodFrom &&
-        completionTs < periodTo;
-
-      return {
-      id: row.id,
-      projectNumber: row.project_number,
-      projectName: cleanProjectTitle(row.project_name, {
-        customerName: row.customer_name,
-        projectNumber: row.project_number,
-      }),
-      customerName: row.customer_name,
-      stepName: row.step_name,
-      previousStepName: row.previous_step_name ?? null,
-      previousStepAt: row.previous_step_at ?? null,
-      maturityDate: row.maturity_date,
-      createdAtHero: row.created_at_hero ?? null,
-      completionDate: row.completion_date ?? null,
-      isOverdue,
-      isNewInPeriod,
-      isCompletedInPeriod,
-      isFinished,
-      department: row.department_key ?? null,
-      wasReopened: row.was_reopened ?? false,
-      openInvoiceAmount: Number(row.accounting_open_amount ?? 0) || 0,
-      openInvoiceCount: Number(row.accounting_open_count ?? 0) || 0,
-      isAccountingOpen: row.is_accounting_open ?? false,
-      };
-    })
-    .sort((a, b) =>
-      (a.projectNumber ?? "").localeCompare(b.projectNumber ?? "")
-    );
+    .map((row) => toPipelineProjectRow(row, { periodFrom, periodTo, now }))
+    .sort(sortByNumber);
 }
