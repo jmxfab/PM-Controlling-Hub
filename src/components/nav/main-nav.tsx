@@ -28,20 +28,22 @@ export function MainNav() {
 
   return (
     <header className="relative border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-visible z-30">
-      <div className="relative max-w-[1200px] mx-auto px-8 h-16 flex items-center gap-6 overflow-visible">
+      <div className="relative max-w-[1200px] mx-auto pl-6 pr-8 h-16 flex items-center gap-6 overflow-visible">
         <Link
           href="/"
-          className="shrink-0 relative block -my-6 z-40"
+          className="group shrink-0 relative block self-center -mb-12 z-40 transition-transform hover:scale-[1.03]"
           aria-label="Jumax Controlling · Startseite"
         >
-          {/* Logo (120×120) ragt bewusst oben + unten deutlich über den Header. */}
+          {/* Logo (96×96) hängt unter die Header-Unterkante.
+              Kein rounded/shadow — die schwarze PNG-Fläche geht sauber in
+              den Page-Background über (Light + Dark). */}
           <Image
             src="/jumax-logo.png"
             alt="Jumax Logo"
-            width={120}
-            height={120}
+            width={96}
+            height={96}
             priority
-            className="rounded-xl drop-shadow-xl"
+            className="block"
           />
         </Link>
         <nav className="flex items-center gap-1">

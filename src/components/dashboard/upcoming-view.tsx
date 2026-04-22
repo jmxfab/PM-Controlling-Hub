@@ -42,6 +42,7 @@ import {
   type Department,
 } from "@/lib/dashboard/dashboard-types";
 import type { UpcomingProject } from "@/lib/supabase/hero-maturity-queries";
+import { HeroProjectLink } from "./hero-project-link";
 
 export type UpcomingWindow = "overdue" | "today" | "tomorrow" | "next3d" | "next7d" | "next30d";
 
@@ -377,20 +378,12 @@ export function UpcomingView({
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {heroHref ? (
-                        <a
-                          href={heroHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {p.projectNumber ?? "–"}
-                        </a>
-                      ) : (
-                        p.projectNumber ?? "–"
-                      )}
+                    <TableCell>
+                      <HeroProjectLink
+                        projectId={p.id}
+                        projectNumber={p.projectNumber}
+                        linkTemplate={heroProjectLinkTemplate ?? null}
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="space-y-0.5">

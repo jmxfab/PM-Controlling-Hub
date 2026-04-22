@@ -58,17 +58,18 @@ export const loadUpcomingProjects = cache(
 
     if (department !== "GESAMT") {
       query = query.eq("department_key", department);
-    } else {
-      query = query.in("department_key", typeIds.map(() => "").filter((_, i) => i === 0)
-        ? ["PV", "PV_GEWERBE", "WP", "KLIMA", "GEBAEUDETECHNIK"]
-        : ["PV", "PV_GEWERBE", "WP", "KLIMA", "GEBAEUDETECHNIK"]);
+    } else if (typeIds.length > 0) {
+      query = query.in("department_key", typeIds);
     }
 
     const { data, error } = await query
       .order("maturity_date", { ascending: true })
       .limit(500);
 
-    if (error) return [];
+    if (error) {
+      console.error("loadUpcomingProjects query failed:", error.message);
+      return [];
+    }
 
     const now = Date.now();
     const today = new Date();

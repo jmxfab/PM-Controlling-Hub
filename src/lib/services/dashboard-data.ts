@@ -117,7 +117,7 @@ function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem
         }),
         status: project.status,
         stepName: project.step_name ?? null,
-        department: getDepartmentFromProjectNumber(project.project_number),
+        department: project.department ?? getDepartmentFromProjectNumber(project.project_number),
         snapshotDate: getProjectSnapshotDate(project),
         projectType: project.project_type,
         measureShort: project.measure_short,

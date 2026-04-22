@@ -12,6 +12,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HeroProjectLink } from "./hero-project-link";
 import {
   Card,
   CardContent,
@@ -179,22 +180,12 @@ export function DashboardProjectList({
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                           {project.projectNumber ? (
-                            project.heroLink ? (
-                              <a
-                                href={project.heroLink}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                title="Im Hero öffnen"
-                                className="inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-blue-500 hover:border-blue-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                              >
-                                {project.projectNumber}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : (
-                              <Badge variant="outline" className="font-medium text-foreground">
-                                {project.projectNumber}
-                              </Badge>
-                            )
+                            <HeroProjectLink
+                              projectId={project.id}
+                              projectNumber={project.projectNumber}
+                              linkTemplate={heroProjectLinkTemplate ?? null}
+                              size="md"
+                            />
                           ) : (
                             <span>Ohne Projektnummer</span>
                           )}

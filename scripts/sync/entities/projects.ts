@@ -212,6 +212,11 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
   extract: (data) =>
     (data as { project_matches?: ProjectMatchRaw[] } | null)?.project_matches ?? [],
   normalize: (raw) => {
+    const resolvedId = raw.id ?? raw.project_id ?? raw.project_nr;
+    if (!resolvedId) {
+      throw new Error(`Hero project row has no usable id: ${JSON.stringify(raw).slice(0, 200)}`);
+    }
+
     const statuses = raw.project_match_statuses ?? [];
     const completion = findLatestStatusByName(statuses, [
       "abgeschlossen",
@@ -227,7 +232,7 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
     ]);
 
     return {
-      id: String(raw.id ?? raw.project_id ?? raw.project_nr ?? ""),
+      id: String(resolvedId),
       project_number: raw.project_nr ?? null,
       project_name: raw.project_title ?? null,
       department: departmentFor(raw.project_nr),

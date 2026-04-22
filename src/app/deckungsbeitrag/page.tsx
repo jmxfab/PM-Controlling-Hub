@@ -29,13 +29,17 @@ export default async function DeckungsbeitragPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const department = parseDashboardDepartmentParam(resolved.department);
   const timeframe = parseDashboardTimeframe(resolved);
+  const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   const tabContents = Object.fromEntries(
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
       dept === department ? (
         <Suspense key={department} fallback={<DashboardInitialLoader />}>
-          <DeckungsbeitragTab department={department} />
+          <DeckungsbeitragTab
+            department={department}
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
         </Suspense>
       ) : (
         <div className="text-sm text-muted-foreground py-8 text-center">
@@ -69,8 +73,10 @@ export default async function DeckungsbeitragPage({ searchParams }: PageProps) {
 
 async function DeckungsbeitragTab({
   department,
+  heroProjectLinkTemplate,
 }: {
   department: Department;
+  heroProjectLinkTemplate: string | null;
 }) {
   const dto = await loadDeckungsbeitrag(department).catch(() => null);
   if (!dto) {
@@ -80,5 +86,11 @@ async function DeckungsbeitragTab({
       </div>
     );
   }
-  return <DeckungsbeitragView department={department} dto={dto} />;
+  return (
+    <DeckungsbeitragView
+      department={department}
+      dto={dto}
+      heroProjectLinkTemplate={heroProjectLinkTemplate}
+    />
+  );
 }

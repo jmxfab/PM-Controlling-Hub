@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export function EmailReviewCard({ email, onPushed, onRejected }: EmailReviewCard
       const data = (await res.json()) as { notion_page_id: string };
       onPushed(email.id, data.notion_page_id);
     } catch {
-      alert("Fehler beim Eintragen in Notion. Bitte nochmal versuchen.");
+      toast.error("Fehler beim Eintragen in Notion. Bitte nochmal versuchen.");
     } finally {
       setLoading(null);
     }
@@ -64,7 +65,7 @@ export function EmailReviewCard({ email, onPushed, onRejected }: EmailReviewCard
       });
       onRejected(email.id);
     } catch {
-      alert("Fehler beim Ablehnen.");
+      toast.error("Fehler beim Ablehnen.");
     } finally {
       setLoading(null);
     }

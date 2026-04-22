@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 
 export type EmailCategory = "info" | "aufgabe" | "dringend";
 
@@ -59,16 +60,34 @@ export async function classifyEmail(params: {
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const text = message.content
+  const raw = message.content
     .filter((block) => block.type === "text")
     .map((block) => (block as { type: "text"; text: string }).text)
     .join("");
 
-  const result = JSON.parse(text) as ClassificationResult;
+  // Strip optional markdown fences Claude sometimes wraps around JSON
+  const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
-  if (!["info", "aufgabe", "dringend"].includes(result.category)) {
-    result.category = "info";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`Email classifier returned non-JSON response: ${text.slice(0, 200)}`);
   }
 
-  return result;
+  const schema = z.object({
+    category: z.enum(["info", "aufgabe", "dringend"]).catch("info"),
+    title: z.string().max(120).catch("(kein Titel)"),
+    summary: z.string().max(2000).catch(""),
+    due_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .catch(null),
+    reasoning: z.string().max(500).catch(""),
+  });
+
+  const result = schema.parse(parsed);
+
+  return result as ClassificationResult;
 }

@@ -38,6 +38,7 @@ import type {
 } from "@/lib/supabase/hero-insights-queries";
 import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { HeroProjectLink } from "./hero-project-link";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
@@ -287,20 +288,12 @@ export function InsightsView({
                   }
                   title={heroHref ? "Im Hero öffnen" : undefined}
                 >
-                  <TableCell className="font-mono text-xs">
-                    {heroHref ? (
-                      <a
-                        href={heroHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {p.projectNumber ?? "–"}
-                      </a>
-                    ) : (
-                      p.projectNumber ?? "–"
-                    )}
+                  <TableCell>
+                    <HeroProjectLink
+                      projectId={p.id}
+                      projectNumber={p.projectNumber}
+                      linkTemplate={heroProjectLinkTemplate ?? null}
+                    />
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">

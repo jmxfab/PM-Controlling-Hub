@@ -31,7 +31,13 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isExcluded(pathname)) return NextResponse.next();
 
-  const expected = process.env.DASHBOARD_PASSWORD ?? "controlling";
+  const expected = process.env.DASHBOARD_PASSWORD;
+  if (!expected) {
+    return new NextResponse("Server misconfigured: DASHBOARD_PASSWORD is not set", {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   const header = req.headers.get("authorization") ?? "";
 
   if (header.startsWith("Basic ")) {

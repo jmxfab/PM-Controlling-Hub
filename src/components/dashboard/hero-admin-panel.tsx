@@ -16,6 +16,16 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +68,7 @@ export function HeroAdminPanel({
   const [feedback, setFeedback] = useState<FeedbackState>({ kind: "idle" });
   const [isSaving, setIsSaving] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const refreshDashboard = () => {
@@ -120,11 +131,6 @@ export function HeroAdminPanel({
   };
 
   const handleClear = async () => {
-    const confirmed = window.confirm(
-      "Hero API Key wirklich entfernen? Das Dashboard fällt dann auf die Umgebungsvariable bzw. Beispieldaten zurück."
-    );
-    if (!confirmed) return;
-
     setIsClearing(true);
     setFeedback({ kind: "idle" });
 
@@ -176,6 +182,7 @@ export function HeroAdminPanel({
   const busy = isSaving || isClearing || isPending;
 
   return (
+    <>
     <Card>
       <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between lg:space-y-0">
         <div className="space-y-2">
@@ -308,7 +315,7 @@ export function HeroAdminPanel({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleClear}
+                  onClick={() => setShowClearConfirm(true)}
                   disabled={busy}
                 >
                   {isClearing ? (
@@ -339,5 +346,29 @@ export function HeroAdminPanel({
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Hero API Key entfernen?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Das Dashboard fällt dann auf die Umgebungsvariable bzw. Beispieldaten zurück.
+            Diese Aktion kann nicht rückgängig gemacht werden.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setShowClearConfirm(false);
+              void handleClear();
+            }}
+          >
+            Entfernen
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

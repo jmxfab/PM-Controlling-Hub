@@ -25,34 +25,58 @@ export async function POST(request: NextRequest) {
   const { id, title, summary } = parsed.data;
   const supabase = getSupabaseAdmin();
 
-  const { data: email, error } = await supabase
+  // Atomares CAS: nur wenn status noch NICHT 'pushed_to_notion' → verhindert
+  // Race Conditions bei gleichzeitigen Requests.
+  const { data: claimed, error: claimError } = await supabase
     .from("emails_processed")
-    .select("*")
+    .update({ status: "pushing" })
     .eq("id", id)
+    .neq("status", "pushed_to_notion")
+    .neq("status", "pushing")
+    .select("*")
     .single();
 
-  if (error || !email) {
-    return NextResponse.json({ error: "E-Mail nicht gefunden" }, { status: 404 });
-  }
+  if (claimError || !claimed) {
+    const { data: existing } = await supabase
+      .from("emails_processed")
+      .select("status")
+      .eq("id", id)
+      .single();
 
-  if (email.status === "pushed_to_notion") {
+    if (!existing) {
+      return NextResponse.json({ error: "E-Mail nicht gefunden" }, { status: 404 });
+    }
     return NextResponse.json({ error: "Bereits in Notion eingetragen" }, { status: 409 });
   }
 
-  const notionPageId = await createNotionTask({
-    title,
-    subject: email.subject ?? "(kein Betreff)",
-    senderEmail: email.sender_email ?? "",
-    category: email.category,
-    summary,
-    receivedAt: email.received_at ?? email.created_at,
-    dueDate: email.extracted_due_date ?? null,
-  });
+  let notionPageId: string;
+  try {
+    notionPageId = await createNotionTask({
+      title,
+      subject: claimed.subject ?? "(kein Betreff)",
+      senderEmail: claimed.sender_email ?? "",
+      category: claimed.category,
+      summary,
+      receivedAt: claimed.received_at ?? claimed.created_at,
+      dueDate: claimed.extracted_due_date ?? null,
+    });
+  } catch (err) {
+    // Rollback claim so the user can retry
+    await supabase
+      .from("emails_processed")
+      .update({ status: "pending" })
+      .eq("id", id);
+    throw err;
+  }
 
-  await supabase
+  const { error: finalizeError } = await supabase
     .from("emails_processed")
     .update({ status: "pushed_to_notion", notion_page_id: notionPageId })
     .eq("id", id);
+
+  if (finalizeError) {
+    console.error("push-to-notion: failed to finalize status", finalizeError.message);
+  }
 
   return NextResponse.json({ success: true, notion_page_id: notionPageId });
 }

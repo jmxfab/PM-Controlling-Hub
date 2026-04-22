@@ -43,6 +43,7 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import { HeroProjectLink } from "./hero-project-link";
 
 interface HeroPipelinePanelProps {
   department: Department;
@@ -349,20 +350,12 @@ export function HeroPipelinePanel({
                       }
                       title={heroHref ? "Im Hero öffnen" : undefined}
                     >
-                      <TableCell className="font-mono text-xs">
-                        {heroHref ? (
-                          <a
-                            href={heroHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {project.projectNumber ?? "–"}
-                          </a>
-                        ) : (
-                          project.projectNumber ?? "–"
-                        )}
+                      <TableCell>
+                        <HeroProjectLink
+                          projectId={project.id}
+                          projectNumber={project.projectNumber}
+                          linkTemplate={heroProjectLinkTemplate ?? null}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 flex-wrap">

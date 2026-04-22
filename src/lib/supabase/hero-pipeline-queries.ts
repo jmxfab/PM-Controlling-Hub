@@ -16,6 +16,7 @@ import { cleanProjectTitle } from "@/lib/hero/project-title";
 import {
   isAccountingStep,
   isFinishedStep as isFinishedStepName,
+  isReworkStep as isReworkStepName,
 } from "@/lib/hero/step-classifier";
 
 function supabaseAdmin() {
@@ -188,48 +189,7 @@ export async function loadTimeframeDeltas(
   const supabase = supabaseAdmin();
   const typeIds = typeIdsFor(department);
 
-  // Basis-Query: alle Transitions im Zeitraum + Department-Filter
-  let deptFilter = "";
-  const deptParams: string[] = [];
-  if (department !== "GESAMT") {
-    deptFilter = ` AND department_key = '${department}'`;
-  } else {
-    deptFilter = ` AND department_key IS NOT NULL`;
-  }
-
-  // Transitions im Zeitraum pro Kategorie via SQL-RPC ... oder inline
-  // Wir nutzen eine einzige SELECT mit FILTER-Aggregaten.
-  const sql = `
-    SELECT
-      count(DISTINCT t.project_match_id) FILTER (
-        WHERE t.history_index = 1
-      ) AS new_projects,
-      count(*) FILTER (
-        WHERE LOWER(t.step_name) SIMILAR TO '%(abgeschlossen|archiviert)%'
-      ) AS completed,
-      count(*) FILTER (
-        WHERE LOWER(t.step_name) ~ '(nacharbeit|reklamation)'
-      ) AS reworks,
-      count(*) FILTER (
-        WHERE LOWER(t.step_name) LIKE '%abschlussrechnung%'
-           OR LOWER(t.step_name) LIKE '%kundenrechnung%'
-           OR LOWER(t.step_name) LIKE '%schlussrechnung%'
-           OR LOWER(t.step_name) LIKE '%teil-rg%'
-           OR LOWER(t.step_name) LIKE '%teilrechnung%'
-      ) AS accounting,
-      count(*) AS total
-    FROM hero_status_transitions t
-    WHERE t.entered_at >= $1::timestamptz
-      AND t.entered_at <  $2::timestamptz
-      ${deptFilter}
-  `;
-  void sql;
-  void deptParams;
-
-  // Leichteres: alle transitions via supabase REST mit inline filtern
-  // Supabase-js kann JSON-basierte Range-Queries, aber für FILTERs mit
-  // SIMILAR/ILIKE brauchen wir rpc. Stattdessen: lade alle relevanten
-  // Zeilen und aggregiere in JS (im Zeitraum sind meist <1000 Zeilen).
+  // Lade alle Transitions im Zeitraum und aggregiere in JS.
 
   let query = supabase
     .from("hero_status_transitions")
@@ -284,17 +244,13 @@ export async function loadTimeframeDeltas(
 
   for (const t of chunks) {
     if (!t.step_name) continue;
-    const n = t.step_name.toLowerCase();
-    const isFinishedStep = /abgeschlossen|archiviert/.test(n);
-    const isReworkStep = /nacharbeit|reklamation/.test(n);
-    const isAccountingStep = /abschlussrechnung|kundenrechnung|schlussrechnung|teil-rg|teilrechnung/.test(n);
     if (t.history_index === 1) seenNewProjects.add(t.project_match_id);
-    if (isFinishedStep) completed += 1;
-    if (isReworkStep) {
+    if (isFinishedStepName(t.step_name)) completed += 1;
+    if (isReworkStepName(t.step_name)) {
       reworks += 1;
       if (finishedBefore.has(t.project_match_id)) reopened += 1;
     }
-    if (isAccountingStep) accounting += 1;
+    if (isAccountingStep(t.step_name)) accounting += 1;
   }
 
   // Projekte die in diesem Zeitraum überfällig wurden = maturity_date fiel

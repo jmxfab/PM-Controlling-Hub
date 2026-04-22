@@ -11,23 +11,26 @@ function getRequiredEnv(
   return value;
 }
 
-function createReadClient(): SupabaseClient {
-  return createClient(
-    getRequiredEnv(process.env.NEXT_PUBLIC_SUPABASE_URL, "supabaseUrl"),
-    getRequiredEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, "supabaseAnonKey")
-  );
+let _readClient: SupabaseClient | null = null;
+
+function getReadClient(): SupabaseClient {
+  if (!_readClient) {
+    _readClient = createClient(
+      getRequiredEnv(process.env.NEXT_PUBLIC_SUPABASE_URL, "NEXT_PUBLIC_SUPABASE_URL"),
+      getRequiredEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, "NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    );
+  }
+  return _readClient;
 }
 
 /**
  * Standard Supabase client for client-side and general server-side reading.
- * Uses the anonymous key and is subject to RLS.
- *
- * The client is created lazily so builds and local dashboard work do not fail
- * unless a code path actually needs Supabase.
+ * Uses the anonymous key and is subject to RLS. Singleton — created once on
+ * first use so builds without env vars don't fail at import time.
  */
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_target, property) {
-    const client = createReadClient();
+    const client = getReadClient();
     const value = client[property as keyof SupabaseClient];
 
     return typeof value === "function" ? value.bind(client) : value;

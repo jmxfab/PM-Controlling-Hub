@@ -23,6 +23,7 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import { HeroProjectLink } from "./hero-project-link";
 
 function formatEur(v: number): string {
   return new Intl.NumberFormat("de-DE", {
@@ -35,9 +36,11 @@ function formatEur(v: number): string {
 export function DeckungsbeitragView({
   department,
   dto,
+  heroProjectLinkTemplate,
 }: {
   department: Department;
   dto: DeckungsbeitragDto;
+  heroProjectLinkTemplate?: string | null;
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
 
@@ -125,8 +128,12 @@ export function DeckungsbeitragView({
               ) : (
                 dto.rows.map((r) => (
                   <TableRow key={r.projectMatchId}>
-                    <TableCell className="font-mono text-xs">
-                      {r.projectNumber ?? "–"}
+                    <TableCell>
+                      <HeroProjectLink
+                        projectId={r.projectMatchId}
+                        projectNumber={r.projectNumber}
+                        linkTemplate={heroProjectLinkTemplate ?? null}
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="space-y-0.5">
