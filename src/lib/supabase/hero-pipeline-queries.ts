@@ -1,7 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+
+const DATA_CACHE_TTL_S = 60;
 
 import {
   HERO_TYPE_ID_TO_DEPARTMENT,
@@ -71,41 +74,53 @@ function isFinishedStep(name: string | null | undefined): boolean {
   return FINISHED_NAME_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-const loadProjectTypeStepsOnce = cache(
-  async (): Promise<Map<string, Map<string, { name: string; sortOrder: number }>>> => {
-    // Map<typeId, Map<stepId, { name, sortOrder }>>
-    const supabase = supabaseAdmin();
-    const result = new Map<string, Map<string, { name: string; sortOrder: number }>>();
+interface StepDescriptor {
+  name: string;
+  sortOrder: number;
+}
 
+const fetchProjectTypeStepsRaw = unstable_cache(
+  async (): Promise<Array<[string, Array<[string, StepDescriptor]>]>> => {
+    const supabase = supabaseAdmin();
     const { data, error } = await supabase
       .from("hero_project_types")
       .select("id, raw");
 
     if (error) {
-      console.warn("loadProjectTypeStepsOnce:", error.message);
-      return result;
+      console.warn("fetchProjectTypeStepsRaw:", error.message);
+      return [];
     }
 
-    for (const row of (data ?? []) as Array<{
-      id: string;
-      raw: Record<string, unknown> | null;
-    }>) {
-      const steps = (row.raw?.project_status_steps as
-        | Array<{ id?: unknown; name?: unknown; sort_order?: unknown }>
-        | undefined) ?? [];
-      const perType = new Map<string, { name: string; sortOrder: number }>();
+    return (data ?? []).map((row) => {
+      const typed = row as { id: string; raw: Record<string, unknown> | null };
+      const steps =
+        (typed.raw?.project_status_steps as
+          | Array<{ id?: unknown; name?: unknown; sort_order?: unknown }>
+          | undefined) ?? [];
+      const entries: Array<[string, StepDescriptor]> = [];
       for (const step of steps) {
         const id = step.id != null ? String(step.id) : null;
         const name = typeof step.name === "string" ? step.name : null;
         if (!id || !name) continue;
-        perType.set(id, {
-          name,
-          sortOrder: typeof step.sort_order === "number" ? step.sort_order : 0,
-        });
+        entries.push([
+          id,
+          {
+            name,
+            sortOrder: typeof step.sort_order === "number" ? step.sort_order : 0,
+          },
+        ]);
       }
-      result.set(row.id, perType);
-    }
-    return result;
+      return [typed.id, entries] as [string, Array<[string, StepDescriptor]>];
+    });
+  },
+  ["hero_project_type_steps"],
+  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_project_types"] }
+);
+
+const loadProjectTypeStepsOnce = cache(
+  async (): Promise<Map<string, Map<string, StepDescriptor>>> => {
+    const pairs = await fetchProjectTypeStepsRaw();
+    return new Map(pairs.map(([typeId, entries]) => [typeId, new Map(entries)]));
   }
 );
 

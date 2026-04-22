@@ -1,12 +1,19 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 
 import {
   normalizeHeroProject,
   type HeroProject,
 } from "@/lib/hero/hero-client";
+
+/**
+ * TTL for the cross-request data cache. The GitHub Actions sync refreshes
+ * Supabase every 15 min, so a 60 s view is both cheap and acceptably fresh.
+ */
+const DATA_CACHE_TTL_S = 60;
 
 /**
  * Read-side accessors for the Hero mirror tables.
@@ -38,24 +45,37 @@ interface HeroProjectRow {
   raw: Record<string, unknown> | null;
 }
 
+/**
+ * Raw Supabase fetch of the project rows. Cached across requests via
+ * Next.js unstable_cache so repeated dashboard renders within the TTL
+ * hit the data cache rather than re-reading 3k rows.
+ */
+const fetchHeroProjectRows = unstable_cache(
+  async (): Promise<HeroProjectRow[]> => {
+    const supabase = supabaseAdmin();
+    const { data, error } = await supabase
+      .from("hero_projects")
+      .select("id, raw")
+      .eq("is_deleted", false);
+    if (error) {
+      throw new Error(`Failed to load hero_projects: ${error.message}`);
+    }
+    return (data ?? []) as HeroProjectRow[];
+  },
+  ["hero_projects_raw"],
+  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_projects"] }
+);
+
 export const loadHeroProjectsFromSupabase = cache(
   async (): Promise<HeroProject[]> => {
-    const supabase = supabaseAdmin();
-
-    const [projectsResult, accountingSums] = await Promise.all([
-      supabase.from("hero_projects").select("id, raw").eq("is_deleted", false),
+    const [projectRows, accountingSums] = await Promise.all([
+      fetchHeroProjectRows(),
       loadAccountingSumsByProjectId(),
     ]);
 
-    const { data: projectRows, error: projectsError } = projectsResult;
-    if (projectsError) {
-      throw new Error(`Failed to load hero_projects: ${projectsError.message}`);
-    }
-    if (!projectRows || projectRows.length === 0) {
-      return [];
-    }
+    if (projectRows.length === 0) return [];
 
-    return (projectRows as HeroProjectRow[]).flatMap((row) => {
+    return projectRows.flatMap((row) => {
       if (!row.raw) return [];
       const project = normalizeHeroProject(
         row.raw as unknown as Parameters<typeof normalizeHeroProject>[0]
@@ -76,43 +96,55 @@ export const loadHeroProjectsFromSupabase = cache(
  * "type contains invoice/rechnung" rule the in-memory normalizer used to
  * apply, but does it in one query rather than 18k row materialisation.
  */
-const loadAccountingSumsByProjectId = cache(
-  async (): Promise<Map<string, number>> => {
+const fetchAccountingSumPairs = unstable_cache(
+  async (): Promise<Array<[string, number]>> => {
     const supabase = supabaseAdmin();
-    const result = new Map<string, number>();
+
+    // Push the invoice/Rechnung filter to SQL — without it we'd pull all
+    // 18k+ rows just to drop >80% of them in JS.
+    const invoiceFilter = [
+      "type.ilike.%invoice%",
+      "type.ilike.%rechnung%",
+      "document_type_name.ilike.%invoice%",
+      "document_type_name.ilike.%rechnung%",
+      "document_base_type.ilike.%invoice%",
+      "document_base_type.ilike.%rechnung%",
+    ].join(",");
 
     const { data, error } = await supabase
       .from("hero_customer_documents")
-      .select("project_match_id, value, type, document_type_name, document_base_type")
+      .select("project_match_id, value")
       .eq("is_deleted", false)
       .not("project_match_id", "is", null)
-      .not("value", "is", null);
+      .not("value", "is", null)
+      .or(invoiceFilter);
 
     if (error) {
       console.warn("accounting sums query failed:", error.message);
-      return result;
+      return [];
     }
 
+    const acc = new Map<string, number>();
     for (const row of (data ?? []) as Array<{
       project_match_id: string | null;
       value: number | null;
-      type: string | null;
-      document_type_name: string | null;
-      document_base_type: string | null;
     }>) {
       if (!row.project_match_id || row.value == null) continue;
-      const typeValue =
-        `${row.type ?? ""} ${row.document_type_name ?? ""} ${row.document_base_type ?? ""}`.toLowerCase();
-      if (!typeValue.includes("invoice") && !typeValue.includes("rechnung")) {
-        continue;
-      }
-      result.set(
+      acc.set(
         row.project_match_id,
-        (result.get(row.project_match_id) ?? 0) + row.value
+        (acc.get(row.project_match_id) ?? 0) + row.value
       );
     }
+    return Array.from(acc.entries());
+  },
+  ["hero_accounting_sums"],
+  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_customer_documents"] }
+);
 
-    return result;
+const loadAccountingSumsByProjectId = cache(
+  async (): Promise<Map<string, number>> => {
+    const pairs = await fetchAccountingSumPairs();
+    return new Map(pairs);
   }
 );
 
