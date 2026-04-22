@@ -16,6 +16,7 @@ import { EXTENDED_ENTITIES } from "./extended";
 import { measuresSync } from "./measures";
 import { partnersSync } from "./partners";
 import { projectsSync } from "./projects";
+import { projectTypesRichSync } from "./project-types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ALL_ENTITIES: HeroEntitySync<any, any>[] = [
@@ -24,6 +25,7 @@ export const ALL_ENTITIES: HeroEntitySync<any, any>[] = [
   customerDocumentsSync,
   measuresSync,
   partnersSync,
+  projectTypesRichSync,
   ...EXTENDED_ENTITIES,
 ];
 

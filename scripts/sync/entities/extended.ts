@@ -204,24 +204,9 @@ export const historiesSync = makePaginatedEntity({
 // Reference / small entities (top-level)
 // ---------------------------------------------------------------------------
 
-export const projectTypesSync = makeUnpaginatedEntity({
-  name: "project_types",
-  table: "hero_project_types",
-  query: /* GraphQL */ `
-    query SyncProjectTypes {
-      project_types {
-        id
-        modified
-        created
-      }
-    }
-  `,
-  extract: (data) => {
-    if (!data || typeof data !== "object") return [];
-    const value = (data as Record<string, unknown>).project_types;
-    return Array.isArray(value) ? (value as BaseRaw[]) : [];
-  },
-});
+// project_types moved to its own file (project-types.ts) — it needs the full
+// project_status_steps list for the dashboard pipeline panel, not the minimal
+// id/modified shape the factory emits.
 
 export const documentTypesSync = makeUnpaginatedEntity({
   name: "document_types",
@@ -345,7 +330,6 @@ export const EXTENDED_ENTITIES = [
   fileUploadsSync,
   receiptsSync,
   historiesSync,
-  projectTypesSync,
   documentTypesSync,
   trackingCategoriesSync,
   companyBranchesSync,

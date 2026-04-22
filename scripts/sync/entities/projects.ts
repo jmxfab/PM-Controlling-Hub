@@ -29,6 +29,7 @@ interface ProjectMatchRaw {
   project_nr?: string | null;
   project_title?: string | null;
   project_type?: string | null;
+  type_id?: string | number | null;
   created?: string | null;
   modified?: string | null;
   measure?: { short?: string | null; name?: string | null } | null;
@@ -50,7 +51,15 @@ interface ProjectMatchRaw {
     city?: string | null;
     zipcode?: string | null;
   } | null;
-  current_project_match_status?: ProjectMatchStatusRaw | null;
+  current_project_match_status?:
+    | (ProjectMatchStatusRaw & {
+        step?: {
+          id?: string | number | null;
+          name?: string | null;
+          sort_order?: number | null;
+        } | null;
+      })
+    | null;
   project_match_statuses?: ProjectMatchStatusRaw[] | null;
 }
 
@@ -144,6 +153,7 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
         project_nr
         project_title
         project_type
+        type_id
         created
         modified
         measure {
@@ -174,6 +184,11 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
           name
           short_name
           maturity_date
+          step {
+            id
+            name
+            sort_order
+          }
         }
         project_match_statuses {
           id
