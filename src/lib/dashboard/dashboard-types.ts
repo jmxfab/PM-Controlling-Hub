@@ -1,8 +1,10 @@
 export const DASHBOARD_DEPARTMENTS = [
   "GESAMT",
   "PV",
+  "PV_GEWERBE",
   "WP",
-  "HAUSTECHNIK",
+  "KLIMA",
+  "GEBAEUDETECHNIK",
 ] as const;
 
 export type Department = (typeof DASHBOARD_DEPARTMENTS)[number];
@@ -11,16 +13,41 @@ export type ProjectDepartment = Exclude<Department, "GESAMT">;
 export const DASHBOARD_DEPARTMENT_SHORT_LABELS: Record<Department, string> = {
   GESAMT: "Gesamt",
   PV: "PV",
+  PV_GEWERBE: "PV Gewerbe",
   WP: "WP",
-  HAUSTECHNIK: "Haustechnik",
+  KLIMA: "Klima",
+  GEBAEUDETECHNIK: "Gebäudetechnik",
 };
 
 export const DASHBOARD_DEPARTMENT_NAMES: Record<Department, string> = {
   GESAMT: "Gesamtunternehmen",
-  PV: "Photovoltaik (PV)",
-  WP: "Wärmepumpen (WP)",
-  HAUSTECHNIK: "Haustechnik",
+  PV: "Photovoltaik",
+  PV_GEWERBE: "PV Gewerbe",
+  WP: "Wärmepumpen",
+  KLIMA: "Klima",
+  GEBAEUDETECHNIK: "Gebäudetechnik",
 };
+
+/**
+ * Hero project_type.id → dashboard department.
+ * Only type_ids that map to a value here are included in the dashboard;
+ * everything else (notably Leads / inactive legacy types) is filtered out.
+ */
+export const HERO_TYPE_ID_TO_DEPARTMENT: Record<string, ProjectDepartment> = {
+  "36933": "PV",              // ☀️ Photovoltaik
+  "36936": "PV_GEWERBE",      // ☀️ PV Gewerbe
+  "36934": "WP",              // ♨️ Wärmepumpe
+  "39820": "KLIMA",           // 🥶 Klima
+  "36935": "GEBAEUDETECHNIK", // 👨🏻‍🔧 Gebäudetechnik
+  "29899": "GEBAEUDETECHNIK", // Gebäudetechnik (ältere, aktive Variante)
+};
+
+export function mapHeroTypeIdToDepartment(
+  typeId: string | number | null | undefined
+): ProjectDepartment | null {
+  if (typeId == null) return null;
+  return HERO_TYPE_ID_TO_DEPARTMENT[String(typeId)] ?? null;
+}
 
 export interface DashboardProjectDocument {
   id?: string;

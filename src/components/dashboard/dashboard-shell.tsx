@@ -2,7 +2,7 @@
 
 import { type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, Sun, Wind, Wrench } from "lucide-react";
+import { Building2, Snowflake, Sun, Sunrise, Wind, Wrench } from "lucide-react";
 
 import {
   getDefaultDashboardCustomRange,
@@ -28,8 +28,10 @@ interface DashboardShellProps {
 const departmentIcons = {
   GESAMT: Building2,
   PV: Sun,
+  PV_GEWERBE: Sunrise,
   WP: Wind,
-  HAUSTECHNIK: Wrench,
+  KLIMA: Snowflake,
+  GEBAEUDETECHNIK: Wrench,
 } as const;
 
 export function DashboardShell({
@@ -178,7 +180,7 @@ export function DashboardShell({
       </div>
 
       <Tabs value={department} onValueChange={handleDepartmentChange} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
+        <TabsList className="grid w-full grid-cols-3 gap-1 lg:grid-cols-6 lg:w-full">
           {departments.map((departmentKey) => {
             const DepartmentIcon = departmentIcons[departmentKey];
 

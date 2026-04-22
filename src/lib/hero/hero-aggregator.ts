@@ -1,5 +1,5 @@
 import {
-  getDepartmentFromProjectNumber,
+  getDepartmentFromHeroTypeId,
   HeroDepartment,
   HeroProject,
 } from "@/lib/hero/hero-client";
@@ -122,18 +122,26 @@ function hasAccountingTransfer(project: HeroProject): boolean {
 
 type ProjectsByDept = Record<HeroDepartment | "GESAMT", HeroProject[]>;
 
-/** Group projects by department based on project number prefix */
+/**
+ * Group projects by department based on Hero type_id. Projects without a
+ * mapped type_id (e.g. Leads) are silently dropped — the read layer is
+ * expected to have already filtered them.
+ */
 export function groupProjectsByDepartment(projects: HeroProject[]): ProjectsByDept {
   const result: ProjectsByDept = {
     PV: [],
+    PV_GEWERBE: [],
     WP: [],
-    HAUSTECHNIK: [],
-    GESAMT: projects, // GESAMT = all departments combined
+    KLIMA: [],
+    GEBAEUDETECHNIK: [],
+    GESAMT: projects,
   };
 
   for (const project of projects) {
-    const dept = getDepartmentFromProjectNumber(project.project_number);
-    result[dept].push(project);
+    const dept = project.department ?? getDepartmentFromHeroTypeId(project.type_id);
+    if (dept) {
+      result[dept].push(project);
+    }
   }
 
   return result;

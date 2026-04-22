@@ -17,7 +17,12 @@ import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
 
 const HERO_ENDPOINT = "https://login.hero-software.de/api/external/v7/graphql";
 
-export type HeroDepartment = "PV" | "WP" | "HAUSTECHNIK";
+export type HeroDepartment =
+  | "PV"
+  | "PV_GEWERBE"
+  | "WP"
+  | "KLIMA"
+  | "GEBAEUDETECHNIK";
 
 export interface HeroParty {
   id?: string | number | null;
@@ -72,6 +77,11 @@ export interface HeroProject {
   name: string | null;
   status: string | null;
   project_type?: string | null;
+  type_id?: string | null;
+  department?: HeroDepartment | null;
+  step_id?: string | null;
+  step_name?: string | null;
+  step_sort_order?: number | null;
   measure_short?: string | null;
   measure_name?: string | null;
   created_at?: string | null;
@@ -103,15 +113,43 @@ export interface HeroProject {
   customerDocuments?: HeroCustomerDocument[] | null;
 }
 
-/** Determines the department from a project number prefix */
+/**
+ * Hero project_type.id → dashboard department.
+ * Only these type_ids flow into the dashboard; everything else (Leads,
+ * inactive legacy types) is filtered out at the read layer.
+ */
+const HERO_TYPE_ID_TO_DEPARTMENT: Record<string, HeroDepartment> = {
+  "36933": "PV",              // ☀️ Photovoltaik
+  "36936": "PV_GEWERBE",      // ☀️ PV Gewerbe
+  "36934": "WP",              // ♨️ Wärmepumpe
+  "39820": "KLIMA",           // 🥶 Klima
+  "36935": "GEBAEUDETECHNIK", // 👨🏻‍🔧 Gebäudetechnik
+  "29899": "GEBAEUDETECHNIK", // Gebäudetechnik (alte aktive Variante)
+};
+
+/**
+ * Returns the dashboard department for a Hero project based on its type_id.
+ * Returns null for project types we don't display (e.g. Leads).
+ */
+export function getDepartmentFromHeroTypeId(
+  typeId: string | number | null | undefined
+): HeroDepartment | null {
+  if (typeId == null) return null;
+  return HERO_TYPE_ID_TO_DEPARTMENT[String(typeId)] ?? null;
+}
+
+/**
+ * Legacy project-number prefix fallback — only kept for tests that don't
+ * have a type_id. New code should use getDepartmentFromHeroTypeId().
+ */
 export function getDepartmentFromProjectNumber(
   projectNumber: string | null | undefined
 ): HeroDepartment {
-  if (!projectNumber) return "HAUSTECHNIK";
+  if (!projectNumber) return "GEBAEUDETECHNIK";
   const upper = projectNumber.toUpperCase();
   if (upper.startsWith("PV")) return "PV";
   if (upper.startsWith("WÄP") || upper.startsWith("WAP")) return "WP";
-  return "HAUSTECHNIK";
+  return "GEBAEUDETECHNIK";
 }
 
 /** Generic GraphQL fetch helper */
@@ -159,6 +197,7 @@ interface HeroProjectMatchRaw {
   project_nr?: string | null;
   project_title?: string | null;
   project_type?: string | null;
+  type_id?: string | number | null;
   created?: string | null;
   modified?: string | null;
   measure?: {
@@ -178,6 +217,11 @@ interface HeroProjectMatchRaw {
     created?: string | null;
     modified?: string | null;
     maturity_date?: string | null;
+    step?: {
+      id?: string | number | null;
+      name?: string | null;
+      sort_order?: number | null;
+    } | null;
   } | null;
 }
 
@@ -229,6 +273,9 @@ export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProje
     .filter((value): value is string => !!value && value.trim().length > 0)
     .join(", ");
 
+  const typeId = rawProject.type_id != null ? String(rawProject.type_id) : null;
+  const step = rawProject.current_project_match_status?.step ?? null;
+
   return {
     id: String(rawProject.id ?? rawProject.project_id ?? rawProject.project_nr ?? ""),
     project_number: rawProject.project_nr ?? null,
@@ -238,6 +285,11 @@ export function normalizeHeroProject(rawProject: HeroProjectMatchRaw): HeroProje
       rawProject.project_type ??
       null,
     project_type: rawProject.project_type ?? null,
+    type_id: typeId,
+    department: getDepartmentFromHeroTypeId(typeId),
+    step_id: step?.id != null ? String(step.id) : null,
+    step_name: step?.name ?? null,
+    step_sort_order: step?.sort_order ?? null,
     measure_short: rawProject.measure?.short ?? null,
     measure_name: rawProject.measure?.name ?? null,
     created_at: rawProject.created ?? null,

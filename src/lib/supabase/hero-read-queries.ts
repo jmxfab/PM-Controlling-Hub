@@ -66,11 +66,14 @@ export async function loadHeroProjectsFromSupabase(): Promise<HeroProject[]> {
     const raw = { ...row.raw } as Record<string, unknown>;
     const docs = documentsByProjectId.get(row.id) ?? [];
     raw.customer_documents = docs;
-    return [
-      normalizeHeroProject(
-        raw as unknown as Parameters<typeof normalizeHeroProject>[0]
-      ),
-    ];
+    const project = normalizeHeroProject(
+      raw as unknown as Parameters<typeof normalizeHeroProject>[0]
+    );
+    // Filter out any project type that doesn't map to a dashboard department
+    // (e.g. Leads, inactive legacy types). normalizeHeroProject populates
+    // project.department from type_id; a null department means "don't show".
+    if (!project.department) return [];
+    return [project];
   });
 }
 

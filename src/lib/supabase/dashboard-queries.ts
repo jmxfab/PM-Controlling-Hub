@@ -10,7 +10,12 @@ import {
 import { type Department } from "@/lib/dashboard/dashboard-types";
 import { aggregateSnapshotsByWeek } from "@/lib/supabase/dashboard-historic";
 
-type SupabaseDepartment = "PV" | "WP" | "HAUSTECHNIK";
+type SupabaseDepartment =
+  | "PV"
+  | "PV_GEWERBE"
+  | "WP"
+  | "KLIMA"
+  | "GEBAEUDETECHNIK";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -13,7 +13,7 @@ import {
 export const metadata: Metadata = {
   title: "Controlling Dashboard | JMX",
   description:
-    "Projektcontrolling für PV, Wärmepumpen und Haustechnik — liest aus der Supabase-Hero-Mirror.",
+    "Projektcontrolling für PV, PV Gewerbe, Wärmepumpen, Klima und Gebäudetechnik — liest aus der Supabase-Hero-Mirror.",
 };
 
 export const revalidate = 30;
@@ -30,44 +30,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const timeframe = parseDashboardTimeframe(resolvedSearchParams);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
-  const tabContents = {
-    GESAMT: (
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardTabContent
-          department="GESAMT"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-          timeframe={timeframe}
-        />
-      </Suspense>
-    ),
-    PV: (
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardTabContent
-          department="PV"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-          timeframe={timeframe}
-        />
-      </Suspense>
-    ),
-    WP: (
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardTabContent
-          department="WP"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-          timeframe={timeframe}
-        />
-      </Suspense>
-    ),
-    HAUSTECHNIK: (
-      <Suspense fallback={<DashboardSkeleton />}>
-        <DashboardTabContent
-          department="HAUSTECHNIK"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-          timeframe={timeframe}
-        />
-      </Suspense>
-    ),
-  } satisfies Record<Department, ReactNode>;
+  const tabContents = Object.fromEntries(
+    DASHBOARD_DEPARTMENTS.map((dept) => [
+      dept,
+      (
+        <Suspense fallback={<DashboardSkeleton />}>
+          <DashboardTabContent
+            department={dept}
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+            timeframe={timeframe}
+          />
+        </Suspense>
+      ),
+    ])
+  ) as Record<Department, ReactNode>;
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
