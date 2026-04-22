@@ -25,6 +25,7 @@ const ACCOUNTING_PATTERNS = [
 ];
 const CLOSING_PATTERNS = ["abschlussgespräch"];
 const COMMITMENT_PATTERNS = ["auftragsbestätigung"];
+const BEWERTUNGSPOOL_PATTERNS = ["bewertungspool"];
 
 export const DASHBOARD_KPI_KEYS = [
   "activeProjects",
@@ -34,6 +35,7 @@ export const DASHBOARD_KPI_KEYS = [
   "scheduledReworks",
   "openCustomerCommitments",
   "scheduledClosings",
+  "bewertungspoolCount",
 ] as const;
 
 export type DashboardKpiKey = (typeof DASHBOARD_KPI_KEYS)[number];
@@ -67,6 +69,8 @@ const DASHBOARD_KPI_MATCHERS: Record<DashboardKpiKey, DashboardKpiMatcher> = {
     !isFinished(project) &&
     matchesStep(project, CLOSING_PATTERNS) &&
     !!project.maturity_date,
+  bewertungspoolCount: (project) =>
+    !isFinished(project) && matchesStep(project, BEWERTUNGSPOOL_PATTERNS),
 };
 
 function currentStepText(project: HeroProject): string {
@@ -198,6 +202,7 @@ export function computeKPIsFromProjectsAt(
     scheduledReworks: kpiProjectGroups.scheduledReworks.length,
     openCustomerCommitments: kpiProjectGroups.openCustomerCommitments.length,
     scheduledClosings: kpiProjectGroups.scheduledClosings.length,
+    bewertungspoolCount: kpiProjectGroups.bewertungspoolCount.length,
   };
 }
 
@@ -210,6 +215,7 @@ function createEmptyDashboardKpiProjectGroups(): DashboardKpiProjectGroups {
     scheduledReworks: [],
     openCustomerCommitments: [],
     scheduledClosings: [],
+    bewertungspoolCount: [],
   };
 }
 

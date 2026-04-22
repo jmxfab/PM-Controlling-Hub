@@ -62,6 +62,7 @@ describe("DashboardKpiDialog", () => {
           scheduledReworks: 1,
           openCustomerCommitments: 0,
           scheduledClosings: 0,
+          bewertungspoolCount: 0,
         }}
         departmentName="Photovoltaik (PV)"
         snapshotContextLabel="aktuellen Hero-Stand"
@@ -74,6 +75,7 @@ describe("DashboardKpiDialog", () => {
           scheduledReworks: [reworkProject],
           openCustomerCommitments: [],
           scheduledClosings: [],
+          bewertungspoolCount: [],
         }}
         source="sample"
         timeframe={{

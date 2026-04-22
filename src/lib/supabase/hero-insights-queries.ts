@@ -7,6 +7,7 @@ import {
   HERO_TYPE_ID_TO_DEPARTMENT,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import { cleanProjectTitle } from "@/lib/hero/project-title";
 
 /**
  * Zeitreihen- und Aggregations-Queries für den Insights-Tab.
@@ -267,7 +268,10 @@ export const loadLongestRunning = cache(
     return rows.map((r) => ({
       id: r.id,
       projectNumber: r.project_number,
-      projectName: r.project_name,
+      projectName: cleanProjectTitle(r.project_name, {
+        customerName: r.customer_name,
+        projectNumber: r.project_number,
+      }),
       stepName: r.step_name,
       customerName: r.customer_name,
       createdAtHero: r.created_at_hero,
@@ -279,6 +283,71 @@ export const loadLongestRunning = cache(
 );
 
 export { typeIdsFor };
+
+// ---------------------------------------------------------------------------
+// kWp / Anlagenleistung
+// ---------------------------------------------------------------------------
+
+export interface KwpStats {
+  totalKwp: number;
+  avgKwp: number | null;
+  projectsWithKwp: number;
+  projectsCompleted: number;
+}
+
+const KWP_REGEX = /(\d+(?:[.,]\d+)?)\s*kwp/i;
+
+function parseKwp(measureName: string | null): number | null {
+  if (!measureName) return null;
+  const m = KWP_REGEX.exec(measureName);
+  if (!m) return null;
+  const parsed = parseFloat(m[1].replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export const loadKwpStats = cache(
+  async (department: Department): Promise<KwpStats> => {
+    const supabase = supabaseAdmin();
+
+    let query = supabase
+      .from("hero_dashboard_projects")
+      .select("measure_name, is_finished, department_key")
+      .eq("is_finished", true);
+
+    if (department !== "GESAMT") query = query.eq("department_key", department);
+    else query = query.not("department_key", "is", null);
+
+    const rows: Array<{ measure_name: string | null; is_finished: boolean }> = [];
+    for (let offset = 0; offset < 20000; offset += 1000) {
+      const { data, error } = await query.range(offset, offset + 999);
+      if (error) break;
+      const chunk = (data ?? []) as typeof rows;
+      rows.push(...chunk);
+      if (chunk.length < 1000) break;
+    }
+
+    let totalKwp = 0;
+    let projectsWithKwp = 0;
+
+    for (const r of rows) {
+      const kwp = parseKwp(r.measure_name);
+      if (kwp !== null) {
+        totalKwp += kwp;
+        projectsWithKwp++;
+      }
+    }
+
+    return {
+      totalKwp: Math.round(totalKwp * 10) / 10,
+      avgKwp:
+        projectsWithKwp > 0
+          ? Math.round((totalKwp / projectsWithKwp) * 10) / 10
+          : null,
+      projectsWithKwp,
+      projectsCompleted: rows.length,
+    };
+  }
+);
 
 // ---------------------------------------------------------------------------
 // Zeit-Metriken (Durchlauf)

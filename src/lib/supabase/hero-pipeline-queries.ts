@@ -12,6 +12,7 @@ import {
   fetchDashboardProjectRows,
   type DashboardProjectRow,
 } from "./hero-read-queries";
+import { cleanProjectTitle } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -543,7 +544,10 @@ export async function loadProjectsForSteps(
     .map((row) => ({
       id: row.id,
       projectNumber: row.project_number,
-      projectName: row.project_name,
+      projectName: cleanProjectTitle(row.project_name, {
+        customerName: row.customer_name,
+        projectNumber: row.project_number,
+      }),
       customerName: row.customer_name,
       stepName: row.step_name,
       previousStepName: row.previous_step_name ?? null,

@@ -20,6 +20,7 @@ import {
   type HeroCustomerDocument,
   type HeroProject,
 } from "@/lib/hero/hero-client";
+import { cleanProjectTitle } from "@/lib/hero/project-title";
 import { getHistoricKPIs } from "@/lib/supabase/dashboard-queries";
 import { loadHeroProjectsFromSupabase } from "@/lib/supabase/hero-read-queries";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
@@ -33,6 +34,7 @@ const EMPTY_KPIS: KPIData = {
   scheduledReworks: 0,
   openCustomerCommitments: 0,
   scheduledClosings: 0,
+  bewertungspoolCount: 0,
 };
 
 export interface DashboardTabData {
@@ -97,26 +99,6 @@ async function getLiveData(
   };
 }
 
-/**
- * Hero's project_title often comes back as templated junk like
- * "-7305 | --, --, --" when a project was created without a real title.
- * Detect that shape and fall back to something useful.
- */
-function cleanProjectName(
-  raw: string | null | undefined,
-  customerName?: string | null
-): string | null {
-  if (!raw) return customerName ?? null;
-  const trimmed = raw.trim();
-  // No letters and no digits → just punctuation/dashes
-  if (!/[A-Za-zÄÖÜäöüß0-9]/.test(trimmed)) return customerName ?? null;
-  // Pattern: "-NNNN | --, --, --" or similar repeat-of-dashes segments
-  const letters = trimmed.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
-  const dashRun = (trimmed.match(/-/g) ?? []).length;
-  if (letters.length === 0 && dashRun >= 2) return customerName ?? null;
-  return trimmed;
-}
-
 function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem[] {
   return projects
     .map((project) => {
@@ -129,7 +111,10 @@ function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem
       return {
         id: project.id,
         projectNumber: project.project_number,
-        projectName: cleanProjectName(project.name, customerName),
+        projectName: cleanProjectTitle(project.name, {
+          customerName,
+          projectNumber: project.project_number,
+        }),
         status: project.status,
         stepName: project.step_name ?? null,
         department: getDepartmentFromProjectNumber(project.project_number),
@@ -186,6 +171,7 @@ function createEmptyDashboardKpiProjectGroups(): Record<
     scheduledReworks: [],
     openCustomerCommitments: [],
     scheduledClosings: [],
+    bewertungspoolCount: [],
   };
 }
 

@@ -8,6 +8,7 @@ import {
   type Department,
   type ProjectDepartment,
 } from "@/lib/dashboard/dashboard-types";
+import { cleanProjectTitle } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -90,7 +91,10 @@ export const loadUpcomingProjects = cache(
       return {
         id: r.id,
         projectNumber: r.project_number,
-        projectName: r.project_name,
+        projectName: cleanProjectTitle(r.project_name, {
+          customerName: r.customer_name,
+          projectNumber: r.project_number,
+        }),
         customerName: r.customer_name,
         stepName: r.step_name,
         maturityDate: r.maturity_date,

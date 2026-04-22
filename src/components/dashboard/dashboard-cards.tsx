@@ -12,6 +12,7 @@ import {
   CalendarClock,
   PhoneCall,
   CalendarCheck,
+  Star,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ export interface KPIData {
   scheduledReworks: number;
   openCustomerCommitments: number;
   scheduledClosings: number;
+  bewertungspoolCount: number;
 }
 
 interface DashboardKpiCardDefinition {
@@ -100,6 +102,13 @@ export const DASHBOARD_KPI_CARD_DEFINITIONS: Record<
     getValue: (data) => data.scheduledClosings,
     getDescription: ({ snapshotContextLabel }) =>
       `Kundentermine im ${snapshotContextLabel}`,
+  },
+  bewertungspoolCount: {
+    title: "Im Bewertungspool",
+    icon: Star,
+    getValue: (data) => data.bewertungspoolCount,
+    getDescription: ({ snapshotContextLabel }) =>
+      `Projekte zur Bewertung im ${snapshotContextLabel}`,
   },
 };
 

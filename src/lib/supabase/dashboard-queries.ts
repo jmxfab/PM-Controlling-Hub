@@ -104,6 +104,7 @@ export async function getLatestKPIs(
     scheduledReworks: data.scheduled_reworks,
     openCustomerCommitments: data.open_customer_commitments,
     scheduledClosings: data.scheduled_closings,
+    bewertungspoolCount: 0,
   };
 }
 
