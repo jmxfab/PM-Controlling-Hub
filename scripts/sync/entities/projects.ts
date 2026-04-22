@@ -41,6 +41,15 @@ interface ProjectMatchRaw {
     short_name?: string | null;
     maturity_date?: string | null;
   } | null;
+  project_match_statuses?: Array<{
+    id?: string | number | null;
+    status_code?: string | number | null;
+    name?: string | null;
+    short_name?: string | null;
+    created?: string | null;
+    modified?: string | null;
+    maturity_date?: string | null;
+  }> | null;
 }
 
 interface ProjectRow {
@@ -132,6 +141,15 @@ export const projectsSync: HeroEntitySync<ProjectMatchRaw, ProjectRow> = {
           id
           name
           short_name
+          maturity_date
+        }
+        project_match_statuses {
+          id
+          status_code
+          name
+          short_name
+          created
+          modified
           maturity_date
         }
       }

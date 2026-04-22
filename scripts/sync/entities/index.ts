@@ -10,10 +10,20 @@
 
 import type { HeroEntitySync } from "../sync-engine";
 
+import { contactsSync } from "./contacts";
+import { customerDocumentsSync } from "./customer-documents";
+import { measuresSync } from "./measures";
+import { partnersSync } from "./partners";
 import { projectsSync } from "./projects";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const ALL_ENTITIES: HeroEntitySync<any, any>[] = [projectsSync];
+export const ALL_ENTITIES: HeroEntitySync<any, any>[] = [
+  projectsSync,
+  contactsSync,
+  customerDocumentsSync,
+  measuresSync,
+  partnersSync,
+];
 
 export function findEntity(
   name: string

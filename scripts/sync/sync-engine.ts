@@ -53,6 +53,12 @@ export interface HeroEntitySync<TRaw, TRow extends { id: string }> {
    * ISO-string comparison on `row.hero_modified_at`.
    */
   rowModifiedAt?: (row: TRow) => string | null | undefined;
+  /**
+   * True for entities that return the full result set in a single request
+   * (e.g. `company { measures }`). The engine runs exactly one page and
+   * ignores `first` / `offset` semantics.
+   */
+  isUnpaginated?: boolean;
 }
 
 interface RunResult {
@@ -72,7 +78,9 @@ export async function runEntitySync<TRaw, TRow extends { id: string }>(
   const supabase = getSyncSupabaseAdmin();
   const startedAt = Date.now();
   const pageSize = entity.pageSize ?? 100;
-  const concurrency = Math.max(1, entity.concurrency ?? 3);
+  const concurrency = entity.isUnpaginated
+    ? 1
+    : Math.max(1, entity.concurrency ?? 3);
   const maxRows = entity.maxRows ?? 50_000;
 
   const { data: cursorRow } = await supabase
@@ -121,11 +129,15 @@ export async function runEntitySync<TRaw, TRow extends { id: string }>(
             first: pageSize,
             offset: offset + i * pageSize,
           };
-          const vars = {
-            first: ctx.first,
-            offset: ctx.offset,
-            ...(entity.variables ? entity.variables(ctx) : {}),
-          };
+          const vars = entity.isUnpaginated
+            ? entity.variables
+              ? entity.variables(ctx)
+              : {}
+            : {
+                first: ctx.first,
+                offset: ctx.offset,
+                ...(entity.variables ? entity.variables(ctx) : {}),
+              };
           return heroGraphQLWithRetry(entity.query, vars);
         })
       );
@@ -153,11 +165,16 @@ export async function runEntitySync<TRaw, TRow extends { id: string }>(
         }
       }
 
-      const lastPageLen = normalizedPages[normalizedPages.length - 1]?.length ?? 0;
-      if (lastPageLen < pageSize) {
+      if (entity.isUnpaginated) {
         done = true;
+      } else {
+        const lastPageLen =
+          normalizedPages[normalizedPages.length - 1]?.length ?? 0;
+        if (lastPageLen < pageSize) {
+          done = true;
+        }
+        offset += concurrency * pageSize;
       }
-      offset += concurrency * pageSize;
     }
 
     await supabase
