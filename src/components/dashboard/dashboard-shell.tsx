@@ -161,23 +161,6 @@ export function DashboardShell({
                 </TabsList>
               </TimeframeGroup>
 
-              <TimeframeGroup label="Termine (Zukunft)">
-                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-                  <TabsTrigger value="morgen" title="Termin: morgen fällig">
-                    Morgen
-                  </TabsTrigger>
-                  <TabsTrigger value="next3d" title="Termin: in den nächsten 3 Tagen fällig">
-                    In 3 Tagen
-                  </TabsTrigger>
-                  <TabsTrigger value="next7d" title="Termin: in den nächsten 7 Tagen fällig">
-                    Nächste Woche
-                  </TabsTrigger>
-                  <TabsTrigger value="30d" title="Termin: nächste 30 Tage">
-                    30 Tage
-                  </TabsTrigger>
-                </TabsList>
-              </TimeframeGroup>
-
               <TimeframeGroup label="Änderungen (Vergangenheit)">
                 <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
                   <TabsTrigger value="gestern">Gestern</TabsTrigger>
@@ -223,7 +206,7 @@ export function DashboardShell({
             {timeframe.mode === "current"
               ? "Jetzt = Momentaufnahme, kein Zeitfilter. Zeigt wie viele Projekte aktuell offen / überfällig / in Abrechnung sind."
               : isFutureMode(timeframe.mode)
-              ? "Termin-Fenster: zeigt nur Projekte deren Fälligkeitsdatum in diesem Zeitraum liegt."
+              ? "Termin-Fenster: zeigt nur Projekte deren Fälligkeitsdatum in diesem Zeitraum liegt. (Einen besseren Überblick gibt der Fälligkeiten-Tab.)"
               : "Änderungs-Fenster: zeigt zusätzlich wie viele Projekte in diesem Zeitraum neu angelegt / abgeschlossen / in Abrechnung / in Nacharbeit gegangen sind."}
           </p>
         )}

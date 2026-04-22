@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarClock,
   Euro,
   LayoutDashboard,
   Mail,
@@ -12,6 +13,7 @@ import {
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/faelligkeiten", label: "Fälligkeiten", icon: CalendarClock },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/cashflow", label: "Cashflow", icon: Euro },
   { href: "/emails", label: "E-Mails", icon: Mail },
