@@ -1,0 +1,41 @@
+name: Hero → Supabase Sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      entities:
+        description: 'Comma-separated entity names or "all"'
+        required: false
+        default: "all"
+
+concurrency:
+  group: hero-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Run Hero sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run sync
+        run: npx tsx scripts/sync/run-all.ts --entities "${{ github.event.inputs.entities || 'all' }}"
+        env:
+          HERO_API_KEY: ${{ secrets.HERO_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
