@@ -18,13 +18,12 @@ import {
   groupProjectsByDepartment,
 } from "@/lib/hero/hero-aggregator";
 import {
-  fetchAllHeroProjects,
   getDepartmentFromProjectNumber,
   type HeroCustomerDocument,
   type HeroProject,
 } from "@/lib/hero/hero-client";
-import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
 import { getHistoricKPIs } from "@/lib/supabase/dashboard-queries";
+import { loadHeroProjectsFromSupabase } from "@/lib/supabase/hero-read-queries";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
 
 const EMPTY_KPIS: KPIData = {
@@ -56,14 +55,6 @@ export async function getDashboardTabData(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<DashboardTabData> {
-  const heroApiKey = await getActiveHeroApiKey();
-
-  if (!heroApiKey) {
-    throw new Error(
-      "Hero API-Key ist nicht konfiguriert. Bitte im Admin-Bereich eintragen oder als Umgebungsvariable HERO_API_KEY setzen."
-    );
-  }
-
   return await getLiveData(department, timeframe);
 }
 
@@ -112,7 +103,7 @@ async function getLiveData(
   };
 }
 
-const getCachedHeroProjects = cache(fetchAllHeroProjects);
+const getCachedHeroProjects = cache(loadHeroProjectsFromSupabase);
 
 function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem[] {
   return projects

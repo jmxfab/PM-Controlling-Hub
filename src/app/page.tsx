@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HeroAdminPanel } from "@/components/dashboard/hero-admin-panel";
 import { SyncButton } from "@/components/dashboard/sync-button";
+import { SyncInProgressBanner } from "@/components/dashboard/sync-in-progress-banner";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
 import {
@@ -15,10 +16,10 @@ import { getHeroApiKeyStatus } from "@/lib/settings/hero-settings";
 export const metadata: Metadata = {
   title: "Controlling Dashboard | JMX",
   description:
-    "Projektcontrolling für PV, Wärmepumpen und Haustechnik mit Live-Lesezugriff auf Hero und sicherem Sample-Fallback",
+    "Projektcontrolling für PV, Wärmepumpen und Haustechnik — liest aus der Supabase-Hero-Mirror.",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 interface DashboardPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -41,7 +42,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const liveHeroAvailable = heroApiKeyStatus.configured;
   const liveHeroDisabledReason = liveHeroAvailable
     ? undefined
-    : "Live-Hero-Daten können erst geladen werden, wenn ein Hero API Key hinterlegt ist.";
+    : "Ohne Hero API Key kann der Sync in GitHub Actions nicht laufen — bitte den Key hinterlegen.";
 
   const tabContents = {
     GESAMT: (
@@ -98,6 +99,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           disabledReason={liveHeroDisabledReason}
         />
       </div>
+
+      <Suspense fallback={null}>
+        <SyncInProgressBanner />
+      </Suspense>
 
       <HeroAdminPanel
         heroReadOnlyConfigured={heroApiKeyStatus.configured}
