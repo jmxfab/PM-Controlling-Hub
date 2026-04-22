@@ -2,7 +2,15 @@ name: Hero → Supabase Sync
 
 on:
   schedule:
+    # Regelmäßiger Sync alle 30 Minuten.
     - cron: "*/30 * * * *"
+    # Zusätzlicher Sync Donnerstag 09:40 Europe/Berlin — direkt vor
+    # dem Ende der Jumax-Wochenperiode (Fr→Do). GitHub-Cron läuft in UTC,
+    # daher zwei Einträge für Sommer- (CEST = UTC+2) und Winterzeit
+    # (CET = UTC+1). Dedup ist unkritisch: Sync ist idempotent, die
+    # View wird nach jedem Run sowieso refresht.
+    - cron: "40 7 * * 4"   # Do 09:40 CEST (Apr–Okt, Sommerzeit)
+    - cron: "40 8 * * 4"   # Do 09:40 CET  (Okt–Mär, Winterzeit)
   workflow_dispatch:
     inputs:
       entities:
