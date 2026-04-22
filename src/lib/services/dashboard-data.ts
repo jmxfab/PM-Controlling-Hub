@@ -59,28 +59,12 @@ export async function getDashboardTabData(
   const heroApiKey = await getActiveHeroApiKey();
 
   if (!heroApiKey) {
-    return {
-      kpiData: EMPTY_KPIS,
-      historicData: [],
-      projectList: [],
-      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
-      source: "empty",
-      notice: "Hero API-Key ist nicht konfiguriert. Bitte im Admin-Bereich eintragen.",
-    };
+    throw new Error(
+      "Hero API-Key ist nicht konfiguriert. Bitte im Admin-Bereich eintragen oder als Umgebungsvariable HERO_API_KEY setzen."
+    );
   }
 
-  try {
-    return await getLiveData(department, timeframe);
-  } catch (error) {
-    return {
-      kpiData: EMPTY_KPIS,
-      historicData: [],
-      projectList: [],
-      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
-      source: "empty",
-      notice: `Hero Live-Daten nicht verfügbar. ${formatLiveReadError(error)}`,
-    };
-  }
+  return await getLiveData(department, timeframe);
 }
 
 async function getLiveData(
@@ -287,10 +271,3 @@ function compareDashboardProjects(
   );
 }
 
-function formatLiveReadError(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return `Der Live-Abruf ist fehlgeschlagen (${error.message}).`;
-  }
-
-  return "Der Live-Abruf ist fehlgeschlagen.";
-}
