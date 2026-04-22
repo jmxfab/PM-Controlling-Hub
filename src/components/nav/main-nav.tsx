@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, Mail, Settings } from "lucide-react";
+import {
+  BarChart3,
+  Euro,
+  LayoutDashboard,
+  Mail,
+  Settings,
+} from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/insights", label: "Insights", icon: BarChart3 },
+  { href: "/cashflow", label: "Cashflow", icon: Euro },
   { href: "/emails", label: "E-Mails", icon: Mail },
   { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];

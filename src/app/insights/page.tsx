@@ -7,6 +7,7 @@ import {
   loadWeeklyThroughput,
   loadStepDurations,
   loadLongestRunning,
+  loadDurationMetrics,
   type InsightsRange,
 } from "@/lib/supabase/hero-insights-queries";
 import {
@@ -94,15 +95,19 @@ async function InsightsTab({
   timeframe: DashboardTimeframe;
 }) {
   const range = buildInsightsRange(timeframe);
-  const [weekly, stepDurations, longestRunning] = await Promise.all([
-    loadWeeklyThroughput(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadStepDurations(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadLongestRunning(department).catch(() => []),
-  ]);
+  const [weekly, stepDurations, longestRunning, durationMetrics] =
+    await Promise.all([
+      loadWeeklyThroughput(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+      loadStepDurations(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+      loadLongestRunning(department).catch(() => []),
+      loadDurationMetrics(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+    ]);
 
   return (
     <InsightsView
@@ -110,6 +115,7 @@ async function InsightsTab({
       weekly={weekly}
       stepDurations={stepDurations}
       longestRunning={longestRunning}
+      durationMetrics={durationMetrics}
       timeframeLabel={getDashboardTimeframeLabel(timeframe)}
     />
   );

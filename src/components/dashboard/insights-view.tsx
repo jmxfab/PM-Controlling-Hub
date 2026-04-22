@@ -33,6 +33,7 @@ import {
 import type {
   WeeklyThroughputPoint,
   StepDurationRow,
+  DurationMetric,
 } from "@/lib/supabase/hero-insights-queries";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
@@ -51,6 +52,7 @@ interface InsightsViewProps {
     customerName: string | null;
     ageDays: number;
   }>;
+  durationMetrics?: DurationMetric[];
   timeframeLabel?: string;
 }
 
@@ -59,6 +61,7 @@ export function InsightsView({
   weekly,
   stepDurations,
   longestRunning,
+  durationMetrics,
   timeframeLabel,
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
@@ -80,6 +83,44 @@ export function InsightsView({
 
   return (
     <div className="space-y-6">
+      {durationMetrics && durationMetrics.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Zeit-Metriken — {deptName}{rangeSuffix}</CardTitle>
+            <CardDescription>
+              Durchschnittliche und mediane Dauer pro Projekt-Phase. Basis:
+              Status-Historie der im Zeitraum abgeschlossenen Projekte.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-2">
+              {durationMetrics.map((m) => (
+                <div
+                  key={m.label}
+                  className="rounded-md border p-3 space-y-1"
+                >
+                  <p className="text-sm font-medium">{m.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {m.description}
+                  </p>
+                  <div className="flex items-baseline gap-4 pt-1">
+                    <span className="text-2xl font-semibold tabular-nums">
+                      {m.avgDays != null ? `${m.avgDays} Tg` : "–"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Median {m.medianDays != null ? `${m.medianDays} Tg` : "–"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      n={m.sampleSize}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Wöchentlicher Flow — {deptName}{rangeSuffix}</CardTitle>
