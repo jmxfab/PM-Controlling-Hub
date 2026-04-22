@@ -25,6 +25,7 @@ import {
 } from "@/lib/hero/hero-client";
 import { buildHeroSampleDashboardData } from "@/lib/hero/hero-sample-data";
 import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
+import { getHistoricKPIs } from "@/lib/supabase/dashboard-queries";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
 
 const HERO_SAMPLE_MODE_NOTICE =
@@ -87,7 +88,13 @@ async function getLiveData(
   const allProjects = await getCachedHeroProjects();
   const filteredProjects = filterHeroProjectsByTimeframe(allProjects, timeframe);
   const departmentProjects = groupProjectsByDepartment(filteredProjects)[department];
-  const historicData: HistoricDataPoint[] = [];
+
+  let historicData: HistoricDataPoint[] = [];
+  try {
+    historicData = await getHistoricKPIs(department, timeframe);
+  } catch {
+    // Supabase nicht konfiguriert oder Tabellen fehlen — leere History ist ok
+  }
 
   if (departmentProjects.length === 0) {
     return {
