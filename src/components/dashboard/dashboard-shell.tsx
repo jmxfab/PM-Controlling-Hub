@@ -34,17 +34,6 @@ const departmentIcons = {
   GEBAEUDETECHNIK: Wrench,
 } as const;
 
-const FUTURE_TIMEFRAME_MODES = new Set<DashboardTimeframeMode>([
-  "morgen",
-  "next3d",
-  "next7d",
-  "30d",
-]);
-
-function isFutureMode(mode: DashboardTimeframeMode): boolean {
-  return FUTURE_TIMEFRAME_MODES.has(mode);
-}
-
 export function DashboardShell({
   department,
   departments,
@@ -145,71 +134,60 @@ export function DashboardShell({
   return (
     <div className="space-y-4">
       {isPending ? <NavigatingOverlay /> : null}
-      <div className="rounded-lg border bg-card p-4 space-y-4">
-        <div className="space-y-3">
-          <Label>Zeitraum</Label>
-          <Tabs value={timeframe.mode} onValueChange={handleTimeframeChange}>
-            <div className="flex flex-wrap gap-3">
-              <TimeframeGroup label="Momentaufnahme">
-                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-                  <TabsTrigger
-                    value="current"
-                    title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen/überfällig/in Abrechnung sind."
-                  >
-                    Jetzt
-                  </TabsTrigger>
-                </TabsList>
-              </TimeframeGroup>
+      <div className="rounded-lg border bg-card p-3">
+        <Tabs value={timeframe.mode} onValueChange={handleTimeframeChange}>
+          <div className="flex flex-wrap gap-2">
+            <TabsList
+              className="flex h-auto flex-wrap gap-1 bg-muted p-1"
+              title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen / überfällig / in Abrechnung sind."
+            >
+              <TabsTrigger value="current">Jetzt</TabsTrigger>
+            </TabsList>
 
-              <TimeframeGroup label="Änderungen (Vergangenheit)">
-                <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-                  <TabsTrigger value="gestern">Gestern</TabsTrigger>
-                  <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
-                  <TabsTrigger value="7d" title="Jumax-Woche: Fr 00:00 → Do 23:59">
-                    Woche (Fr→Do)
-                  </TabsTrigger>
-                  <TabsTrigger value="14d">14 Tage</TabsTrigger>
-                  <TabsTrigger value="frei">Frei</TabsTrigger>
-                </TabsList>
-              </TimeframeGroup>
-            </div>
-          </Tabs>
-        </div>
-
-        {timeframe.mode === "frei" ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-timeframe-from">Von</Label>
-              <Input
-                id="dashboard-timeframe-from"
-                type="date"
-                value={timeframe.from ?? ""}
-                onChange={(event) =>
-                  handleCustomRangeChange("from", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-timeframe-to">Bis</Label>
-              <Input
-                id="dashboard-timeframe-to"
-                type="date"
-                value={timeframe.to ?? ""}
-                onChange={(event) =>
-                  handleCustomRangeChange("to", event.target.value)
-                }
-              />
-            </div>
+            <TabsList
+              className="flex h-auto flex-wrap gap-1 bg-muted p-1"
+              title="Änderungen im Zeitraum: zeigt zusätzlich wie viele Projekte in diesem Zeitraum neu angelegt / abgeschlossen / in Abrechnung / in Nacharbeit gegangen sind."
+            >
+              <TabsTrigger value="gestern">Gestern</TabsTrigger>
+              <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
+              <TabsTrigger
+                value="7d"
+                title="Jumax-Woche: Fr 00:00 → Do 23:59"
+              >
+                Woche (Fr→Do)
+              </TabsTrigger>
+              <TabsTrigger value="14d">14 Tage</TabsTrigger>
+              <TabsTrigger value="frei">Frei</TabsTrigger>
+            </TabsList>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {timeframe.mode === "current"
-              ? "Jetzt = Momentaufnahme, kein Zeitfilter. Zeigt wie viele Projekte aktuell offen / überfällig / in Abrechnung sind."
-              : isFutureMode(timeframe.mode)
-              ? "Termin-Fenster: zeigt nur Projekte deren Fälligkeitsdatum in diesem Zeitraum liegt. (Einen besseren Überblick gibt der Fälligkeiten-Tab.)"
-              : "Änderungs-Fenster: zeigt zusätzlich wie viele Projekte in diesem Zeitraum neu angelegt / abgeschlossen / in Abrechnung / in Nacharbeit gegangen sind."}
-          </p>
-        )}
+
+          {timeframe.mode === "frei" ? (
+            <div className="grid gap-4 sm:grid-cols-2 mt-3">
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-timeframe-from">Von</Label>
+                <Input
+                  id="dashboard-timeframe-from"
+                  type="date"
+                  value={timeframe.from ?? ""}
+                  onChange={(event) =>
+                    handleCustomRangeChange("from", event.target.value)
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-timeframe-to">Bis</Label>
+                <Input
+                  id="dashboard-timeframe-to"
+                  type="date"
+                  value={timeframe.to ?? ""}
+                  onChange={(event) =>
+                    handleCustomRangeChange("to", event.target.value)
+                  }
+                />
+              </div>
+            </div>
+          ) : null}
+        </Tabs>
       </div>
 
       <Tabs value={department} onValueChange={handleDepartmentChange} className="space-y-4">
@@ -238,23 +216,6 @@ export function DashboardShell({
           </TabsContent>
         ))}
       </Tabs>
-    </div>
-  );
-}
-
-function TimeframeGroup({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground/70">
-        {label}
-      </span>
-      {children}
     </div>
   );
 }

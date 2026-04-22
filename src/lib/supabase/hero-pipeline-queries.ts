@@ -555,6 +555,8 @@ export interface PipelineProjectRow {
   previousStepName: string | null;
   previousStepAt: string | null;
   maturityDate: string | null;
+  createdAtHero: string | null;
+  completionDate: string | null;
   department: ProjectDepartment | null;
   wasReopened: boolean;
   /** Summe der offenen Invoice-Werte (Status 100/200) dieses Projekts */
@@ -562,23 +564,72 @@ export interface PipelineProjectRow {
   openInvoiceCount: number;
   /** Projekt steht aktuell in einem Abrechnungs-Step */
   isAccountingOpen: boolean;
+  /** Fälligkeitsdatum vor heute, Projekt noch offen */
+  isOverdue: boolean;
+  /** Projekt wurde im gewählten Zeitraum neu angelegt (nur past-Timeframe) */
+  isNewInPeriod: boolean;
+  /** Projekt wurde im gewählten Zeitraum abgeschlossen (nur past-Timeframe) */
+  isCompletedInPeriod: boolean;
+  /** Aktueller Step ist Abgeschlossen/Archiviert */
+  isFinished: boolean;
 }
 
 export async function loadProjectsForSteps(
   department: Department,
-  stepKeys: string[]
+  stepKeys: string[],
+  options?: { timeframeRange?: TimeframeRangeIso }
 ): Promise<PipelineProjectRow[]> {
   if (stepKeys.length === 0) return [];
   const all = await fetchDashboardProjectRows();
   const rows = rowsFor(all, department);
   const stepKeySet = new Set(stepKeys);
 
+  const now = Date.now();
+  const periodFrom =
+    options?.timeframeRange?.direction === "past"
+      ? new Date(options.timeframeRange.fromIso).getTime()
+      : null;
+  const periodTo =
+    options?.timeframeRange?.direction === "past"
+      ? new Date(options.timeframeRange.toIso).getTime()
+      : null;
+
   return rows
     .filter((row) => {
       const key = row.step_group ?? row.step_name ?? row.step_id;
       return key != null && stepKeySet.has(key);
     })
-    .map((row) => ({
+    .map((row) => {
+      const createdTs = row.created_at_hero
+        ? Date.parse(row.created_at_hero)
+        : NaN;
+      const completionTs = row.completion_date
+        ? Date.parse(row.completion_date)
+        : NaN;
+      const maturityTs = row.maturity_date
+        ? Date.parse(row.maturity_date)
+        : NaN;
+
+      const isFinished = row.is_finished ?? false;
+      const isOverdue =
+        !isFinished &&
+        Number.isFinite(maturityTs) &&
+        maturityTs < now;
+      const isNewInPeriod =
+        periodFrom != null &&
+        periodTo != null &&
+        Number.isFinite(createdTs) &&
+        createdTs >= periodFrom &&
+        createdTs < periodTo;
+      const isCompletedInPeriod =
+        periodFrom != null &&
+        periodTo != null &&
+        isFinished &&
+        Number.isFinite(completionTs) &&
+        completionTs >= periodFrom &&
+        completionTs < periodTo;
+
+      return {
       id: row.id,
       projectNumber: row.project_number,
       projectName: cleanProjectTitle(row.project_name, {
@@ -590,12 +641,19 @@ export async function loadProjectsForSteps(
       previousStepName: row.previous_step_name ?? null,
       previousStepAt: row.previous_step_at ?? null,
       maturityDate: row.maturity_date,
+      createdAtHero: row.created_at_hero ?? null,
+      completionDate: row.completion_date ?? null,
+      isOverdue,
+      isNewInPeriod,
+      isCompletedInPeriod,
+      isFinished,
       department: row.department_key ?? null,
       wasReopened: row.was_reopened ?? false,
       openInvoiceAmount: Number(row.accounting_open_amount ?? 0) || 0,
       openInvoiceCount: Number(row.accounting_open_count ?? 0) || 0,
       isAccountingOpen: row.is_accounting_open ?? false,
-    }))
+      };
+    })
     .sort((a, b) =>
       (a.projectNumber ?? "").localeCompare(b.projectNumber ?? "")
     );

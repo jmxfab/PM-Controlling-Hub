@@ -4,7 +4,10 @@ import {
   DASHBOARD_DEPARTMENTS,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
-import { loadProjectsForSteps } from "@/lib/supabase/hero-pipeline-queries";
+import {
+  loadProjectsForSteps,
+  type TimeframeRangeIso,
+} from "@/lib/supabase/hero-pipeline-queries";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -30,9 +33,26 @@ export async function GET(request: NextRequest) {
       .map((value) => value.trim())
       .filter(Boolean);
 
+    // Optional: Timeframe mitgeben damit pro Projekt "neu im Zeitraum" /
+    // "abgeschlossen im Zeitraum" Flags gesetzt werden.
+    const rangeFromIso = searchParams.get("rangeFrom");
+    const rangeToIso = searchParams.get("rangeTo");
+    const rangeDirection = searchParams.get("rangeDirection");
+    const timeframeRange: TimeframeRangeIso | undefined =
+      rangeFromIso && rangeToIso && rangeDirection
+        ? {
+            fromIso: rangeFromIso,
+            toIso: rangeToIso,
+            label: "",
+            direction:
+              rangeDirection === "future" ? "future" : "past",
+          }
+        : undefined;
+
     const projects = await loadProjectsForSteps(
       department as Department,
-      stepKeys
+      stepKeys,
+      timeframeRange ? { timeframeRange } : undefined
     );
 
     return NextResponse.json({ projects });

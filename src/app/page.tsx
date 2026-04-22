@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { SyncInProgressBanner } from "@/components/dashboard/sync-in-progress-banner";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
@@ -12,7 +13,7 @@ import {
 } from "@/lib/dashboard/dashboard-types";
 
 export const metadata: Metadata = {
-  title: "Controlling Dashboard | JMX",
+  title: "Controlling | JMX",
   description:
     "Projektcontrolling für PV, PV Gewerbe, Wärmepumpen, Klima und Gebäudetechnik — liest aus der Supabase-Hero-Mirror.",
 };
@@ -48,13 +49,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Controlling Dashboard
+      <div className="flex items-center gap-4">
+        <Image
+          src="/favicon.svg"
+          alt="JMX Logo"
+          width={56}
+          height={56}
+          priority
+          className="shrink-0 rounded-xl"
+        />
+        <h1
+          className="text-3xl font-bold tracking-tight cursor-help"
+          title="Operativer Überblick über Projekte, Status, Dokumente und Verlauf."
+        >
+          Controlling
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Operativer Überblick über Projekte, Status, Dokumente und Verlauf.
-        </p>
       </div>
 
       <Suspense fallback={null}>

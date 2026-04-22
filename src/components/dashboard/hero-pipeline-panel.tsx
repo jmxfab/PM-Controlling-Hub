@@ -79,6 +79,11 @@ export function HeroPipelinePanel({
         department,
         steps: keys.join("||"),
       });
+      if (pipeline.timeframeDelta) {
+        params.set("rangeFrom", pipeline.timeframeDelta.fromIso);
+        params.set("rangeTo", pipeline.timeframeDelta.toIso);
+        params.set("rangeDirection", "past");
+      }
       const response = await fetch(
         `/api/dashboard/pipeline-projects?${params.toString()}`
       );
@@ -322,8 +327,42 @@ export function HeroPipelinePanel({
                         {project.projectNumber ?? "–"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {project.projectName ?? "–"}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{project.projectName ?? "–"}</span>
+                          {project.isNewInPeriod ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-rose-500 text-rose-600"
+                              title="Im gewählten Zeitraum neu angelegt"
+                            >
+                              <ArrowDownRight className="h-3 w-3" />
+                              Neu
+                            </Badge>
+                          ) : null}
+                          {project.isCompletedInPeriod ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-emerald-500 text-emerald-600"
+                              title="Im gewählten Zeitraum abgeschlossen"
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              Abgeschlossen
+                            </Badge>
+                          ) : null}
+                          {project.isOverdue ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-orange-500 text-orange-600"
+                              title={`Fälligkeit ${
+                                project.maturityDate
+                                  ? new Date(project.maturityDate).toLocaleDateString("de-DE")
+                                  : ""
+                              } bereits überschritten`}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              Überfällig
+                            </Badge>
+                          ) : null}
                           {project.wasReopened ? (
                             <Badge
                               variant="outline"

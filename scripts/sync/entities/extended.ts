@@ -158,13 +158,95 @@ export const absencesSync = makePaginatedEntity({
   concurrency: 2,
 });
 
-export const fieldServiceJobsSync = makePaginatedEntity({
+interface FieldServiceJobRaw extends BaseRaw {
+  project_match_id?: string | number | null;
+  partner_id?: string | number | null;
+  partner?: { id?: string | number | null; first_name?: string | null; last_name?: string | null } | null;
+  planned_date?: string | null;
+  date?: string | null;
+  status?: string | null;
+  done?: boolean | null;
+  duration?: number | null;
+  duration_minutes?: number | null;
+  type?: string | null;
+  description?: string | null;
+  title?: string | null;
+}
+
+interface FieldServiceJobRow {
+  id: string;
+  project_match_id: string | null;
+  partner_id: string | null;
+  planned_date: string | null;
+  status: string | null;
+  done: boolean | null;
+  duration_minutes: number | null;
+  type: string | null;
+  title: string | null;
+  raw: FieldServiceJobRaw;
+  hero_modified_at: string | null;
+  synced_at: string;
+  is_deleted: boolean;
+}
+
+export const fieldServiceJobsSync: HeroEntitySync<FieldServiceJobRaw, FieldServiceJobRow> = {
   name: "field_service_jobs",
   table: "hero_field_service_jobs",
-  queryField: "field_service_jobs",
   pageSize: 200,
   concurrency: 3,
-});
+  query: /* GraphQL */ `
+    query SyncFieldServiceJobs($first: Int!, $offset: Int!) {
+      field_service_jobs(first: $first, offset: $offset, orderBy: "id") {
+        id
+        project_match_id
+        partner_id
+        partner {
+          id
+          first_name
+          last_name
+        }
+        planned_date
+        date
+        status
+        done
+        duration
+        duration_minutes
+        type
+        description
+        title
+        modified
+        created
+      }
+    }
+  `,
+  extract: (data) =>
+    (data as { field_service_jobs?: FieldServiceJobRaw[] } | null)?.field_service_jobs ?? [],
+  normalize: (raw) => ({
+    id: String(raw.id),
+    project_match_id: raw.project_match_id != null ? String(raw.project_match_id) : null,
+    partner_id:
+      raw.partner_id != null
+        ? String(raw.partner_id)
+        : raw.partner?.id != null
+          ? String(raw.partner.id)
+          : null,
+    planned_date: raw.planned_date ?? raw.date ?? null,
+    status: raw.status ?? null,
+    done: raw.done ?? null,
+    duration_minutes:
+      raw.duration_minutes != null
+        ? raw.duration_minutes
+        : raw.duration != null
+          ? raw.duration
+          : null,
+    type: raw.type ?? null,
+    title: raw.title ?? raw.description ?? null,
+    raw,
+    hero_modified_at: raw.modified ?? raw.created ?? null,
+    synced_at: new Date().toISOString(),
+    is_deleted: false,
+  }),
+};
 
 export const calendarEventsSync = makePaginatedEntity({
   name: "calendar_events",
@@ -183,13 +265,110 @@ export const fileUploadsSync = makePaginatedEntity({
   selectionSet: "id\n        modified\n        created\n        url",
 });
 
-export const receiptsSync = makePaginatedEntity({
+interface ReceiptRaw extends BaseRaw {
+  project_match_id?: string | number | null;
+  partner_id?: string | number | null;
+  value?: number | string | null;
+  net_value?: number | string | null;
+  vat?: number | string | null;
+  currency?: string | null;
+  category_id?: string | number | null;
+  category?: { id?: string | number | null; name?: string | null } | null;
+  status_code?: string | number | null;
+  status_name?: string | null;
+  date?: string | null;
+  receipt_date?: string | null;
+  description?: string | null;
+  nr?: string | null;
+}
+
+interface ReceiptRow {
+  id: string;
+  project_match_id: string | null;
+  partner_id: string | null;
+  value: number | null;
+  vat: number | null;
+  currency: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  status_code: number | null;
+  status_name: string | null;
+  receipt_date: string | null;
+  nr: string | null;
+  raw: ReceiptRaw;
+  hero_modified_at: string | null;
+  synced_at: string;
+  is_deleted: boolean;
+}
+
+function toNum(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toIntVal(v: number | string | null | undefined): number | null {
+  const n = toNum(v);
+  return n != null ? Math.trunc(n) : null;
+}
+
+export const receiptsSync: HeroEntitySync<ReceiptRaw, ReceiptRow> = {
   name: "receipts",
   table: "hero_receipts",
-  queryField: "receipts",
   pageSize: 200,
   concurrency: 2,
-});
+  query: /* GraphQL */ `
+    query SyncReceipts($first: Int!, $offset: Int!) {
+      receipts(first: $first, offset: $offset, orderBy: "id") {
+        id
+        project_match_id
+        partner_id
+        value
+        net_value
+        vat
+        currency
+        category_id
+        category {
+          id
+          name
+        }
+        status_code
+        status_name
+        date
+        receipt_date
+        description
+        nr
+        modified
+        created
+      }
+    }
+  `,
+  extract: (data) =>
+    (data as { receipts?: ReceiptRaw[] } | null)?.receipts ?? [],
+  normalize: (raw) => ({
+    id: String(raw.id),
+    project_match_id: raw.project_match_id != null ? String(raw.project_match_id) : null,
+    partner_id: raw.partner_id != null ? String(raw.partner_id) : null,
+    value: toNum(raw.value ?? raw.net_value),
+    vat: toNum(raw.vat),
+    currency: raw.currency ?? null,
+    category_id:
+      raw.category_id != null
+        ? String(raw.category_id)
+        : raw.category?.id != null
+          ? String(raw.category.id)
+          : null,
+    category_name: raw.category?.name ?? null,
+    status_code: toIntVal(raw.status_code),
+    status_name: raw.status_name ?? null,
+    receipt_date: raw.receipt_date ?? raw.date ?? null,
+    nr: raw.nr ?? null,
+    raw,
+    hero_modified_at: raw.modified ?? raw.created ?? null,
+    synced_at: new Date().toISOString(),
+    is_deleted: false,
+  }),
+};
 
 export const historiesSync = makePaginatedEntity({
   name: "histories",

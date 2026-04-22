@@ -359,28 +359,37 @@ function sumInvoiceDocumentValues(documents: HeroCustomerDocument[]): number | n
   return invoiceSum > 0 ? invoiceSum : null;
 }
 
-/**
- * Run a schema introspection query against Hero to discover available fields.
- * Call this once to understand what data Hero actually provides.
- */
-export async function introspectHeroSchema(): Promise<unknown> {
-  const query = `
-    query IntrospectProjectMatch {
-      __type(name: "ProjectMatch") {
-        fields {
-          name
-          description
-          type {
-            name
-            kind
-            ofType {
-              name
-              kind
-            }
-          }
-        }
+const INTROSPECT_TYPE_FRAGMENT = `
+  fields {
+    name
+    description
+    type {
+      name
+      kind
+      ofType {
+        name
+        kind
       }
     }
+  }
+`;
+
+/**
+ * Run schema introspection for multiple Hero types to discover available fields.
+ * Results keyed by type name — null if the type doesn't exist in the Hero schema.
+ */
+export async function introspectHeroSchema(): Promise<Record<string, unknown>> {
+  const query = `
+    query IntrospectHeroTypes {
+      ProjectMatch: __type(name: "ProjectMatch") { ${INTROSPECT_TYPE_FRAGMENT} }
+      FieldServiceJob: __type(name: "FieldServiceJob") { ${INTROSPECT_TYPE_FRAGMENT} }
+      Receipt: __type(name: "Receipt") { ${INTROSPECT_TYPE_FRAGMENT} }
+      Task: __type(name: "Task") { ${INTROSPECT_TYPE_FRAGMENT} }
+      TrackingTime: __type(name: "TrackingTime") { ${INTROSPECT_TYPE_FRAGMENT} }
+      CalendarEvent: __type(name: "CalendarEvent") { ${INTROSPECT_TYPE_FRAGMENT} }
+      Contact: __type(name: "Contact") { ${INTROSPECT_TYPE_FRAGMENT} }
+      Partner: __type(name: "Partner") { ${INTROSPECT_TYPE_FRAGMENT} }
+    }
   `;
-  return heroGraphQL(query);
+  return heroGraphQL<Record<string, unknown>>(query);
 }
