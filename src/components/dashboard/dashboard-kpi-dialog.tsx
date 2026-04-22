@@ -25,7 +25,7 @@ interface DashboardKpiDialogProps {
   snapshotContextLabel: string;
   heroProjectLinkTemplate: string | null;
   kpiProjectGroups: Record<DashboardKpiKey, DashboardProjectListItem[]>;
-  source: "hero" | "sample" | "empty";
+  source: "hero" | "empty";
   timeframe: DashboardTimeframe;
 }
 

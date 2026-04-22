@@ -23,13 +23,9 @@ import {
   type HeroCustomerDocument,
   type HeroProject,
 } from "@/lib/hero/hero-client";
-import { buildHeroSampleDashboardData } from "@/lib/hero/hero-sample-data";
 import { getActiveHeroApiKey } from "@/lib/settings/hero-settings";
 import { getHistoricKPIs } from "@/lib/supabase/dashboard-queries";
 import { filterHeroProjectsByTimeframe } from "./dashboard-live-filter";
-
-const HERO_SAMPLE_MODE_NOTICE =
-  "Hero Live-Daten sind aktuell nicht verfügbar.";
 
 const EMPTY_KPIS: KPIData = {
   activeProjects: 0,
@@ -47,7 +43,7 @@ export interface DashboardTabData {
   historicData: HistoricDataPoint[];
   projectList: DashboardProjectListItem[];
   kpiProjectGroups: Record<DashboardKpiKey, DashboardProjectListItem[]>;
-  source: "hero" | "sample" | "empty";
+  source: "hero" | "empty";
   notice?: string;
   projectListNotice?: string;
 }
@@ -63,21 +59,27 @@ export async function getDashboardTabData(
   const heroApiKey = await getActiveHeroApiKey();
 
   if (!heroApiKey) {
-    return getFallbackData(
-      department,
-      timeframe,
-      `${HERO_SAMPLE_MODE_NOTICE} HERO_API_KEY fehlt oder ist leer (weder im Dashboard hinterlegt noch als Umgebungsvariable gesetzt).`
-    );
+    return {
+      kpiData: EMPTY_KPIS,
+      historicData: [],
+      projectList: [],
+      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
+      source: "empty",
+      notice: "Hero API-Key ist nicht konfiguriert. Bitte im Admin-Bereich eintragen.",
+    };
   }
 
   try {
     return await getLiveData(department, timeframe);
   } catch (error) {
-    return getFallbackData(
-      department,
-      timeframe,
-      `${HERO_SAMPLE_MODE_NOTICE} ${formatLiveReadError(error)}`
-    );
+    return {
+      kpiData: EMPTY_KPIS,
+      historicData: [],
+      projectList: [],
+      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
+      source: "empty",
+      notice: `Hero Live-Daten nicht verfügbar. ${formatLiveReadError(error)}`,
+    };
   }
 }
 
@@ -127,36 +129,6 @@ async function getLiveData(
 }
 
 const getCachedHeroProjects = cache(fetchAllHeroProjects);
-
-function getFallbackData(
-  department: Department,
-  timeframe: DashboardTimeframe,
-  reason: string
-): DashboardTabData {
-  const sampleData = buildHeroSampleDashboardData(department, timeframe);
-
-  if (!sampleData.hasDataInRange) {
-    return {
-      kpiData: EMPTY_KPIS,
-      historicData: [],
-      projectList: [],
-      kpiProjectGroups: sampleData.kpiProjectGroups,
-      source: "sample",
-      notice: `${reason} Für den gewählten Zeitraum sind in den Hero-Beispieldaten keine Snapshots vorhanden.`,
-      projectListNotice:
-        "Im gewählten Zeitraum wurden keine Beispielprojekte gefunden.",
-    };
-  }
-
-  return {
-    kpiData: sampleData.kpiData,
-    historicData: sampleData.historicData,
-    projectList: sampleData.projectList,
-    kpiProjectGroups: sampleData.kpiProjectGroups,
-    source: "sample",
-    notice: `${reason} Es werden automatisch Hero-Beispieldaten als Fallback angezeigt.`,
-  };
-}
 
 function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem[] {
   return projects

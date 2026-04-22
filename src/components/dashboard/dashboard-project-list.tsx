@@ -46,7 +46,7 @@ interface DashboardProjectListProps {
   departmentName: string;
   heroProjectLinkTemplate: string | null;
   projects: DashboardProjectListItem[];
-  source: "hero" | "sample" | "empty";
+  source: "hero" | "empty";
   timeframe: DashboardTimeframe;
   variant?: "card" | "embedded";
 }

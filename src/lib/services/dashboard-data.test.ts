@@ -89,15 +89,15 @@ describe("filterHeroProjectsByTimeframe", () => {
 });
 
 describe("getDashboardTabData", () => {
-  it("falls back to sample data when HERO_API_KEY is missing", async () => {
+  it("returns empty state when HERO_API_KEY is missing", async () => {
     stubSupabaseEnv();
 
     const { getDashboardTabData } = await import("./dashboard-data");
     const data = await getDashboardTabData("GESAMT", currentTimeframe);
 
-    expect(data.source).toBe("sample");
-    expect(data.projectList.length).toBeGreaterThan(0);
-    expect(data.notice).toContain("HERO_API_KEY fehlt oder ist leer");
+    expect(data.source).toBe("empty");
+    expect(data.projectList).toHaveLength(0);
+    expect(data.notice).toContain("API-Key ist nicht konfiguriert");
   });
 
   it("prefers live Hero data when the GraphQL read succeeds", async () => {
@@ -206,7 +206,7 @@ describe("getDashboardTabData", () => {
     );
   });
 
-  it("falls back to sample data when the live Hero read fails", async () => {
+  it("returns empty state when the live Hero read fails", async () => {
     stubSupabaseEnv();
     vi.stubEnv("HERO_API_KEY", "test-key");
     vi.stubGlobal(
@@ -221,9 +221,9 @@ describe("getDashboardTabData", () => {
     const { getDashboardTabData } = await import("./dashboard-data");
     const data = await getDashboardTabData("PV", currentTimeframe);
 
-    expect(data.source).toBe("sample");
-    expect(data.projectList.length).toBeGreaterThan(0);
-    expect(data.notice).toContain("Der Live-Abruf ist fehlgeschlagen");
+    expect(data.source).toBe("empty");
+    expect(data.projectList).toHaveLength(0);
+    expect(data.notice).toContain("Hero Live-Daten nicht verfügbar");
     expect(data.notice).toContain("Hero API request failed: 401 Unauthorized");
   });
 });

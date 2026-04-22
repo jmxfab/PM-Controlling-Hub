@@ -5,7 +5,6 @@ import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
   getDashboardHistoricDescription,
-  getDashboardSnapshotContextLabel,
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
 import {
@@ -33,16 +32,12 @@ export async function DashboardTabContent({
 
   const departmentName = DASHBOARD_DEPARTMENT_NAMES[department];
   const snapshotContextLabel =
-    source === "hero"
-      ? timeframe.mode === "current"
-        ? "aktuellen Hero-Stand"
-        : `Zeitraum ${getDashboardTimeframeLabel(timeframe)}`
-      : getDashboardSnapshotContextLabel(timeframe);
+    timeframe.mode === "current"
+      ? "aktuellen Hero-Stand"
+      : `Zeitraum ${getDashboardTimeframeLabel(timeframe)}`;
   const historicDescription = getDashboardHistoricDescription(timeframe);
   const emptyHistoricMessage =
-    source === "hero"
-      ? "Für Live-Hero-Lesungen sind aktuell keine historischen Verlaufssnapshots verfügbar."
-      : timeframe.mode === "current"
+    timeframe.mode === "current"
       ? "Noch keine historischen Daten vorhanden."
       : "Im gewählten Zeitraum liegen noch keine historischen Daten vor.";
   const statusNotice = notice ?? getDashboardStatusNotice(source);
@@ -81,12 +76,8 @@ export async function DashboardTabContent({
 }
 
 function getDashboardStatusNotice(
-  source: "hero" | "sample" | "empty"
+  source: "hero" | "empty"
 ): string | null {
-  if (source === "sample") {
-    return "Hero Live-Daten sind aktuell nicht verfügbar. Das Dashboard zeigt automatisch Hero-Beispieldaten als Fallback.";
-  }
-
   if (source === "empty") {
     return "Für den gewählten Zeitraum wurden keine Projekte gefunden.";
   }
