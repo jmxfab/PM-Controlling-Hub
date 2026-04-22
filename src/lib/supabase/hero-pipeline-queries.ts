@@ -14,9 +14,12 @@ import {
 } from "./hero-read-queries";
 import { cleanProjectTitle } from "@/lib/hero/project-title";
 import {
+  classifyStep,
   isAccountingStep,
   isFinishedStep as isFinishedStepName,
   isReworkStep as isReworkStepName,
+  STEP_CATEGORIES,
+  type StepCategory,
 } from "@/lib/hero/step-classifier";
 
 function supabaseAdmin() {
@@ -63,6 +66,18 @@ export interface HeroPipelineStep {
    * gewandert (nur gesetzt wenn timeframe = past Zeitraum).
    */
   periodEnteredCount?: number;
+  /**
+   * Wie viele Projekte sind im gewählten Timeframe aus diesem Step
+   * RAUS gewandert (= bearbeitet). Nur gesetzt bei past-Zeitraum.
+   */
+  periodLeftCount?: number;
+  /**
+   * Summe der offenen Rechnungen (EUR) der Projekte die aktuell in
+   * diesem Step stehen. Nur für Abrechnungs-Steps gefüllt.
+   */
+  openInvoiceAmount?: number;
+  /** Category-Bucket für die Gruppierung im UI. */
+  category: StepCategory;
 }
 
 export interface HeroPipelineKpis {
@@ -288,40 +303,61 @@ export async function loadTimeframeDeltas(
 async function loadStepTransitionCounts(
   department: Department,
   range: TimeframeRangeIso
-): Promise<Map<string, number>> {
+): Promise<{ entered: Map<string, number>; left: Map<string, number> }> {
   const supabase = supabaseAdmin();
-  const result = new Map<string, number>();
+  const entered = new Map<string, number>();
+  const left = new Map<string, number>();
 
-  let query = supabase
+  const groupOf = (stepName: string): string =>
+    stepName.replace(/^[^A-Za-zÄÖÜäöüß0-9]+/g, "").trim();
+
+  // 1) Eintritte im Zeitraum (entered_at zwischen from/to)
+  let qEntered = supabase
     .from("hero_status_transitions")
     .select("step_name, department_key, entered_at")
     .gte("entered_at", range.fromIso)
     .lt("entered_at", range.toIso)
     .not("step_name", "is", null);
-
-  if (department !== "GESAMT") {
-    query = query.eq("department_key", department);
-  } else {
-    query = query.not("department_key", "is", null);
-  }
+  if (department !== "GESAMT") qEntered = qEntered.eq("department_key", department);
+  else qEntered = qEntered.not("department_key", "is", null);
 
   for (let offset = 0; offset < 30000; offset += 1000) {
-    const { data, error } = await query.range(offset, offset + 999);
+    const { data, error } = await qEntered.range(offset, offset + 999);
     if (error) break;
     const rows = (data ?? []) as Array<{ step_name: string | null }>;
     for (const r of rows) {
       if (!r.step_name) continue;
-      // Gleiche Normalisierung wie step_group in der View:
-      // führende Emoji/Symbole + Whitespace stripen.
-      const groupKey = r.step_name
-        .replace(/^[^A-Za-zÄÖÜäöüß0-9]+/g, "")
-        .trim();
-      if (!groupKey) continue;
-      result.set(groupKey, (result.get(groupKey) ?? 0) + 1);
+      const key = groupOf(r.step_name);
+      if (!key) continue;
+      entered.set(key, (entered.get(key) ?? 0) + 1);
     }
     if (rows.length < 1000) break;
   }
-  return result;
+
+  // 2) Austritte im Zeitraum (left_at zwischen from/to)
+  let qLeft = supabase
+    .from("hero_status_transitions")
+    .select("step_name, department_key, left_at")
+    .gte("left_at", range.fromIso)
+    .lt("left_at", range.toIso)
+    .not("step_name", "is", null);
+  if (department !== "GESAMT") qLeft = qLeft.eq("department_key", department);
+  else qLeft = qLeft.not("department_key", "is", null);
+
+  for (let offset = 0; offset < 30000; offset += 1000) {
+    const { data, error } = await qLeft.range(offset, offset + 999);
+    if (error) break;
+    const rows = (data ?? []) as Array<{ step_name: string | null }>;
+    for (const r of rows) {
+      if (!r.step_name) continue;
+      const key = groupOf(r.step_name);
+      if (!key) continue;
+      left.set(key, (left.get(key) ?? 0) + 1);
+    }
+    if (rows.length < 1000) break;
+  }
+
+  return { entered, left };
 }
 
 export const loadHeroPipeline = cache(
@@ -355,6 +391,7 @@ export const loadHeroPipeline = cache(
         overdueCount: number;
         reopenedCount: number;
         stepOrder: number;
+        openInvoiceAmount: number;
       }
     >();
     let totalOpen = 0;
@@ -379,6 +416,7 @@ export const loadHeroPipeline = cache(
         overdueCount: 0,
         reopenedCount: 0,
         stepOrder: row.step_order ?? Number.MAX_SAFE_INTEGER,
+        openInvoiceAmount: 0,
       };
       // Keep the *smallest* step_order across rows in the same bucket
       // (GESAMT merges steps across departments; we show them in pipeline
@@ -416,6 +454,12 @@ export const loadHeroPipeline = cache(
           }
         }
       }
+      // Offene Rechnungssumme auch pro Step aggregieren (damit wir bei den
+      // Abrechnungs-Steps im Cash-Panel den Eur-Wert direkt anzeigen können).
+      if (!row.is_finished && row.accounting_open_amount != null) {
+        bucket.openInvoiceAmount +=
+          Number(row.accounting_open_amount) || 0;
+      }
       stepMap.set(stepKey, bucket);
 
       // Jumax reporting week = Friday morning → Thursday evening.
@@ -450,6 +494,8 @@ export const loadHeroPipeline = cache(
         overdueCount: meta.overdueCount,
         reopenedCount: meta.reopenedCount,
         stepOrder: meta.stepOrder,
+        openInvoiceAmount: meta.openInvoiceAmount,
+        category: classifyStep(meta.name),
       }))
       .sort((a, b) => {
         if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
@@ -472,18 +518,20 @@ export const loadHeroPipeline = cache(
         ? await loadTimeframeDeltas(department, timeframeRange)
         : undefined;
 
-    // Pro-Step Transition-Counts im Zeitraum (nur bei "past"). Damit jede
-    // Step-Zeile in der Pipeline einen Zähler bekommt: "X Projekte sind
-    // im gewählten Zeitraum in diesen Step eingetreten".
+    // Pro-Step Transition-Counts im Zeitraum (nur bei "past"):
+    // entered = Projekte die in diesen Step gewandert sind,
+    // left    = Projekte die diesen Step verlassen haben (= bearbeitet).
     if (timeframeRange && timeframeRange.direction === "past") {
-      const entered = await loadStepTransitionCounts(
+      const { entered, left } = await loadStepTransitionCounts(
         department,
         timeframeRange
       );
       for (const step of steps) {
         // Match über step_group (ohne Emoji). `step.id` IST step_group.
-        const count = entered.get(step.id);
-        if (count != null) step.periodEnteredCount = count;
+        const inCount = entered.get(step.id);
+        if (inCount != null) step.periodEnteredCount = inCount;
+        const leftCount = left.get(step.id);
+        if (leftCount != null) step.periodLeftCount = leftCount;
       }
     }
 

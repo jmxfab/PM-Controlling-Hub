@@ -14,8 +14,8 @@ import {
 
 const navItems = [
   { href: "/", label: "Controlling", icon: LayoutDashboard },
-  { href: "/faelligkeiten", label: "Fälligkeiten", icon: CalendarClock },
   { href: "/insights", label: "Insights", icon: BarChart3 },
+  { href: "/faelligkeiten", label: "Fälligkeiten", icon: CalendarClock },
   { href: "/cash", label: "Cash", icon: Euro },
   // /deckungsbeitrag ausgeblendet bis die Datenbasis (Materialkosten /
   // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
@@ -28,7 +28,7 @@ export function MainNav() {
 
   return (
     <header className="relative border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 overflow-visible z-30">
-      <div className="relative max-w-[1200px] mx-auto pl-6 pr-8 h-16 flex items-center gap-6 overflow-visible">
+      <div className="relative max-w-[1200px] mx-auto pl-16 pr-8 h-16 flex items-center gap-6 overflow-visible">
         <Link
           href="/"
           className="group shrink-0 relative block self-center -mb-12 z-40 transition-transform hover:scale-[1.03]"

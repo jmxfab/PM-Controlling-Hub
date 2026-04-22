@@ -7,9 +7,12 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
+  CheckSquare,
   Euro,
   RotateCcw,
 } from "lucide-react";
+
+import { STEP_CATEGORIES, type StepCategory } from "@/lib/hero/step-classifier";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -336,20 +339,21 @@ export function HeroPipelinePanel({
               kombinieren, um die Liste rechts zu filtern.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <StepList
-              title="Offene Steps"
+          <CardContent className="space-y-4">
+            <GroupedStepList
               steps={activeSteps}
               selected={selected}
               onToggle={toggleStep}
             />
-            <StepList
-              title="Abgeschlossen / Archiviert"
-              steps={finishedSteps}
-              selected={selected}
-              onToggle={toggleStep}
-              muted
-            />
+            {finishedSteps.length > 0 ? (
+              <StepList
+                title={STEP_CATEGORIES.fertig.label}
+                steps={finishedSteps}
+                selected={selected}
+                onToggle={toggleStep}
+                muted
+              />
+            ) : null}
 
             {selected.size > 0 ? (
               <Button
@@ -739,33 +743,57 @@ function KpiTile({
   );
 }
 
+function formatEurShort(amount: number): string {
+  if (amount >= 1_000_000) {
+    return `${(amount / 1_000_000).toLocaleString("de-DE", { maximumFractionDigits: 1 })}M €`;
+  }
+  if (amount >= 1000) {
+    return `${Math.round(amount / 1000).toLocaleString("de-DE")}k €`;
+  }
+  return `${Math.round(amount).toLocaleString("de-DE")} €`;
+}
+
 function StepList({
   title,
   steps,
   selected,
   onToggle,
   muted,
+  description,
 }: {
   title: string;
   steps: HeroPipelineDto["steps"];
   selected: Set<string>;
   onToggle: (id: string) => void;
   muted?: boolean;
+  description?: string;
 }) {
   if (steps.length === 0) return null;
 
   return (
     <div className="space-y-1">
-      <p
-        className={`text-xs uppercase tracking-wide ${
-          muted ? "text-muted-foreground/60" : "text-muted-foreground"
-        }`}
-      >
-        {title}
-      </p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p
+          className={`text-xs uppercase tracking-wide font-medium ${
+            muted ? "text-muted-foreground/60" : "text-muted-foreground"
+          }`}
+        >
+          {title}
+        </p>
+        <span className="text-[10px] text-muted-foreground tabular-nums">
+          {steps.reduce((sum, s) => sum + s.projectCount, 0)}
+        </span>
+      </div>
+      {description ? (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          {description}
+        </p>
+      ) : null}
       <ul className="space-y-0.5">
         {steps.map((step) => {
           const checked = selected.has(step.id);
+          const hasInvoice =
+            step.openInvoiceAmount != null && step.openInvoiceAmount > 0;
           return (
             <li key={step.id}>
               <label
@@ -780,22 +808,45 @@ function StepList({
                   />
                   <span className="truncate">{step.name}</span>
                 </span>
-                <span className="flex items-center gap-1 shrink-0 text-xs tabular-nums">
+                <span className="flex items-center gap-1 shrink-0 text-xs tabular-nums flex-wrap justify-end">
+                  {hasInvoice ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-0.5 border-emerald-500 text-emerald-600 px-1.5 font-mono"
+                      title={`Summe offener Rechnungen in diesem Step: ${new Intl.NumberFormat(
+                        "de-DE",
+                        { style: "currency", currency: "EUR" }
+                      ).format(step.openInvoiceAmount ?? 0)}`}
+                    >
+                      <Euro className="h-3 w-3" />
+                      {formatEurShort(step.openInvoiceAmount ?? 0)}
+                    </Badge>
+                  ) : null}
                   {step.periodEnteredCount != null && step.periodEnteredCount > 0 ? (
                     <Badge
                       variant="outline"
                       className="h-5 gap-0.5 border-blue-500 text-blue-600 px-1.5"
-                      title={`${step.periodEnteredCount} Projekte sind im gewählten Zeitraum in diesen Step gewandert`}
+                      title={`${step.periodEnteredCount} Projekte sind im gewählten Zeitraum in diesen Step gewandert (neu / geplant)`}
                     >
                       <ArrowDownRight className="h-3 w-3" />
                       {step.periodEnteredCount}
+                    </Badge>
+                  ) : null}
+                  {step.periodLeftCount != null && step.periodLeftCount > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-0.5 border-emerald-600 text-emerald-700 px-1.5"
+                      title={`${step.periodLeftCount} Projekte haben diesen Step im Zeitraum verlassen (bearbeitet)`}
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                      {step.periodLeftCount}
                     </Badge>
                   ) : null}
                   {step.reopenedCount > 0 ? (
                     <Badge
                       variant="outline"
                       className="h-5 gap-0.5 border-yellow-500 text-yellow-600 px-1.5"
-                      title={`${step.reopenedCount} davon Reopens (erneut in Nacharbeit)`}
+                      title={`${step.reopenedCount} davon Reopens (erneut in Nacharbeit, obwohl Projekt schon weiter war)`}
                     >
                       <RotateCcw className="h-3 w-3" />
                       {step.reopenedCount}
@@ -804,20 +855,73 @@ function StepList({
                   {step.overdueCount > 0 ? (
                     <Badge
                       variant="outline"
-                      className="h-5 gap-0.5 border-rose-500 text-rose-600 px-1.5"
-                      title={`${step.overdueCount} überfällig`}
+                      className="h-5 gap-0.5 border-red-600 text-red-600 px-1.5"
+                      title={`${step.overdueCount} überfällig in diesem Step`}
                     >
-                      <ArrowUpRight className="h-3 w-3" />
+                      <AlertTriangle className="h-3 w-3" />
                       {step.overdueCount}
                     </Badge>
                   ) : null}
-                  <span className="font-mono">{step.projectCount}</span>
+                  <span className="font-mono ml-1">{step.projectCount}</span>
                 </span>
               </label>
             </li>
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Offene Steps gruppiert nach Kategorie (Akquise, Planung, Freigabe,
+ * Montage, Nacharbeit, Bewertung, Abrechnung, Sonstige). Jede Kategorie
+ * wird nur gezeigt wenn sie Steps enthält.
+ */
+function GroupedStepList({
+  steps,
+  selected,
+  onToggle,
+}: {
+  steps: HeroPipelineDto["steps"];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<StepCategory, HeroPipelineDto["steps"]>();
+    for (const step of steps) {
+      const cat = step.category ?? "sonstige";
+      const list = map.get(cat) ?? [];
+      list.push(step);
+      map.set(cat, list);
+    }
+    return Array.from(map.entries())
+      .filter(([cat]) => cat !== "fertig")
+      .sort(
+        ([a], [b]) => STEP_CATEGORIES[a].order - STEP_CATEGORIES[b].order
+      );
+  }, [steps]);
+
+  if (groups.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-4 text-center">
+        Keine offenen Steps in dieser Auswahl.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map(([category, list]) => (
+        <StepList
+          key={category}
+          title={STEP_CATEGORIES[category].label}
+          description={STEP_CATEGORIES[category].description}
+          steps={list}
+          selected={selected}
+          onToggle={onToggle}
+        />
+      ))}
     </div>
   );
 }
