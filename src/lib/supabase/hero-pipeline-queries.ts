@@ -52,6 +52,9 @@ export interface HeroPipelineKpis {
   totalReopened: number;
   completedLastWeek: number;
   newThisWeek: number;
+  /** Summe noch offener Rechnungen (EUR) über alle offenen Projekte */
+  openInvoiceAmount: number;
+  openInvoiceCount: number;
 }
 
 export interface HeroPipelineDto extends HeroPipelineKpis {
@@ -124,11 +127,17 @@ export const loadHeroPipeline = cache(
     let totalReopened = 0;
     let completedLastWeek = 0;
     let newThisWeek = 0;
+    let openInvoiceAmount = 0;
+    let openInvoiceCount = 0;
 
     for (const row of projects) {
       const stepKey = row.step_group ?? row.step_name ?? row.step_id;
       if (!stepKey) continue;
-      const display = row.step_group ?? row.step_name ?? stepKey;
+      // Display label = the full step_name with Hero emoji ("🔧 Zählermontage",
+      // "💸 Abschlussrechnung", …). step_key is without the emoji so the
+      // same semantic step from different departments shares a bucket on
+      // GESAMT; we still show whichever emoji-version we see first.
+      const display = row.step_name ?? row.step_group ?? stepKey;
       const bucket = stepMap.get(stepKey) ?? {
         name: display,
         projectCount: 0,
@@ -159,6 +168,12 @@ export const loadHeroPipeline = cache(
         if (row.was_reopened) {
           bucket.reopenedCount += 1;
           totalReopened += 1;
+        }
+        if (row.accounting_open_amount != null) {
+          openInvoiceAmount += Number(row.accounting_open_amount) || 0;
+        }
+        if (row.accounting_open_count != null) {
+          openInvoiceCount += Number(row.accounting_open_count) || 0;
         }
       }
       stepMap.set(stepKey, bucket);
@@ -213,6 +228,8 @@ export const loadHeroPipeline = cache(
       totalReopened,
       completedLastWeek,
       newThisWeek,
+      openInvoiceAmount,
+      openInvoiceCount,
     };
   }
 );

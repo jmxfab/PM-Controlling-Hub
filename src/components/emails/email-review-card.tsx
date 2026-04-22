@@ -104,7 +104,7 @@ export function EmailReviewCard({ email, onPushed, onRejected }: EmailReviewCard
       <CardContent className="space-y-3">
         <div className="space-y-1">
           <Label htmlFor={`title-${email.id}`} className="text-xs text-muted-foreground">
-            Aufgaben-Titel
+            Todo-Titel
           </Label>
           <Input
             id={`title-${email.id}`}

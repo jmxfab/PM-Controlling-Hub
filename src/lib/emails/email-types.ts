@@ -20,7 +20,7 @@ export interface ProcessedEmail {
 
 export const CATEGORY_LABELS: Record<EmailCategory, string> = {
   info: "Info",
-  aufgabe: "Aufgabe",
+  aufgabe: "Todo",
   dringend: "Dringend",
 };
 

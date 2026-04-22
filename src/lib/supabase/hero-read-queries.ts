@@ -74,6 +74,8 @@ interface DashboardProjectRow {
   last_finish_at: string | null;
   last_rework_at: string | null;
   accounting_amount: number | null;
+  accounting_open_amount: number | null;
+  accounting_open_count: number | null;
   raw: Record<string, unknown> | null;
 }
 
@@ -105,7 +107,7 @@ const fetchDashboardProjectRows = unstable_cache(
     }
     return all.filter((row) => row.department_key != null);
   },
-  ["hero_dashboard_projects_v4"],
+  ["hero_dashboard_projects_v5"],
   { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
 

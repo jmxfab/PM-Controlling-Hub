@@ -5,7 +5,7 @@ import type { ProcessedEmail } from "@/lib/emails/email-types";
 
 export const metadata: Metadata = {
   title: "E-Mail Posteingang | JMX",
-  description: "Klassifizierte E-Mails prüfen und als Aufgaben in Notion eintragen",
+  description: "Klassifizierte E-Mails prüfen und als Todos in Notion eintragen",
 };
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function EmailsPage() {
           {pendingCount > 0
             ? `${pendingCount} E-Mail${pendingCount !== 1 ? "s" : ""} warten auf Freigabe.`
             : "Alle E-Mails sind bearbeitet."}
-          {" "}Freigegebene Aufgaben werden direkt in Notion eingetragen.
+          {" "}Freigegebene Todos werden direkt in Notion eingetragen.
         </p>
       </div>
 

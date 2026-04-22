@@ -84,10 +84,17 @@ export function getDashboardTimeframeRange(
   }
 
   if (timeframe.mode === "7d") {
+    // Jumax-Wochenfenster: Donnerstag → Donnerstag (7 Tage inklusive).
+    // Das "to" ist der nächste (oder aktuelle) Donnerstag 00:00, das "from"
+    // sind 7 Tage vorher (ebenfalls ein Donnerstag).
     const normalizedReference = atLocalNoon(referenceDate);
+    const dayOfWeek = normalizedReference.getDay(); // 0=So … 4=Do
+    const daysUntilThursday = (4 - dayOfWeek + 7) % 7; // 0 wenn Do, sonst 1..6
+    const thursdayEnd = addDays(normalizedReference, daysUntilThursday);
+    const thursdayStart = addDays(thursdayEnd, -7);
     return {
-      from: toIsoDate(addDays(normalizedReference, -6)),
-      to: toIsoDate(normalizedReference),
+      from: toIsoDate(thursdayStart),
+      to: toIsoDate(thursdayEnd),
     };
   }
 
@@ -153,7 +160,7 @@ export function getDashboardTimeframeLabel(
   }
 
   if (timeframe.mode === "7d") {
-    return "Letzte 7 Tage";
+    return "Woche (Do → Do)";
   }
 
   if (timeframe.mode === "14d") {

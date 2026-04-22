@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { HeroAdminPanel } from "@/components/dashboard/hero-admin-panel";
 import { SyncButton } from "@/components/dashboard/sync-button";
 import { SyncStatusPanel } from "@/components/dashboard/sync-status-panel";
+import { ThemeToggleCard } from "@/components/settings/theme-toggle-card";
 import { getHeroApiKeyStatus } from "@/lib/settings/hero-settings";
 
 export const metadata: Metadata = {
@@ -44,6 +45,8 @@ export default async function SettingsPage() {
           disabledReason={liveHeroDisabledReason}
         />
       </div>
+
+      <ThemeToggleCard />
 
       <HeroAdminPanel
         heroReadOnlyConfigured={heroApiKeyStatus.configured}

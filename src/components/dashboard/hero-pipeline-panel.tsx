@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
+  Euro,
   RotateCcw,
 } from "lucide-react";
 
@@ -109,7 +110,7 @@ export function HeroPipelinePanel({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <KpiTile
           label="Alle Offenen"
           value={pipeline.totalOpen}
@@ -120,23 +121,33 @@ export function HeroPipelinePanel({
           value={pipeline.totalOverdue}
           tone={pipeline.totalOverdue > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
+          hint="offen & maturity_date < heute"
+        />
+        <KpiTile
+          label="Buchhaltung offen"
+          valueText={formatEur(pipeline.openInvoiceAmount)}
+          tone="neutral"
+          icon={<Euro className="h-4 w-4" />}
+          hint={`${pipeline.openInvoiceCount} offene Rechnung${pipeline.openInvoiceCount === 1 ? "" : "en"}`}
         />
         <KpiTile
           label="Letzte Woche abgeschlossen"
           value={pipeline.completedLastWeek}
           tone="good"
           icon={<CheckCircle2 className="h-4 w-4" />}
+          hint="Fr 00:00 → Do 23:59"
         />
         <KpiTile
           label="Neu diese Woche"
           value={pipeline.newThisWeek}
           tone="attention"
           icon={<ArrowDownRight className="h-4 w-4" />}
+          hint="Fr 00:00 → heute"
         />
         <KpiTile
           label="Reopens (Nacharbeit)"
           value={pipeline.totalReopened}
-          tone={pipeline.totalReopened > 0 ? "warning" : "neutral"}
+          tone="good"
           icon={<RotateCcw className="h-4 w-4" />}
           hint="nach bereits erreichtem Abgeschlossen"
         />
@@ -226,7 +237,7 @@ export function HeroPipelinePanel({
                           {project.wasReopened ? (
                             <Badge
                               variant="outline"
-                              className="gap-1 border-orange-500 text-orange-600"
+                              className="gap-1 border-emerald-500 text-emerald-600"
                               title="Projekt wurde nach Abgeschlossen wieder geöffnet"
                             >
                               <RotateCcw className="h-3 w-3" />
@@ -283,15 +294,25 @@ export function HeroPipelinePanel({
 
 type KpiTone = "neutral" | "good" | "warning" | "attention";
 
+function formatEur(amount: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function KpiTile({
   label,
   value,
+  valueText,
   hint,
   icon,
   tone = "neutral",
 }: {
   label: string;
-  value: number;
+  value?: number;
+  valueText?: string;
   hint?: string;
   icon?: React.ReactNode;
   tone?: KpiTone;
@@ -313,7 +334,7 @@ function KpiTile({
         <div
           className={`text-2xl font-semibold tabular-nums ${toneClass}`}
         >
-          {value.toLocaleString("de-DE")}
+          {valueText ?? (value ?? 0).toLocaleString("de-DE")}
         </div>
         {hint ? (
           <p className="text-xs text-muted-foreground">{hint}</p>
@@ -368,8 +389,8 @@ function StepList({
                   {step.reopenedCount > 0 ? (
                     <Badge
                       variant="outline"
-                      className="h-5 gap-0.5 border-orange-500 text-orange-600 px-1.5"
-                      title={`${step.reopenedCount} davon Reopens`}
+                      className="h-5 gap-0.5 border-emerald-500 text-emerald-600 px-1.5"
+                      title={`${step.reopenedCount} davon Reopens (erneut in Nacharbeit)`}
                     >
                       <RotateCcw className="h-3 w-3" />
                       {step.reopenedCount}
