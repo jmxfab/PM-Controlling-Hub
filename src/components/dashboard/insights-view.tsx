@@ -51,6 +51,7 @@ interface InsightsViewProps {
     customerName: string | null;
     ageDays: number;
   }>;
+  timeframeLabel?: string;
 }
 
 export function InsightsView({
@@ -58,8 +59,10 @@ export function InsightsView({
   weekly,
   stepDurations,
   longestRunning,
+  timeframeLabel,
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
+  const rangeSuffix = timeframeLabel ? ` · ${timeframeLabel}` : "";
   const chartData = weekly.map((w) => ({
     ...w,
     label: new Date(w.weekStart).toLocaleDateString("de-DE", {
@@ -79,10 +82,11 @@ export function InsightsView({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Wöchentlicher Flow — {deptName}</CardTitle>
+          <CardTitle>Wöchentlicher Flow — {deptName}{rangeSuffix}</CardTitle>
           <CardDescription>
-            Letzte 12 Wochen. Neu angelegt (blau), Abgeschlossen (grün),
-            In Abrechnung (gelb), Nacharbeit-Starts (rot), Reopens (lila).
+            Neu angelegt (blau), Abgeschlossen (grün), In Abrechnung (gelb),
+            Nacharbeit-Starts (rot), Reopens (lila). Bei „Jetzt" werden die
+            letzten 12 Wochen gezeigt.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -113,10 +117,12 @@ export function InsightsView({
 
       <Card>
         <CardHeader>
-          <CardTitle>Durchlaufzeit pro Step (Tage) — {deptName}</CardTitle>
+          <CardTitle>
+            Durchlaufzeit pro Step (Tage) — {deptName}{rangeSuffix}
+          </CardTitle>
           <CardDescription>
-            Ø + Median Tage die ein Projekt im jeweiligen Step verbringt.
-            Basis: letzte 12 Monate, Top 10.
+            Ø + Median Tage die ein Projekt im jeweiligen Step verbringt. Top
+            10. Bei „Jetzt" werden die letzten 12 Monate zugrunde gelegt.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -150,7 +156,9 @@ export function InsightsView({
         <CardHeader>
           <CardTitle>Älteste offene Projekte — {deptName}</CardTitle>
           <CardDescription>
-            Projekte mit dem ältesten created-Datum die noch nicht Abgeschlossen sind.
+            Projekte mit dem ältesten created-Datum die noch nicht
+            Abgeschlossen sind. Nicht zeitraumabhängig — zeigt immer die
+            aktuellen Dauerläufer.
           </CardDescription>
         </CardHeader>
         <CardContent>

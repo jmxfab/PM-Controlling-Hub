@@ -38,21 +38,36 @@ export interface WeeklyThroughputPoint {
   reopens: number;
 }
 
+export interface InsightsRange {
+  fromIso: string;
+  toIso: string;
+}
+
 /**
- * Wöchentliche Flow-Raten pro Department für die letzten 12 Wochen.
- * Basiert auf hero_status_transitions (mit finished_before für Reopens).
+ * Wöchentliche Flow-Raten pro Department, optional eingeschränkt auf
+ * einen Zeitraum. Default: letzte 12 Wochen ab jetzt.
  */
 export const loadWeeklyThroughput = cache(
-  async (department: Department, weeks = 12): Promise<WeeklyThroughputPoint[]> => {
+  async (
+    department: Department,
+    options?: { weeks?: number; range?: InsightsRange }
+  ): Promise<WeeklyThroughputPoint[]> => {
     const supabase = supabaseAdmin();
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - weeks * 7);
-    const sinceIso = sinceDate.toISOString();
+    const { range, weeks = 12 } = options ?? {};
+    const sinceIso =
+      range?.fromIso ??
+      (() => {
+        const since = new Date();
+        since.setDate(since.getDate() - weeks * 7);
+        return since.toISOString();
+      })();
+    const untilIso = range?.toIso;
 
     let query = supabase
       .from("hero_status_transitions")
       .select("project_match_id, step_name, entered_at, history_index, department_key")
       .gte("entered_at", sinceIso);
+    if (untilIso) query = query.lt("entered_at", untilIso);
 
     if (department !== "GESAMT") {
       query = query.eq("department_key", department);
@@ -141,21 +156,31 @@ export interface StepDurationRow {
 }
 
 /**
- * Durchschnittliche + mediane Verweildauer pro Step (letzte 12 Monate).
- * Für Bottleneck-Analyse.
+ * Durchschnittliche + mediane Verweildauer pro Step, optional eingeschränkt
+ * auf einen Zeitraum. Default: letzte 12 Monate.
  */
 export const loadStepDurations = cache(
-  async (department: Department): Promise<StepDurationRow[]> => {
+  async (
+    department: Department,
+    options?: { range?: InsightsRange }
+  ): Promise<StepDurationRow[]> => {
     const supabase = supabaseAdmin();
-    const cutoff = new Date();
-    cutoff.setFullYear(cutoff.getFullYear() - 1);
+    const { range } = options ?? {};
+    const sinceIso =
+      range?.fromIso ??
+      (() => {
+        const c = new Date();
+        c.setFullYear(c.getFullYear() - 1);
+        return c.toISOString();
+      })();
 
     let query = supabase
       .from("hero_status_transitions")
       .select("step_id, step_name, duration_seconds, department_key")
-      .gte("entered_at", cutoff.toISOString())
+      .gte("entered_at", sinceIso)
       .not("duration_seconds", "is", null)
       .not("step_name", "is", null);
+    if (range?.toIso) query = query.lt("entered_at", range.toIso);
 
     if (department !== "GESAMT") {
       query = query.eq("department_key", department);
