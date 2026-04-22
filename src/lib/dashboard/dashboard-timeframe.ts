@@ -1,4 +1,4 @@
-export const DASHBOARD_TIMEFRAME_MODES = ["current", "14d", "30d", "frei"] as const;
+export const DASHBOARD_TIMEFRAME_MODES = ["current", "gestern", "3d", "7d", "14d", "30d", "frei"] as const;
 
 export type DashboardTimeframeMode = (typeof DASHBOARD_TIMEFRAME_MODES)[number];
 
@@ -70,6 +70,27 @@ export function getDashboardTimeframeRange(
     return null;
   }
 
+  if (timeframe.mode === "gestern") {
+    const yesterday = toIsoDate(addDays(atLocalNoon(referenceDate), -1));
+    return { from: yesterday, to: yesterday };
+  }
+
+  if (timeframe.mode === "3d") {
+    const normalizedReference = atLocalNoon(referenceDate);
+    return {
+      from: toIsoDate(addDays(normalizedReference, -2)),
+      to: toIsoDate(normalizedReference),
+    };
+  }
+
+  if (timeframe.mode === "7d") {
+    const normalizedReference = atLocalNoon(referenceDate);
+    return {
+      from: toIsoDate(addDays(normalizedReference, -6)),
+      to: toIsoDate(normalizedReference),
+    };
+  }
+
   if (timeframe.mode === "14d") {
     return getDefaultDashboardCustomRange(referenceDate);
   }
@@ -123,6 +144,18 @@ export function getDashboardTimeframeLabel(
     return "Aktueller Stand";
   }
 
+  if (timeframe.mode === "gestern") {
+    return "Gestern";
+  }
+
+  if (timeframe.mode === "3d") {
+    return "Letzte 3 Tage";
+  }
+
+  if (timeframe.mode === "7d") {
+    return "Letzte 7 Tage";
+  }
+
   if (timeframe.mode === "14d") {
     return "Letzte 14 Tage";
   }
@@ -145,6 +178,18 @@ export function getDashboardSnapshotContextLabel(
 ): string {
   if (timeframe.mode === "current") {
     return "letzten verfügbaren Snapshot";
+  }
+
+  if (timeframe.mode === "gestern") {
+    return "Snapshot von gestern";
+  }
+
+  if (timeframe.mode === "3d") {
+    return "letzten Snapshot der letzten 3 Tage";
+  }
+
+  if (timeframe.mode === "7d") {
+    return "letzten Snapshot der letzten 7 Tage";
   }
 
   if (timeframe.mode === "14d") {
