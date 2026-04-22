@@ -76,6 +76,8 @@ export interface DashboardProjectListItem {
   projectNumber: string | null;
   projectName: string | null;
   status: string | null;
+  /** Fine-grained Hero step name — carries the emoji (e.g. "🏁 Abgeschlossen"). */
+  stepName?: string | null;
   department: ProjectDepartment;
   snapshotDate: string;
   projectType?: string | null;

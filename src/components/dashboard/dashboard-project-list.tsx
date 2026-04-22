@@ -163,7 +163,7 @@ export function DashboardProjectList({
                     <div className="space-y-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
-                          {project.projectName ?? "Ohne Projektname"}
+                          {getDisplayTitle(project)}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                           {project.projectNumber ? (
@@ -225,7 +225,7 @@ export function DashboardProjectList({
 
                   <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                     <Badge variant={getStatusBadgeVariant(project.status)}>
-                      {formatStatusLabel(project.status)}
+                      {project.stepName ?? formatStatusLabel(project.status)}
                     </Badge>
                     {project.heroLink ? (
                       <Button asChild size="sm" variant="outline">
@@ -244,7 +244,7 @@ export function DashboardProjectList({
                         type="button"
                         size="sm"
                         variant="secondary"
-                        aria-label={`Details zu ${project.projectName ?? project.projectNumber ?? "Projekt"}`}
+                        aria-label={`Details zu ${getDisplayTitle(project)}`}
                       >
                         Details
                         <ChevronDown
@@ -761,6 +761,20 @@ function getStatusBadgeVariant(status: string | null):
   }
 
   return "default";
+}
+
+/**
+ * Pick the nicest title we can show for a project. Hero sometimes stores
+ * junk like "-7305 | --, --, --" when a project was created without a real
+ * name — we fall back through customer name, address, and project number.
+ */
+function getDisplayTitle(project: ProjectRow): string {
+  const name = project.projectName?.trim();
+  if (name && /[A-Za-zÄÖÜäöüß]{2,}/.test(name)) return name;
+  const customer = project.customerName?.trim();
+  if (customer) return customer;
+  if (project.projectNumber) return project.projectNumber;
+  return "Projekt ohne Titel";
 }
 
 function getProjectContextSummary(project: DashboardProjectListItem): string | null {

@@ -97,6 +97,26 @@ async function getLiveData(
   };
 }
 
+/**
+ * Hero's project_title often comes back as templated junk like
+ * "-7305 | --, --, --" when a project was created without a real title.
+ * Detect that shape and fall back to something useful.
+ */
+function cleanProjectName(
+  raw: string | null | undefined,
+  customerName?: string | null
+): string | null {
+  if (!raw) return customerName ?? null;
+  const trimmed = raw.trim();
+  // No letters and no digits → just punctuation/dashes
+  if (!/[A-Za-zÄÖÜäöüß0-9]/.test(trimmed)) return customerName ?? null;
+  // Pattern: "-NNNN | --, --, --" or similar repeat-of-dashes segments
+  const letters = trimmed.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
+  const dashRun = (trimmed.match(/-/g) ?? []).length;
+  if (letters.length === 0 && dashRun >= 2) return customerName ?? null;
+  return trimmed;
+}
+
 function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem[] {
   return projects
     .map((project) => {
@@ -104,11 +124,14 @@ function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem
         project.customerDocuments ?? project.customer_documents ?? []
       );
 
+      const customerName =
+        project.customer_name ?? project.customerName ?? null;
       return {
         id: project.id,
         projectNumber: project.project_number,
-        projectName: project.name,
+        projectName: cleanProjectName(project.name, customerName),
         status: project.status,
+        stepName: project.step_name ?? null,
         department: getDepartmentFromProjectNumber(project.project_number),
         snapshotDate: getProjectSnapshotDate(project),
         projectType: project.project_type,
