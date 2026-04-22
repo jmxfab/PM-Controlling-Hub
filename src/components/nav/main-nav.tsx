@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Mail } from "lucide-react";
+import { LayoutDashboard, Mail, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/emails", label: "E-Mails", icon: Mail },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];
 
 export function MainNav() {
