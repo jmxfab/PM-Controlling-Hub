@@ -1,13 +1,12 @@
 /**
  * Hero contacts → public.hero_contacts
- *
- * Top-level `contacts` query with pagination.
  */
 
 import type { HeroEntitySync } from "../sync-engine";
 
 interface ContactRaw {
   id: string | number;
+  nr?: string | null;
   first_name?: string | null;
   last_name?: string | null;
   company_name?: string | null;
@@ -15,20 +14,34 @@ interface ContactRaw {
   phone_home?: string | null;
   phone_business?: string | null;
   phone_mobile?: string | null;
+  category?: string | null;
+  parent_customer_id?: string | number | null;
   modified?: string | null;
 }
 
 interface ContactRow {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
+  nr: string | null;
+  full_name: string | null;
   company_name: string | null;
   email: string | null;
-  phone: string | null;
+  phone_home: string | null;
+  phone_mobile: string | null;
+  category: string | null;
+  parent_customer_id: string | null;
   raw: ContactRaw;
   hero_modified_at: string | null;
   synced_at: string;
   is_deleted: boolean;
+}
+
+function fullNameOf(c: ContactRaw): string | null {
+  const company = c.company_name?.trim();
+  if (company) return company;
+  const parts = [c.first_name, c.last_name]
+    .filter((v): v is string => !!v && v.trim().length > 0)
+    .join(" ");
+  return parts || null;
 }
 
 export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
@@ -40,6 +53,7 @@ export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
     query SyncContacts($first: Int!, $offset: Int!) {
       contacts(first: $first, offset: $offset, orderBy: "id") {
         id
+        nr
         first_name
         last_name
         company_name
@@ -47,6 +61,8 @@ export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
         phone_home
         phone_business
         phone_mobile
+        category
+        parent_customer_id
         modified
       }
     }
@@ -55,11 +71,15 @@ export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
     (data as { contacts?: ContactRaw[] } | null)?.contacts ?? [],
   normalize: (raw) => ({
     id: String(raw.id),
-    first_name: raw.first_name ?? null,
-    last_name: raw.last_name ?? null,
+    nr: raw.nr ?? null,
+    full_name: fullNameOf(raw),
     company_name: raw.company_name ?? null,
     email: raw.email ?? null,
-    phone: raw.phone_mobile ?? raw.phone_business ?? raw.phone_home ?? null,
+    phone_home: raw.phone_home ?? null,
+    phone_mobile: raw.phone_mobile ?? raw.phone_business ?? null,
+    category: raw.category ?? null,
+    parent_customer_id:
+      raw.parent_customer_id != null ? String(raw.parent_customer_id) : null,
     raw,
     hero_modified_at: raw.modified ?? null,
     synced_at: new Date().toISOString(),
