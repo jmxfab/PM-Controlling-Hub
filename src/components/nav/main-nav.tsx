@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -27,8 +28,24 @@ export function MainNav() {
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="max-w-[1200px] mx-auto px-8 h-14 flex items-center gap-6">
-        <span className="font-semibold text-sm">JMX Controlling</span>
+      <div className="max-w-[1200px] mx-auto px-8 h-16 flex items-center gap-6">
+        <Link
+          href="/"
+          className="flex items-center gap-2 shrink-0"
+          aria-label="JMX Controlling · Startseite"
+        >
+          <Image
+            src="/jumax-logo.png"
+            alt="Jumax Logo"
+            width={36}
+            height={36}
+            priority
+            className="rounded-md"
+          />
+          <span className="font-semibold text-sm hidden sm:inline">
+            JMX Controlling
+          </span>
+        </Link>
         <nav className="flex items-center gap-1">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);

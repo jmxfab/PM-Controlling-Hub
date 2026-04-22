@@ -1,6 +1,5 @@
 import { Suspense, type ReactNode } from "react";
 import type { Metadata } from "next";
-import Image from "next/image";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { SyncInProgressBanner } from "@/components/dashboard/sync-in-progress-banner";
 import { DashboardTabContent } from "@/components/dashboard/dashboard-tab-content";
@@ -49,17 +48,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div className="flex items-center gap-4">
-        <Image
-          src="/favicon.svg"
-          alt="JMX Logo"
-          width={56}
-          height={56}
-          priority
-          className="shrink-0 rounded-xl"
-        />
+      <div>
         <h1
-          className="text-3xl font-bold tracking-tight cursor-help"
+          className="text-3xl font-bold tracking-tight cursor-help inline-block"
           title="Operativer Überblick über Projekte, Status, Dokumente und Verlauf."
         >
           Controlling
