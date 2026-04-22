@@ -50,7 +50,7 @@ export function CashflowView({
   heroProjectLinkTemplate,
 }: {
   department: Department;
-  dto: CashflowDto;
+  dto: CashflowDto | null;
   pipeline?: HeroPipelineDto | null;
   heroProjectLinkTemplate?: string | null;
 }) {
@@ -65,6 +65,14 @@ export function CashflowView({
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
         />
       ) : null}
+      {!dto ? (
+        <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground text-center">
+          Cashflow-KPIs (Aging, Pipeline-Umsatz, Monatsumsatz) konnten nicht
+          geladen werden. Die Pipeline-Sicht oben ist davon unabhängig.
+        </div>
+      ) : null}
+      {dto ? (
+      <>
       {/* Top-KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
@@ -203,6 +211,8 @@ export function CashflowView({
           </div>
         </CardContent>
       </Card>
+      </>
+      ) : null}
     </div>
   );
 }

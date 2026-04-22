@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async redirects() {
+    return [
+      // /cashflow → /cash (Rename 2026-04-22)
+      {
+        source: "/cashflow",
+        destination: "/cash",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

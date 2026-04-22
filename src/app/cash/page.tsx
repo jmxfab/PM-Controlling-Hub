@@ -98,18 +98,22 @@ async function CashTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  const [dto, pipeline] = await Promise.all([
-    loadCashflow(department).catch(() => null),
+  const [dtoResult, pipelineResult] = await Promise.allSettled([
+    loadCashflow(department),
     // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
-    loadHeroPipeline(department, pipelineRange, {
-      onlyCashSteps: true,
-    }).catch(() => null),
+    loadHeroPipeline(department, pipelineRange, { onlyCashSteps: true }),
   ]);
 
-  if (!dto) {
+  const dto = dtoResult.status === "fulfilled" ? dtoResult.value : null;
+  const pipeline =
+    pipelineResult.status === "fulfilled" ? pipelineResult.value : null;
+
+  // Wenn beide leer sind → klare Fehlermeldung. Wenn mindestens eines da ist,
+  // rendern wir die Seite partiell statt den User auf einen toten Screen zu schicken.
+  if (!dto && !pipeline) {
     return (
       <div className="text-sm text-destructive py-8 text-center">
-        Fehler beim Laden der Cash-Daten.
+        Fehler beim Laden der Cash-Daten. Bitte Admin prüfen lassen.
       </div>
     );
   }
