@@ -184,13 +184,11 @@ export function DashboardProjectList({
                                 href={project.heroLink}
                                 target="_blank"
                                 rel="noreferrer noopener"
+                                title="Im Hero öffnen"
+                                className="inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-blue-500 hover:border-blue-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                               >
-                                <Badge
-                                  variant="outline"
-                                  className="font-medium text-foreground hover:border-primary hover:text-primary"
-                                >
-                                  {project.projectNumber}
-                                </Badge>
+                                {project.projectNumber}
+                                <ExternalLink className="h-3 w-3" />
                               </a>
                             ) : (
                               <Badge variant="outline" className="font-medium text-foreground">
