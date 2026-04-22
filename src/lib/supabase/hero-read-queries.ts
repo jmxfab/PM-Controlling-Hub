@@ -36,7 +36,7 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
-const DATA_CACHE_TTL_S = 60;
+const DATA_CACHE_TTL_S = 300;
 const ROW_CHUNK_SIZE = 1000;
 
 interface DashboardProjectRow {

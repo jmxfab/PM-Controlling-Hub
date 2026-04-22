@@ -60,16 +60,12 @@ async function getLiveData(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<DashboardTabData> {
-  const allProjects = await loadHeroProjectsFromSupabase();
+  const [allProjects, historicData] = await Promise.all([
+    loadHeroProjectsFromSupabase(),
+    getHistoricKPIs(department, timeframe).catch((): HistoricDataPoint[] => []),
+  ]);
   const filteredProjects = filterHeroProjectsByTimeframe(allProjects, timeframe);
   const departmentProjects = groupProjectsByDepartment(filteredProjects)[department];
-
-  let historicData: HistoricDataPoint[] = [];
-  try {
-    historicData = await getHistoricKPIs(department, timeframe);
-  } catch {
-    // Supabase nicht konfiguriert oder Tabellen fehlen — leere History ist ok
-  }
 
   if (departmentProjects.length === 0) {
     return {

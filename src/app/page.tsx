@@ -71,16 +71,3 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
 }
 
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-4 mt-6 animate-pulse">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <div key={i} className="h-32 rounded-xl bg-muted/60" />
-        ))}
-      </div>
-      <div className="h-[400px] rounded-xl bg-muted/60 mt-6" />
-      <div className="h-[320px] rounded-xl bg-muted/60 mt-6" />
-    </div>
-  );
-}
