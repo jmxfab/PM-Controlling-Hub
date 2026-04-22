@@ -34,6 +34,7 @@ import type {
   WeeklyThroughputPoint,
   StepDurationRow,
   DurationMetric,
+  KwpStats,
 } from "@/lib/supabase/hero-insights-queries";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
@@ -53,6 +54,7 @@ interface InsightsViewProps {
     ageDays: number;
   }>;
   durationMetrics?: DurationMetric[];
+  kwpStats?: KwpStats | null;
   timeframeLabel?: string;
 }
 
@@ -62,6 +64,7 @@ export function InsightsView({
   stepDurations,
   longestRunning,
   durationMetrics,
+  kwpStats,
   timeframeLabel,
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
@@ -83,6 +86,46 @@ export function InsightsView({
 
   return (
     <div className="space-y-6">
+      {kwpStats && kwpStats.projectsWithKwp > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Anlagenleistung — {deptName}</CardTitle>
+            <CardDescription>
+              kWp-Werte aus Maßnahmenbezeichnungen abgeschlossener Projekte
+              (Regex auf „X kWp"). Projekte ohne kWp-Angabe werden nicht
+              gezählt.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border p-3 space-y-1">
+                <p className="text-xs text-muted-foreground">Gesamt installiert</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {kwpStats.totalKwp.toLocaleString("de-DE")} kWp
+                </p>
+              </div>
+              <div className="rounded-md border p-3 space-y-1">
+                <p className="text-xs text-muted-foreground">Ø pro Projekt</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {kwpStats.avgKwp !== null
+                    ? `${kwpStats.avgKwp.toLocaleString("de-DE")} kWp`
+                    : "–"}
+                </p>
+              </div>
+              <div className="rounded-md border p-3 space-y-1">
+                <p className="text-xs text-muted-foreground">Projekte mit kWp-Angabe</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {kwpStats.projectsWithKwp}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">
+                    / {kwpStats.projectsCompleted}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {durationMetrics && durationMetrics.length > 0 ? (
         <Card>
           <CardHeader>

@@ -31,7 +31,11 @@ export async function DashboardTabContent({
   const rangeIso = buildTimeframeRangeIso(timeframe);
   const [tabData, pipeline] = await Promise.all([
     getDashboardTabData(department, timeframe),
-    loadHeroPipeline(department, rangeIso).catch(() => null),
+    // Dashboard-Pipeline zeigt NUR operative Steps. Die Abrechnungs-Steps
+    // (Abschlussrechnung / Teil-RG / Kundenrechnung) leben im /cashflow-Tab.
+    loadHeroPipeline(department, rangeIso, { excludeCashSteps: true }).catch(
+      () => null
+    ),
   ]);
   const {
     kpiData,

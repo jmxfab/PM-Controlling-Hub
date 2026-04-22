@@ -13,6 +13,10 @@ import {
   type DashboardProjectRow,
 } from "./hero-read-queries";
 import { cleanProjectTitle } from "@/lib/hero/project-title";
+import {
+  isAccountingStep,
+  isFinishedStep as isFinishedStepName,
+} from "@/lib/hero/step-classifier";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -95,35 +99,63 @@ export interface TimeframeDeltaDto {
   overdueBecame: number;         // Projekte die in diesem Zeitraum überfällig wurden
 }
 
-const FINISHED_NAME_PATTERNS = ["abgeschlossen", "archiviert", "fertig", "finished"];
-
-function isFinishedStep(name: string | null | undefined): boolean {
-  if (!name) return false;
-  const lower = name.toLowerCase();
-  return FINISHED_NAME_PATTERNS.some((pattern) => lower.includes(pattern));
-}
-
 /**
- * Jumax reporting week: Friday 00:00 → Thursday 23:59:59.999.
- *
- * Returns [currentWeekStart, lastWeekStart] for counting:
- *   - completedLastWeek: lastWeekStart ≤ completion_date < currentWeekStart
- *   - newThisWeek: created_at_hero ≥ currentWeekStart
- *
- * Done with a single local-time Date so daylight-savings transitions and
- * server timezone don't shift the boundary off the Friday morning.
+ * Jumax reporting week: Friday 00:00 → Thursday 23:59:59.999 in
+ * **Europe/Berlin** time. Vercel-Server laufen in UTC, deswegen
+ * rechnen wir die Grenze explizit in Berlin-Zeit und wandeln sie in
+ * einen UTC-Timestamp um.
  */
 function getJumaxWeekBoundaries(now = new Date()): {
   currentWeekStart: number;
   lastWeekStart: number;
 } {
-  const start = new Date(now);
-  const dayOfWeek = start.getDay(); // 0=Sun, 1=Mon, … 5=Fri, 6=Sat
-  const daysSinceFriday = (dayOfWeek - 5 + 7) % 7;
-  start.setDate(start.getDate() - daysSinceFriday);
-  start.setHours(0, 0, 0, 0);
-  const currentWeekStart = start.getTime();
-  const lastWeekStart = currentWeekStart - 7 * 24 * 60 * 60 * 1000;
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(now);
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  const year = Number(get("year"));
+  const month = Number(get("month"));
+  const day = Number(get("day"));
+  const weekday = get("weekday");
+  const daysSinceFridayMap: Record<string, number> = {
+    Fri: 0,
+    Sat: 1,
+    Sun: 2,
+    Mon: 3,
+    Tue: 4,
+    Wed: 5,
+    Thu: 6,
+  };
+  const daysSinceFriday = daysSinceFridayMap[weekday] ?? 0;
+
+  // Berlin-Datum für den letzten Freitag
+  const fridayUtcMid = Date.UTC(year, month - 1, day) - daysSinceFriday * 86400000;
+  // Offset Berlin→UTC für das Datum bestimmen
+  const probe = new Date(fridayUtcMid);
+  const probeBerlinHour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Berlin",
+      hour: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(probe)
+      .find((p) => p.type === "hour")?.value ?? "0"
+  );
+  // Berlin ist probeBerlinHour Stunden vor UTC. Berlin-Mitternacht =
+  // UTC-Mitternacht − offsetHours. Wenn probeBerlinHour=2 (CEST) →
+  // Berlin-00:00 ist UTC-22:00 vom Vortag.
+  const offsetHours = probeBerlinHour === 0 ? 0 : 24 - probeBerlinHour;
+  const currentWeekStart = fridayUtcMid - offsetHours * 3600000;
+  const lastWeekStart = currentWeekStart - 7 * 86400000;
   return { currentWeekStart, lastWeekStart };
 }
 
@@ -339,7 +371,8 @@ async function loadStepTransitionCounts(
 export const loadHeroPipeline = cache(
   async (
     department: Department,
-    timeframeRange?: TimeframeRangeIso
+    timeframeRange?: TimeframeRangeIso,
+    options?: { excludeCashSteps?: boolean }
   ): Promise<HeroPipelineDto> => {
     const all = await fetchDashboardProjectRows();
     let projects = rowsFor(all, department);
@@ -452,22 +485,26 @@ export const loadHeroPipeline = cache(
       }
     }
 
-    const steps: HeroPipelineStep[] = Array.from(stepMap.entries())
+    let steps: HeroPipelineStep[] = Array.from(stepMap.entries())
       .map(([id, meta]) => ({
         id,
         name: meta.name,
         projectCount: meta.projectCount,
-        isFinished: isFinishedStep(meta.name),
+        isFinished: isFinishedStepName(meta.name),
         overdueCount: meta.overdueCount,
         reopenedCount: meta.reopenedCount,
         stepOrder: meta.stepOrder,
       }))
-      // Sort by Hero pipeline order: finished states last, then by
-      // status_code*1e6 + sort_order*1e3 (derived in the view).
       .sort((a, b) => {
         if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
         return a.stepOrder - b.stepOrder;
       });
+
+    // Cash-Steps (Abschluss-/Teil-/Kundenrechnung) optional ausblenden —
+    // die gehören ins Cashflow-Panel, nicht auf das operative Dashboard.
+    if (options?.excludeCashSteps) {
+      steps = steps.filter((step) => !isAccountingStep(step.name));
+    }
 
     // Delta-Karte (Änderungen im Zeitraum) nur bei "past" Timeframes;
     // bei "future" (Termin-Fenster) ist die Pipeline bereits auf das

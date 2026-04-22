@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Mail,
   Settings,
+  TrendingUp,
 } from "lucide-react";
 
 const navItems = [
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/faelligkeiten", label: "Fälligkeiten", icon: CalendarClock },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/cashflow", label: "Cashflow", icon: Euro },
+  { href: "/deckungsbeitrag", label: "Deckungsbeitrag", icon: TrendingUp },
   { href: "/emails", label: "E-Mails", icon: Mail },
   { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];

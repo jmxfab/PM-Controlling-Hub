@@ -8,6 +8,7 @@ import {
   loadStepDurations,
   loadLongestRunning,
   loadDurationMetrics,
+  loadKwpStats,
   type InsightsRange,
 } from "@/lib/supabase/hero-insights-queries";
 import {
@@ -95,7 +96,7 @@ async function InsightsTab({
   timeframe: DashboardTimeframe;
 }) {
   const range = buildInsightsRange(timeframe);
-  const [weekly, stepDurations, longestRunning, durationMetrics] =
+  const [weekly, stepDurations, longestRunning, durationMetrics, kwpStats] =
     await Promise.all([
       loadWeeklyThroughput(department, range ? { range } : undefined).catch(
         () => []
@@ -107,6 +108,7 @@ async function InsightsTab({
       loadDurationMetrics(department, range ? { range } : undefined).catch(
         () => []
       ),
+      loadKwpStats(department).catch(() => null),
     ]);
 
   return (
@@ -116,6 +118,7 @@ async function InsightsTab({
       stepDurations={stepDurations}
       longestRunning={longestRunning}
       durationMetrics={durationMetrics}
+      kwpStats={kwpStats}
       timeframeLabel={getDashboardTimeframeLabel(timeframe)}
     />
   );
