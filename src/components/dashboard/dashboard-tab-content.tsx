@@ -1,6 +1,7 @@
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
+import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
@@ -11,6 +12,7 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import { loadHeroPipeline } from "@/lib/supabase/hero-pipeline-queries";
 
 export async function DashboardTabContent({
   department,
@@ -21,6 +23,10 @@ export async function DashboardTabContent({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
+  const [tabData, pipeline] = await Promise.all([
+    getDashboardTabData(department, timeframe),
+    loadHeroPipeline(department).catch(() => null),
+  ]);
   const {
     kpiData,
     historicData,
@@ -28,7 +34,7 @@ export async function DashboardTabContent({
     kpiProjectGroups,
     notice,
     source,
-  } = await getDashboardTabData(department, timeframe);
+  } = tabData;
 
   const departmentName = DASHBOARD_DEPARTMENT_NAMES[department];
   const snapshotContextLabel =
@@ -64,6 +70,9 @@ export async function DashboardTabContent({
         departmentName={departmentName}
         emptyMessage={emptyHistoricMessage}
       />
+      {pipeline ? (
+        <HeroPipelinePanel department={department} pipeline={pipeline} />
+      ) : null}
       <DashboardProjectList
         departmentName={departmentName}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
