@@ -1,38 +1,28 @@
 import "server-only";
 
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
-
-const DATA_CACHE_TTL_S = 60;
 
 import {
   HERO_TYPE_ID_TO_DEPARTMENT,
   type Department,
   type ProjectDepartment,
 } from "@/lib/dashboard/dashboard-types";
-import { loadHeroProjectsFromSupabase } from "./hero-read-queries";
+import {
+  fetchDashboardProjectRows,
+  type DashboardProjectRow,
+} from "./hero-read-queries";
 
 /**
  * Per-department Hero pipeline panel.
  *
- * Shares the cached HeroProject[] with the rest of the dashboard — no second
- * Supabase round trip. Step reference data still comes from
- * hero_project_types so steps that currently have zero projects are still
- * listed.
+ * Reads the hero_dashboard_projects materialized view (already paginated
+ * + cached by hero-read-queries), groups projects by `step_group` and
+ * returns counts/metadata per step. For GESAMT the step_group collapses
+ * emoji/whitespace variants so the same semantic step (e.g. Abschlussgespräch)
+ * from multiple departments appears as one bucket. Distinct steps with
+ * different meanings (e.g. "Nacharbeiten terminiert" vs
+ * "Nacharbeiten nicht terminiert") stay separate.
  */
-
-function supabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY"
-    );
-  }
-  return createClient(url, key);
-}
 
 function typeIdsFor(department: Department): string[] {
   if (department === "GESAMT") {
@@ -44,29 +34,31 @@ function typeIdsFor(department: Department): string[] {
 }
 
 export interface HeroPipelineStep {
+  /** step_group — the grouping key used across the UI. */
   id: string;
   name: string;
-  sortOrder: number;
   projectCount: number;
   isFinished: boolean;
+  overdueCount: number;
+  reopenedCount: number;
 }
 
-export interface HeroPipelineDto {
-  department: Department;
-  typeIds: string[];
-  steps: HeroPipelineStep[];
+export interface HeroPipelineKpis {
   totalProjects: number;
   totalOpen: number;
   totalOverdue: number;
+  totalReopened: number;
+  completedLastWeek: number;
+  newThisWeek: number;
 }
 
-const FINISHED_NAME_PATTERNS = [
-  "abgeschlossen",
-  "archiviert",
-  "fertig",
-  "finished",
-  "done",
-];
+export interface HeroPipelineDto extends HeroPipelineKpis {
+  department: Department;
+  typeIds: string[];
+  steps: HeroPipelineStep[];
+}
+
+const FINISHED_NAME_PATTERNS = ["abgeschlossen", "archiviert", "fertig", "finished"];
 
 function isFinishedStep(name: string | null | undefined): boolean {
   if (!name) return false;
@@ -74,119 +66,91 @@ function isFinishedStep(name: string | null | undefined): boolean {
   return FINISHED_NAME_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-interface StepDescriptor {
-  name: string;
-  sortOrder: number;
-}
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const fetchProjectTypeStepsRaw = unstable_cache(
-  async (): Promise<Array<[string, Array<[string, StepDescriptor]>]>> => {
-    const supabase = supabaseAdmin();
-    const { data, error } = await supabase
-      .from("hero_project_types")
-      .select("id, raw");
-
-    if (error) {
-      console.warn("fetchProjectTypeStepsRaw:", error.message);
-      return [];
-    }
-
-    return (data ?? []).map((row) => {
-      const typed = row as { id: string; raw: Record<string, unknown> | null };
-      const steps =
-        (typed.raw?.project_status_steps as
-          | Array<{ id?: unknown; name?: unknown; sort_order?: unknown }>
-          | undefined) ?? [];
-      const entries: Array<[string, StepDescriptor]> = [];
-      for (const step of steps) {
-        const id = step.id != null ? String(step.id) : null;
-        const name = typeof step.name === "string" ? step.name : null;
-        if (!id || !name) continue;
-        entries.push([
-          id,
-          {
-            name,
-            sortOrder: typeof step.sort_order === "number" ? step.sort_order : 0,
-          },
-        ]);
-      }
-      return [typed.id, entries] as [string, Array<[string, StepDescriptor]>];
-    });
-  },
-  ["hero_project_type_steps"],
-  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_project_types"] }
-);
-
-const loadProjectTypeStepsOnce = cache(
-  async (): Promise<Map<string, Map<string, StepDescriptor>>> => {
-    const pairs = await fetchProjectTypeStepsRaw();
-    return new Map(pairs.map(([typeId, entries]) => [typeId, new Map(entries)]));
+function rowsFor(
+  rows: DashboardProjectRow[],
+  department: Department
+): DashboardProjectRow[] {
+  if (department === "GESAMT") {
+    return rows.filter((row) => row.department_key != null);
   }
-);
+  return rows.filter((row) => row.department_key === department);
+}
 
 export const loadHeroPipeline = cache(
   async (department: Department): Promise<HeroPipelineDto> => {
-    const typeIds = typeIdsFor(department);
-    const typeIdSet = new Set(typeIds);
+    const all = await fetchDashboardProjectRows();
+    const projects = rowsFor(all, department);
+    const now = Date.now();
+    const weekAgo = now - ONE_WEEK_MS;
 
-    const [allProjects, stepsByType] = await Promise.all([
-      loadHeroProjectsFromSupabase(),
-      loadProjectTypeStepsOnce(),
-    ]);
-
-    const projects = allProjects.filter(
-      (project) => project.type_id != null && typeIdSet.has(project.type_id)
-    );
-
-    // Step reference pool — start from hero_project_types so empty steps
-    // (zero projects currently) still appear. GESAMT: union across types.
-    const steps = new Map<string, { name: string; sortOrder: number }>();
-    for (const typeId of typeIds) {
-      const perType = stepsByType.get(typeId);
-      if (!perType) continue;
-      for (const [stepId, meta] of perType) {
-        if (!steps.has(stepId)) steps.set(stepId, meta);
+    const stepMap = new Map<
+      string,
+      {
+        name: string;
+        projectCount: number;
+        overdueCount: number;
+        reopenedCount: number;
       }
-    }
-
-    // Count projects per step + overdue from the in-memory HeroProject array.
-    const counts = new Map<string, number>();
+    >();
     let totalOpen = 0;
     let totalOverdue = 0;
-    const now = Date.now();
+    let totalReopened = 0;
+    let completedLastWeek = 0;
+    let newThisWeek = 0;
 
-    for (const project of projects) {
-      const stepId = project.step_id;
-      const stepName = project.step_name;
-      if (!stepId || !stepName) continue;
-
-      if (!steps.has(stepId)) {
-        steps.set(stepId, {
-          name: stepName,
-          sortOrder: project.step_sort_order ?? 0,
-        });
-      }
-      counts.set(stepId, (counts.get(stepId) ?? 0) + 1);
-
-      if (!isFinishedStep(stepName)) {
+    for (const row of projects) {
+      const stepKey = row.step_group ?? row.step_name ?? row.step_id;
+      if (!stepKey) continue;
+      const display = row.step_group ?? row.step_name ?? stepKey;
+      const bucket = stepMap.get(stepKey) ?? {
+        name: display,
+        projectCount: 0,
+        overdueCount: 0,
+        reopenedCount: 0,
+      };
+      bucket.projectCount += 1;
+      const open = !row.is_finished;
+      if (open) {
         totalOpen += 1;
-        const maturity = project.maturity_date;
-        if (maturity) {
-          const maturityTime = Date.parse(maturity);
-          if (Number.isFinite(maturityTime) && maturityTime < now) {
+        if (row.maturity_date) {
+          const t = Date.parse(row.maturity_date);
+          if (Number.isFinite(t) && t < now) {
+            bucket.overdueCount += 1;
             totalOverdue += 1;
           }
+        }
+        if (row.was_reopened) {
+          bucket.reopenedCount += 1;
+          totalReopened += 1;
+        }
+      }
+      stepMap.set(stepKey, bucket);
+
+      if (row.is_finished && row.completion_date) {
+        const completedAt = Date.parse(row.completion_date);
+        if (Number.isFinite(completedAt) && completedAt >= weekAgo) {
+          completedLastWeek += 1;
+        }
+      }
+
+      if (row.created_at_hero) {
+        const createdAt = Date.parse(row.created_at_hero);
+        if (Number.isFinite(createdAt) && createdAt >= weekAgo) {
+          newThisWeek += 1;
         }
       }
     }
 
-    const pipelineSteps: HeroPipelineStep[] = Array.from(steps.entries())
+    const steps: HeroPipelineStep[] = Array.from(stepMap.entries())
       .map(([id, meta]) => ({
         id,
         name: meta.name,
-        sortOrder: meta.sortOrder,
-        projectCount: counts.get(id) ?? 0,
+        projectCount: meta.projectCount,
         isFinished: isFinishedStep(meta.name),
+        overdueCount: meta.overdueCount,
+        reopenedCount: meta.reopenedCount,
       }))
       .sort((a, b) => {
         if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
@@ -195,11 +159,14 @@ export const loadHeroPipeline = cache(
 
     return {
       department,
-      typeIds,
-      steps: pipelineSteps,
+      typeIds: typeIdsFor(department),
+      steps,
       totalProjects: projects.length,
       totalOpen,
       totalOverdue,
+      totalReopened,
+      completedLastWeek,
+      newThisWeek,
     };
   }
 );
@@ -212,35 +179,34 @@ export interface PipelineProjectRow {
   stepName: string | null;
   maturityDate: string | null;
   department: ProjectDepartment | null;
+  wasReopened: boolean;
 }
 
 export async function loadProjectsForSteps(
   department: Department,
-  stepIds: string[]
+  stepKeys: string[]
 ): Promise<PipelineProjectRow[]> {
-  if (stepIds.length === 0) return [];
-  const typeIds = typeIdsFor(department);
-  const typeIdSet = new Set(typeIds);
-  const stepIdSet = new Set(stepIds);
+  if (stepKeys.length === 0) return [];
+  const all = await fetchDashboardProjectRows();
+  const rows = rowsFor(all, department);
+  const stepKeySet = new Set(stepKeys);
 
-  const projects = await loadHeroProjectsFromSupabase();
-
-  return projects
-    .filter(
-      (project) =>
-        project.type_id != null &&
-        typeIdSet.has(project.type_id) &&
-        project.step_id != null &&
-        stepIdSet.has(project.step_id)
-    )
-    .map((project) => ({
-      id: project.id,
-      projectNumber: project.project_number,
-      projectName: project.name,
-      customerName: project.customer_name ?? null,
-      stepName: project.step_name ?? null,
-      maturityDate: project.maturity_date ?? null,
-      department: project.department ?? null,
+  return rows
+    .filter((row) => {
+      const key = row.step_group ?? row.step_name ?? row.step_id;
+      return key != null && stepKeySet.has(key);
+    })
+    .map((row) => ({
+      id: row.id,
+      projectNumber: row.project_number,
+      projectName: row.project_name,
+      customerName: row.customer_name,
+      stepName: row.step_name,
+      maturityDate: row.maturity_date,
+      department: row.department_key ?? null,
+      wasReopened: row.was_reopened ?? false,
     }))
-    .sort((a, b) => (a.projectNumber ?? "").localeCompare(b.projectNumber ?? ""));
+    .sort((a, b) =>
+      (a.projectNumber ?? "").localeCompare(b.projectNumber ?? "")
+    );
 }

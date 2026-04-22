@@ -22,14 +22,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const stepIds = stepsParam
-      .split(",")
+    // Steps are separated by `||` because step_group values may contain
+    // commas (e.g. "Nacharbeiten, nicht terminiert"). Legacy comma input
+    // still works for single-step selections.
+    const stepKeys = stepsParam
+      .split(stepsParam.includes("||") ? "||" : ",")
       .map((value) => value.trim())
       .filter(Boolean);
 
     const projects = await loadProjectsForSteps(
       department as Department,
-      stepIds
+      stepKeys
     );
 
     return NextResponse.json({ projects });

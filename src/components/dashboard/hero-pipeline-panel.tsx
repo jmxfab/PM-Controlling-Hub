@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  RotateCcw,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,8 +59,8 @@ export function HeroPipelinePanel({
   );
 
   async function refreshProjects(nextSelection: Set<string>) {
-    const ids = Array.from(nextSelection);
-    if (ids.length === 0) {
+    const keys = Array.from(nextSelection);
+    if (keys.length === 0) {
       setProjects([]);
       return;
     }
@@ -63,7 +69,7 @@ export function HeroPipelinePanel({
     try {
       const params = new URLSearchParams({
         department,
-        steps: ids.join(","),
+        steps: keys.join("||"),
       });
       const response = await fetch(
         `/api/dashboard/pipeline-projects?${params.toString()}`
@@ -72,7 +78,9 @@ export function HeroPipelinePanel({
         setProjects([]);
         return;
       }
-      const payload = (await response.json()) as { projects: PipelineProjectRow[] };
+      const payload = (await response.json()) as {
+        projects: PipelineProjectRow[];
+      };
       setProjects(payload.projects ?? []);
     } catch {
       setProjects([]);
@@ -81,12 +89,12 @@ export function HeroPipelinePanel({
     }
   }
 
-  function toggleStep(stepId: string) {
+  function toggleStep(stepKey: string) {
     const next = new Set(selected);
-    if (next.has(stepId)) {
-      next.delete(stepId);
+    if (next.has(stepKey)) {
+      next.delete(stepKey);
     } else {
-      next.add(stepId);
+      next.add(stepKey);
     }
     setSelected(next);
     void refreshProjects(next);
@@ -99,121 +107,197 @@ export function HeroPipelinePanel({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <Card className="lg:sticky lg:top-4 h-fit">
-        <CardHeader>
-          <CardTitle className="text-base">
-            Pipeline · {DASHBOARD_DEPARTMENT_NAMES[department]}
-          </CardTitle>
-          <CardDescription>
-            Hero-Steps mit Projektanzahl. Mehrere Steps lassen sich
-            kombinieren, um die Liste zu filtern.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary" className="gap-1">
-              Alle Offenen
-              <span className="font-mono">{pipeline.totalOpen}</span>
-            </Badge>
-            {pipeline.totalOverdue > 0 ? (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" /> Überfällig
-                <span className="font-mono">{pipeline.totalOverdue}</span>
-              </Badge>
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiTile
+          label="Alle Offenen"
+          value={pipeline.totalOpen}
+          hint={`von ${pipeline.totalProjects} Projekten`}
+        />
+        <KpiTile
+          label="Überfällig"
+          value={pipeline.totalOverdue}
+          tone={pipeline.totalOverdue > 0 ? "warning" : "neutral"}
+          icon={<AlertTriangle className="h-4 w-4" />}
+        />
+        <KpiTile
+          label="Letzte Woche abgeschlossen"
+          value={pipeline.completedLastWeek}
+          tone="good"
+          icon={<CheckCircle2 className="h-4 w-4" />}
+        />
+        <KpiTile
+          label="Neu diese Woche"
+          value={pipeline.newThisWeek}
+          tone="attention"
+          icon={<ArrowDownRight className="h-4 w-4" />}
+        />
+        <KpiTile
+          label="Reopens (Nacharbeit)"
+          value={pipeline.totalReopened}
+          tone={pipeline.totalReopened > 0 ? "warning" : "neutral"}
+          icon={<RotateCcw className="h-4 w-4" />}
+          hint="nach bereits erreichtem Abgeschlossen"
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <Card className="lg:sticky lg:top-4 h-fit">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Pipeline · {DASHBOARD_DEPARTMENT_NAMES[department]}
+            </CardTitle>
+            <CardDescription>
+              Hero-Steps mit Projektanzahl. Mehrere Steps lassen sich
+              kombinieren, um die Liste rechts zu filtern.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <StepList
+              title="Offene Steps"
+              steps={activeSteps}
+              selected={selected}
+              onToggle={toggleStep}
+            />
+            <StepList
+              title="Abgeschlossen / Archiviert"
+              steps={finishedSteps}
+              selected={selected}
+              onToggle={toggleStep}
+              muted
+            />
+
+            {selected.size > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                className="w-full"
+              >
+                Auswahl zurücksetzen ({selected.size})
+              </Button>
             ) : null}
-            <Badge variant="outline" className="gap-1">
-              Gesamt
-              <span className="font-mono">{pipeline.totalProjects}</span>
-            </Badge>
-          </div>
+          </CardContent>
+        </Card>
 
-          <StepList
-            title="Offene Steps"
-            steps={activeSteps}
-            selected={selected}
-            onToggle={toggleStep}
-          />
-          <StepList
-            title="Abgeschlossen / Archiviert"
-            steps={finishedSteps}
-            selected={selected}
-            onToggle={toggleStep}
-            muted
-          />
-
-          {selected.size > 0 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearSelection}
-              className="w-full"
-            >
-              Auswahl zurücksetzen ({selected.size})
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Projekte</CardTitle>
-          <CardDescription>
-            {selected.size === 0
-              ? "Wähle links einen oder mehrere Steps, um Projekte zu sehen."
-              : `${projects.length} Projekt${projects.length === 1 ? "" : "e"} in der Auswahl.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {selected.size === 0 ? (
-            <div className="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-md">
-              Keine Auswahl.
-            </div>
-          ) : loading ? (
-            <div className="text-sm text-muted-foreground py-8 text-center">
-              Lade Projekte…
-            </div>
-          ) : projects.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-md">
-              Keine Projekte in den gewählten Steps.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Projekt-Nr.</TableHead>
-                  <TableHead>Titel</TableHead>
-                  <TableHead>Kunde</TableHead>
-                  <TableHead>Step</TableHead>
-                  <TableHead>Fällig</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projects.map((project) => (
-                  <TableRow key={project.id}>
-                    <TableCell className="font-mono text-xs">
-                      {project.projectNumber ?? "–"}
-                    </TableCell>
-                    <TableCell>{project.projectName ?? "–"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {project.customerName ?? "–"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {project.stepName ?? "–"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {project.maturityDate
-                        ? new Date(project.maturityDate).toLocaleDateString("de-DE")
-                        : "–"}
-                    </TableCell>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Projekte</CardTitle>
+            <CardDescription>
+              {selected.size === 0
+                ? "Wähle links einen oder mehrere Steps, um Projekte zu sehen."
+                : `${projects.length} Projekt${projects.length === 1 ? "" : "e"} in der Auswahl.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {selected.size === 0 ? (
+              <div className="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-md">
+                Keine Auswahl.
+              </div>
+            ) : loading ? (
+              <div className="text-sm text-muted-foreground py-8 text-center">
+                Lade Projekte…
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-md">
+                Keine Projekte in den gewählten Steps.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Projekt-Nr.</TableHead>
+                    <TableHead>Titel</TableHead>
+                    <TableHead>Kunde</TableHead>
+                    <TableHead>Step</TableHead>
+                    <TableHead>Fällig</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {projects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-mono text-xs">
+                        {project.projectNumber ?? "–"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {project.projectName ?? "–"}
+                          {project.wasReopened ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-orange-500 text-orange-600"
+                              title="Projekt wurde nach Abgeschlossen wieder geöffnet"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              Reopen
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {project.customerName ?? "–"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {project.stepName ?? "–"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {project.maturityDate
+                          ? new Date(project.maturityDate).toLocaleDateString(
+                              "de-DE"
+                            )
+                          : "–"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
+  );
+}
+
+type KpiTone = "neutral" | "good" | "warning" | "attention";
+
+function KpiTile({
+  label,
+  value,
+  hint,
+  icon,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+  icon?: React.ReactNode;
+  tone?: KpiTone;
+}) {
+  const toneClass = {
+    neutral: "",
+    good: "text-emerald-600",
+    warning: "text-orange-600",
+    attention: "text-rose-600",
+  }[tone];
+
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-4 space-y-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{label}</span>
+          {icon ? <span className={toneClass}>{icon}</span> : null}
+        </div>
+        <div
+          className={`text-2xl font-semibold tabular-nums ${toneClass}`}
+        >
+          {value.toLocaleString("de-DE")}
+        </div>
+        {hint ? (
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -258,8 +342,28 @@ function StepList({
                   />
                   <span className="truncate">{step.name}</span>
                 </span>
-                <span className="font-mono text-xs tabular-nums shrink-0">
-                  {step.projectCount}
+                <span className="flex items-center gap-1 shrink-0 text-xs tabular-nums">
+                  {step.reopenedCount > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-0.5 border-orange-500 text-orange-600 px-1.5"
+                      title={`${step.reopenedCount} davon Reopens`}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      {step.reopenedCount}
+                    </Badge>
+                  ) : null}
+                  {step.overdueCount > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-0.5 border-rose-500 text-rose-600 px-1.5"
+                      title={`${step.overdueCount} überfällig`}
+                    >
+                      <ArrowUpRight className="h-3 w-3" />
+                      {step.overdueCount}
+                    </Badge>
+                  ) : null}
+                  <span className="font-mono">{step.projectCount}</span>
                 </span>
               </label>
             </li>

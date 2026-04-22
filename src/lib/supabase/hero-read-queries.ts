@@ -50,6 +50,7 @@ interface DashboardProjectRow {
   step_id: string | null;
   step_name: string | null;
   step_sort_order: number | null;
+  step_group: string | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
@@ -64,9 +65,15 @@ interface DashboardProjectRow {
   rework_scheduled_date: string | null;
   closing_appointment_date: string | null;
   is_finished: boolean;
+  was_reopened: boolean;
+  last_finish_at: string | null;
+  last_rework_at: string | null;
   accounting_amount: number | null;
   raw: Record<string, unknown> | null;
 }
+
+export type { DashboardProjectRow };
+export { fetchDashboardProjectRows };
 
 const fetchDashboardProjectRows = unstable_cache(
   async (): Promise<DashboardProjectRow[]> => {

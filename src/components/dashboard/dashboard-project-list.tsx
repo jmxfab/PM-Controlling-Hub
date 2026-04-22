@@ -775,7 +775,14 @@ function getProjectContextSummary(project: DashboardProjectListItem): string | n
 
 function getProjectType(project: DashboardProjectListItem): string | null {
   const projectRecord = project as Record<string, unknown>;
-  return firstNonEmptyString(project.projectType, projectRecord.project_type);
+  const raw = firstNonEmptyString(
+    project.projectType,
+    projectRecord.project_type
+  );
+  // Hero returns "unmanaged" as a filler for project_type on every project —
+  // it's noise, not information the user wants in a context chip.
+  if (!raw || raw.toLowerCase() === "unmanaged") return null;
+  return raw;
 }
 
 function getProjectMeasureShort(project: DashboardProjectListItem): string | null {
