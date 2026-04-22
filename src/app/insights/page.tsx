@@ -170,7 +170,24 @@ const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([
 function buildPipelineRange(
   timeframe: DashboardTimeframe
 ): TimeframeRangeIso | undefined {
-  if (timeframe.mode === "current") return undefined;
+  // Im Jetzt-Modus ohne expliziten Zeitraum: rollende letzte 14 Tage
+  // für die Status-Bewegungs-Badges an jedem Step (Blau/Grün/Gelb/Rot).
+  // So sehen User im Insights-Panel immer Bewegung pro Step, ohne dass
+  // die Snapshot-Zahlen (Alle Offenen, Überfällig, …) dadurch kippen.
+  if (timeframe.mode === "current") {
+    const now = new Date();
+    const to = new Date(now);
+    to.setHours(0, 0, 0, 0);
+    to.setDate(to.getDate() + 1); // exklusive Ende
+    const from = new Date(to);
+    from.setDate(from.getDate() - 14);
+    return {
+      fromIso: from.toISOString(),
+      toIso: to.toISOString(),
+      label: "Letzte 14 Tage",
+      direction: "past",
+    };
+  }
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
   const fromIso = `${range.from}T00:00:00+02:00`;
