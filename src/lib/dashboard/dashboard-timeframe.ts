@@ -1,4 +1,15 @@
-export const DASHBOARD_TIMEFRAME_MODES = ["current", "gestern", "3d", "7d", "14d", "30d", "frei"] as const;
+export const DASHBOARD_TIMEFRAME_MODES = [
+  "current",
+  "morgen",
+  "next3d",
+  "next7d",
+  "gestern",
+  "3d",
+  "7d",
+  "14d",
+  "30d",
+  "frei",
+] as const;
 
 export type DashboardTimeframeMode = (typeof DASHBOARD_TIMEFRAME_MODES)[number];
 
@@ -68,6 +79,27 @@ export function getDashboardTimeframeRange(
 ): DashboardTimeframeRange | null {
   if (timeframe.mode === "current") {
     return null;
+  }
+
+  if (timeframe.mode === "morgen") {
+    const tomorrow = toIsoDate(addDays(atLocalNoon(referenceDate), 1));
+    return { from: tomorrow, to: tomorrow };
+  }
+
+  if (timeframe.mode === "next3d") {
+    const ref = atLocalNoon(referenceDate);
+    return {
+      from: toIsoDate(ref),
+      to: toIsoDate(addDays(ref, 2)),
+    };
+  }
+
+  if (timeframe.mode === "next7d") {
+    const ref = atLocalNoon(referenceDate);
+    return {
+      from: toIsoDate(ref),
+      to: toIsoDate(addDays(ref, 6)),
+    };
   }
 
   if (timeframe.mode === "gestern") {
@@ -151,6 +183,10 @@ export function getDashboardTimeframeLabel(
   if (timeframe.mode === "current") {
     return "Aktueller Stand";
   }
+
+  if (timeframe.mode === "morgen") return "Morgen fällig";
+  if (timeframe.mode === "next3d") return "Fällig in 3 Tagen";
+  if (timeframe.mode === "next7d") return "Fällig nächste 7 Tage";
 
   if (timeframe.mode === "gestern") {
     return "Gestern";

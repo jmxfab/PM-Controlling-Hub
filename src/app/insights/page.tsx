@@ -35,13 +35,22 @@ export default async function InsightsPage({
   const department = parseDashboardDepartmentParam(resolved.department);
   const timeframe = parseDashboardTimeframe(resolved);
 
+  // Nur den aktiven Tab server-seitig rendern; die anderen bekommen
+  // einen Platzhalter. Beim Tab-Wechsel updated die DashboardShell die
+  // URL (searchParam), Next.js re-rendert die Seite, und das aktive Tab
+  // lädt die neuen Department-Daten. Wichtig: key={department} am
+  // Suspense damit React das aktive Tab wirklich neu mountet.
   const tabContents = Object.fromEntries(
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
-      (
-        <Suspense fallback={<DashboardInitialLoader />}>
-          <InsightsTab department={dept} />
+      dept === department ? (
+        <Suspense key={department} fallback={<DashboardInitialLoader />}>
+          <InsightsTab department={department} />
         </Suspense>
+      ) : (
+        <div className="text-sm text-muted-foreground py-8 text-center">
+          Wechsel zu {dept} lädt die Daten neu …
+        </div>
       ),
     ])
   ) as Record<Department, React.ReactNode>;

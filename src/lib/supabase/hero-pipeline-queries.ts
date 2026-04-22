@@ -135,6 +135,8 @@ export interface TimeframeRangeIso {
   fromIso: string; // inklusive Start (z.B. 2026-04-17T00:00:00+02:00)
   toIso: string;   // exklusive Ende (z.B. 2026-04-24T00:00:00+02:00)
   label: string;   // "Woche (Fr → Do)", "Letzte 14 Tage", …
+  /** "past" = Zeitraum liegt rückwärts (Änderungen) — "future" = Termin-Fenster (Fälligkeit). */
+  direction: "past" | "future";
 }
 
 /**
@@ -290,9 +292,21 @@ export const loadHeroPipeline = cache(
     timeframeRange?: TimeframeRangeIso
   ): Promise<HeroPipelineDto> => {
     const all = await fetchDashboardProjectRows();
-    const projects = rowsFor(all, department);
+    let projects = rowsFor(all, department);
     const now = Date.now();
     const { currentWeekStart, lastWeekStart } = getJumaxWeekBoundaries();
+
+    // Termin-Fenster (Morgen / In 3 Tagen / Nächste Woche): nur Projekte
+    // zeigen deren maturity_date in diesem Zukunftsfenster liegt.
+    if (timeframeRange?.direction === "future") {
+      const from = new Date(timeframeRange.fromIso).getTime();
+      const to = new Date(timeframeRange.toIso).getTime();
+      projects = projects.filter((p) => {
+        if (!p.maturity_date) return false;
+        const t = Date.parse(p.maturity_date);
+        return Number.isFinite(t) && t >= from && t < to;
+      });
+    }
 
     const stepMap = new Map<
       string,
@@ -405,9 +419,13 @@ export const loadHeroPipeline = cache(
         return a.stepOrder - b.stepOrder;
       });
 
-    const timeframeDelta = timeframeRange
-      ? await loadTimeframeDeltas(department, timeframeRange)
-      : undefined;
+    // Delta-Karte (Änderungen im Zeitraum) nur bei "past" Timeframes;
+    // bei "future" (Termin-Fenster) ist die Pipeline bereits auf das
+    // Fälligkeitsfenster gefiltert.
+    const timeframeDelta =
+      timeframeRange && timeframeRange.direction === "past"
+        ? await loadTimeframeDeltas(department, timeframeRange)
+        : undefined;
 
     return {
       department,

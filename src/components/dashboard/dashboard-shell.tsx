@@ -139,11 +139,27 @@ export function DashboardShell({
           <Label>Zeitraum</Label>
           <Tabs value={timeframe.mode} onValueChange={handleTimeframeChange}>
             <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-              <TabsTrigger value="current">Aktueller Stand</TabsTrigger>
+              <TabsTrigger
+                value="current"
+                title="Momentaufnahme: was ist JETZT in welchem Step"
+              >
+                Aktueller Stand
+              </TabsTrigger>
+              <TabsTrigger value="morgen" title="Termin: morgen fällig">
+                Morgen
+              </TabsTrigger>
+              <TabsTrigger value="next3d" title="Termin: in den nächsten 3 Tagen fällig">
+                In 3 Tagen
+              </TabsTrigger>
+              <TabsTrigger value="next7d" title="Termin: in den nächsten 7 Tagen fällig">
+                Nächste Woche
+              </TabsTrigger>
               <TabsTrigger value="gestern">Gestern</TabsTrigger>
-              <TabsTrigger value="3d">3 Tage</TabsTrigger>
-              <TabsTrigger value="7d">7 Tage</TabsTrigger>
-              <TabsTrigger value="14d">14 Tage</TabsTrigger>
+              <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
+              <TabsTrigger value="7d" title="Jumax-Woche: Fr 00:00 → Do 23:59">
+                Woche (Fr→Do)
+              </TabsTrigger>
+              <TabsTrigger value="14d">Letzte 14 Tage</TabsTrigger>
               <TabsTrigger value="30d">30 Tage</TabsTrigger>
               <TabsTrigger value="frei">Frei</TabsTrigger>
             </TabsList>

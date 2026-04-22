@@ -102,13 +102,14 @@ function getDashboardStatusNotice(
   return null;
 }
 
+const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>(["morgen", "next3d", "next7d", "30d"]);
+
 function buildTimeframeRangeIso(
   timeframe: DashboardTimeframe
 ): TimeframeRangeIso | undefined {
   if (timeframe.mode === "current") return undefined;
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
-  // from = 00:00 local, to = nächster Tag 00:00 local (exklusiv)
   const fromIso = `${range.from}T00:00:00+02:00`;
   const nextDay = addDaysIso(range.to, 1);
   const toIso = `${nextDay}T00:00:00+02:00`;
@@ -116,6 +117,7 @@ function buildTimeframeRangeIso(
     fromIso,
     toIso,
     label: `${range.from} → ${range.to}`,
+    direction: FUTURE_MODES.has(timeframe.mode) ? "future" : "past",
   };
 }
 
