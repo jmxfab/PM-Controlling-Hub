@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { CashflowDto } from "@/lib/supabase/hero-insights-queries";
+import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
+import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
@@ -44,14 +46,25 @@ function formatEur(v: number): string {
 export function CashflowView({
   department,
   dto,
+  pipeline,
+  heroProjectLinkTemplate,
 }: {
   department: Department;
   dto: CashflowDto;
+  pipeline?: HeroPipelineDto | null;
+  heroProjectLinkTemplate?: string | null;
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
 
   return (
     <div className="space-y-6">
+      {pipeline ? (
+        <HeroPipelinePanel
+          department={department}
+          pipeline={pipeline}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      ) : null}
       {/* Top-KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi

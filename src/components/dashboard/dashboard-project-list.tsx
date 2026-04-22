@@ -162,14 +162,41 @@ export function DashboardProjectList({
                   <div className="min-w-0 flex-1 space-y-3">
                     <div className="space-y-2">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
-                          {getDisplayTitle(project)}
-                        </p>
+                        {project.heroLink ? (
+                          <a
+                            href={project.heroLink}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="block truncate text-lg font-semibold leading-tight sm:text-xl hover:text-primary hover:underline"
+                            title="Im Hero öffnen"
+                          >
+                            {getDisplayTitle(project)}
+                          </a>
+                        ) : (
+                          <p className="truncate text-lg font-semibold leading-tight sm:text-xl">
+                            {getDisplayTitle(project)}
+                          </p>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                           {project.projectNumber ? (
-                            <Badge variant="outline" className="font-medium text-foreground">
-                              {project.projectNumber}
-                            </Badge>
+                            project.heroLink ? (
+                              <a
+                                href={project.heroLink}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                              >
+                                <Badge
+                                  variant="outline"
+                                  className="font-medium text-foreground hover:border-primary hover:text-primary"
+                                >
+                                  {project.projectNumber}
+                                </Badge>
+                              </a>
+                            ) : (
+                              <Badge variant="outline" className="font-medium text-foreground">
+                                {project.projectNumber}
+                              </Badge>
+                            )
                           ) : (
                             <span>Ohne Projektnummer</span>
                           )}

@@ -47,12 +47,22 @@ import {
 interface HeroPipelinePanelProps {
   department: Department;
   pipeline: HeroPipelineDto;
+  /**
+   * URL-Template für Hero-Projekt-Deep-Links (Platzhalter "{projectId}").
+   * Wenn gesetzt, wird die Projekt-Nr. zum klickbaren Link ins Hero-Projekt.
+   */
+  heroProjectLinkTemplate?: string | null;
 }
 
 export function HeroPipelinePanel({
   department,
   pipeline,
+  heroProjectLinkTemplate,
 }: HeroPipelinePanelProps) {
+  const buildHeroHref = (projectId: string | null): string | null => {
+    if (!heroProjectLinkTemplate || !projectId) return null;
+    return heroProjectLinkTemplate.replace("{projectId}", projectId);
+  };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [projects, setProjects] = useState<PipelineProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -321,10 +331,38 @@ export function HeroPipelinePanel({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {projects.map((project) => (
-                    <TableRow key={project.id}>
+                  {projects.map((project) => {
+                    const heroHref = buildHeroHref(project.id);
+                    return (
+                    <TableRow
+                      key={project.id}
+                      className={heroHref ? "cursor-pointer hover:bg-accent/40" : undefined}
+                      onClick={
+                        heroHref
+                          ? () =>
+                              window.open(
+                                heroHref,
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                          : undefined
+                      }
+                      title={heroHref ? "Im Hero öffnen" : undefined}
+                    >
                       <TableCell className="font-mono text-xs">
-                        {project.projectNumber ?? "–"}
+                        {heroHref ? (
+                          <a
+                            href={heroHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {project.projectNumber ?? "–"}
+                          </a>
+                        ) : (
+                          project.projectNumber ?? "–"
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -421,7 +459,8 @@ export function HeroPipelinePanel({
                           : "–"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

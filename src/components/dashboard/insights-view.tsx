@@ -36,6 +36,8 @@ import type {
   DurationMetric,
   KwpStats,
 } from "@/lib/supabase/hero-insights-queries";
+import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
+import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
@@ -56,6 +58,8 @@ interface InsightsViewProps {
   durationMetrics?: DurationMetric[];
   kwpStats?: KwpStats | null;
   timeframeLabel?: string;
+  pipeline?: HeroPipelineDto | null;
+  heroProjectLinkTemplate?: string | null;
 }
 
 export function InsightsView({
@@ -66,6 +70,8 @@ export function InsightsView({
   durationMetrics,
   kwpStats,
   timeframeLabel,
+  pipeline,
+  heroProjectLinkTemplate,
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
   const rangeSuffix = timeframeLabel ? ` · ${timeframeLabel}` : "";
@@ -84,8 +90,20 @@ export function InsightsView({
     n: s.sampleSize,
   }));
 
+  const buildHeroHref = (projectId: string | null): string | null => {
+    if (!heroProjectLinkTemplate || !projectId) return null;
+    return heroProjectLinkTemplate.replace("{projectId}", projectId);
+  };
+
   return (
     <div className="space-y-6">
+      {pipeline ? (
+        <HeroPipelinePanel
+          department={department}
+          pipeline={pipeline}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      ) : null}
       {kwpStats && kwpStats.projectsWithKwp > 0 ? (
         <Card>
           <CardHeader>
@@ -256,9 +274,34 @@ export function InsightsView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {longestRunning.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.projectNumber ?? "–"}</TableCell>
+              {longestRunning.map((p) => {
+                const heroHref = buildHeroHref(p.id);
+                return (
+                <TableRow
+                  key={p.id}
+                  className={heroHref ? "cursor-pointer hover:bg-accent/40" : undefined}
+                  onClick={
+                    heroHref
+                      ? () => window.open(heroHref, "_blank", "noopener,noreferrer")
+                      : undefined
+                  }
+                  title={heroHref ? "Im Hero öffnen" : undefined}
+                >
+                  <TableCell className="font-mono text-xs">
+                    {heroHref ? (
+                      <a
+                        href={heroHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {p.projectNumber ?? "–"}
+                      </a>
+                    ) : (
+                      p.projectNumber ?? "–"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="space-y-1">
                       <span className="block">{p.projectName ?? p.customerName ?? "–"}</span>
@@ -275,7 +318,8 @@ export function InsightsView({
                     </Badge>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

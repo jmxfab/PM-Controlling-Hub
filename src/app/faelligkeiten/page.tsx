@@ -79,6 +79,7 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
   const projects = await loadUpcomingProjects(department, fromIso, toIso).catch(
     () => []
   );
+  const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
@@ -95,6 +96,7 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
         department={department}
         window={win}
         projects={projects}
+        heroProjectLinkTemplate={heroProjectLinkTemplate}
       />
     </div>
   );

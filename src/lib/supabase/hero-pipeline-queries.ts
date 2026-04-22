@@ -372,7 +372,7 @@ export const loadHeroPipeline = cache(
   async (
     department: Department,
     timeframeRange?: TimeframeRangeIso,
-    options?: { excludeCashSteps?: boolean }
+    options?: { excludeCashSteps?: boolean; onlyCashSteps?: boolean }
   ): Promise<HeroPipelineDto> => {
     const all = await fetchDashboardProjectRows();
     let projects = rowsFor(all, department);
@@ -500,9 +500,11 @@ export const loadHeroPipeline = cache(
         return a.stepOrder - b.stepOrder;
       });
 
-    // Cash-Steps (Abschluss-/Teil-/Kundenrechnung) optional ausblenden —
-    // die gehören ins Cashflow-Panel, nicht auf das operative Dashboard.
-    if (options?.excludeCashSteps) {
+    // Cash-Steps (Abschluss-/Teil-/Kundenrechnung) optional ausblenden oder
+    // isoliert anzeigen. Insights-Tab = nur operativ, Cash-Tab = nur Cash.
+    if (options?.onlyCashSteps) {
+      steps = steps.filter((step) => isAccountingStep(step.name));
+    } else if (options?.excludeCashSteps) {
       steps = steps.filter((step) => !isAccountingStep(step.name));
     }
 

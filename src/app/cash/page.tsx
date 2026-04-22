@@ -2,15 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
-import { InsightsView } from "@/components/dashboard/insights-view";
-import {
-  loadWeeklyThroughput,
-  loadStepDurations,
-  loadLongestRunning,
-  loadDurationMetrics,
-  loadKwpStats,
-  type InsightsRange,
-} from "@/lib/supabase/hero-insights-queries";
+import { CashflowView } from "@/components/dashboard/cashflow-view";
+import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
 import {
   loadHeroPipeline,
   type TimeframeRangeIso,
@@ -30,20 +23,18 @@ import {
 } from "@/lib/dashboard/dashboard-timeframe";
 
 export const metadata: Metadata = {
-  title: "Insights",
+  title: "Cash",
   description:
-    "Analytics: wöchentliche Flow-Raten, Step-Durchlaufzeiten und älteste offene Projekte.",
+    "Offene Rechnungen, Forderungs-Aging, Pipeline-Umsatz und Abrechnungsquote.",
 };
 
 export const revalidate = 60;
 
-interface InsightsPageProps {
+interface PageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function InsightsPage({
-  searchParams,
-}: InsightsPageProps) {
+export default async function CashPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const department = parseDashboardDepartmentParam(resolved.department);
   const timeframe = parseDashboardTimeframe(resolved);
@@ -57,7 +48,7 @@ export default async function InsightsPage({
           key={`${department}-${timeframe.mode}-${timeframe.from ?? ""}-${timeframe.to ?? ""}`}
           fallback={<DashboardInitialLoader />}
         >
-          <InsightsTab
+          <CashTab
             department={department}
             timeframe={timeframe}
             heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -74,9 +65,9 @@ export default async function InsightsPage({
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Cash</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Flow-Raten, Durchlaufzeiten und Bottleneck-Ansichten für{" "}
+          Offene Rechnungen, Forderungs-Aging und Abrechnungsquote für{" "}
           <span className="font-medium">
             {DASHBOARD_DEPARTMENT_NAMES[department]}
           </span>{" "}
@@ -97,7 +88,7 @@ export default async function InsightsPage({
   );
 }
 
-async function InsightsTab({
+async function CashTab({
   department,
   timeframe,
   heroProjectLinkTemplate,
@@ -106,58 +97,30 @@ async function InsightsTab({
   timeframe: DashboardTimeframe;
   heroProjectLinkTemplate: string | null;
 }) {
-  const range = buildInsightsRange(timeframe);
   const pipelineRange = buildPipelineRange(timeframe);
-  const [
-    weekly,
-    stepDurations,
-    longestRunning,
-    durationMetrics,
-    kwpStats,
-    pipeline,
-  ] = await Promise.all([
-    loadWeeklyThroughput(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadStepDurations(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadLongestRunning(department).catch(() => []),
-    loadDurationMetrics(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadKwpStats(department).catch(() => null),
-    // Operatives Pipeline-Panel: OFFENE STEPS ohne Cash/Rechnungs-Steps.
+  const [dto, pipeline] = await Promise.all([
+    loadCashflow(department).catch(() => null),
+    // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
     loadHeroPipeline(department, pipelineRange, {
-      excludeCashSteps: true,
+      onlyCashSteps: true,
     }).catch(() => null),
   ]);
 
+  if (!dto) {
+    return (
+      <div className="text-sm text-destructive py-8 text-center">
+        Fehler beim Laden der Cash-Daten.
+      </div>
+    );
+  }
   return (
-    <InsightsView
+    <CashflowView
       department={department}
-      weekly={weekly}
-      stepDurations={stepDurations}
-      longestRunning={longestRunning}
-      durationMetrics={durationMetrics}
-      kwpStats={kwpStats}
-      timeframeLabel={getDashboardTimeframeLabel(timeframe)}
+      dto={dto}
       pipeline={pipeline}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
   );
-}
-
-function buildInsightsRange(
-  timeframe: DashboardTimeframe
-): InsightsRange | undefined {
-  if (timeframe.mode === "current") return undefined;
-  const range = getDashboardTimeframeRange(timeframe);
-  if (!range) return undefined;
-  return {
-    fromIso: `${range.from}T00:00:00+02:00`,
-    toIso: `${addOneDay(range.to)}T00:00:00+02:00`,
-  };
 }
 
 const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([

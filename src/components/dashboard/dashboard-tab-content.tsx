@@ -1,7 +1,6 @@
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
-import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
@@ -12,11 +11,6 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
-import {
-  loadHeroPipeline,
-  type TimeframeRangeIso,
-} from "@/lib/supabase/hero-pipeline-queries";
-import { getDashboardTimeframeRange } from "@/lib/dashboard/dashboard-timeframe";
 
 export async function DashboardTabContent({
   department,
@@ -27,16 +21,10 @@ export async function DashboardTabContent({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
-  // Zeitraum für Deltas berechnen (bei "current" kein Zeitraum-Delta)
-  const rangeIso = buildTimeframeRangeIso(timeframe);
-  const [tabData, pipeline] = await Promise.all([
-    getDashboardTabData(department, timeframe),
-    // Dashboard-Pipeline zeigt NUR operative Steps. Die Abrechnungs-Steps
-    // (Abschlussrechnung / Teil-RG / Kundenrechnung) leben im /cashflow-Tab.
-    loadHeroPipeline(department, rangeIso, { excludeCashSteps: true }).catch(
-      () => null
-    ),
-  ]);
+  // Das operative Pipeline-Panel (OFFENE STEPS) lebt im /insights-Tab,
+  // das Cash-Pipeline-Panel im /cash-Tab. Das Controlling-Dashboard zeigt
+  // KPI-Kacheln, Verlaufscharts und die Projektliste.
+  const tabData = await getDashboardTabData(department, timeframe);
   const {
     kpiData,
     historicData,
@@ -82,9 +70,6 @@ export async function DashboardTabContent({
           emptyMessage={emptyHistoricMessage}
         />
       ) : null}
-      {pipeline ? (
-        <HeroPipelinePanel department={department} pipeline={pipeline} />
-      ) : null}
       <DashboardProjectList
         departmentName={departmentName}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -104,29 +89,4 @@ function getDashboardStatusNotice(
   }
 
   return null;
-}
-
-const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>(["morgen", "next3d", "next7d", "30d"]);
-
-function buildTimeframeRangeIso(
-  timeframe: DashboardTimeframe
-): TimeframeRangeIso | undefined {
-  if (timeframe.mode === "current") return undefined;
-  const range = getDashboardTimeframeRange(timeframe);
-  if (!range) return undefined;
-  const fromIso = `${range.from}T00:00:00+02:00`;
-  const nextDay = addDaysIso(range.to, 1);
-  const toIso = `${nextDay}T00:00:00+02:00`;
-  return {
-    fromIso,
-    toIso,
-    label: `${range.from} → ${range.to}`,
-    direction: FUTURE_MODES.has(timeframe.mode) ? "future" : "past",
-  };
-}
-
-function addDaysIso(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
 }
