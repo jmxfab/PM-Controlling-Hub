@@ -4,28 +4,24 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 
+import { type HeroProject } from "@/lib/hero/hero-client";
 import {
-  normalizeHeroProject,
-  type HeroProject,
-} from "@/lib/hero/hero-client";
+  HERO_TYPE_ID_TO_DEPARTMENT,
+  type ProjectDepartment,
+} from "@/lib/dashboard/dashboard-types";
 
 /**
- * TTL for the cross-request data cache. The GitHub Actions sync refreshes
- * Supabase every 15 min, so a 60 s view is both cheap and acceptably fresh.
- */
-const DATA_CACHE_TTL_S = 60;
-
-/**
- * Read-side accessors for the Hero mirror tables.
+ * Read-side accessors for the Hero mirror.
  *
- * `loadHeroProjectsFromSupabase` is wrapped in React `cache()` so a single
- * request that needs projects for every tab only pays for one Supabase read
- * (plus one aggregate for accounting totals). Customer documents are NOT
- * hydrated into each project by default — fetching 18k+ document rows just
- * to compute a per-project invoice sum is wasteful. Instead we aggregate
- * invoice totals server-side via SQL and merge the sum into each project
- * as `accounting_amount`. Anything that needs the full document list on a
- * single project can fetch it on demand.
+ * Dashboard reads now go through the `hero_dashboard_projects` materialized
+ * view, which pre-computes department, step info, accounting sums and the
+ * is_finished flag. That pushes everything expensive (JSONB extraction,
+ * department mapping, invoice aggregation) to Postgres and leaves the Next.js
+ * side with a single table scan and cheap row mapping.
+ *
+ * The view is refreshed after every sync (see scripts/sync/sync-engine.ts
+ * `refreshDashboardView` hook) — it is SECURITY DEFINER so the sync job can
+ * call it via RPC without needing extra grants.
  */
 
 function supabaseAdmin() {
@@ -40,122 +36,128 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
-interface HeroProjectRow {
+const DATA_CACHE_TTL_S = 60;
+const ROW_CHUNK_SIZE = 1000;
+
+interface DashboardProjectRow {
   id: string;
+  project_number: string | null;
+  project_name: string | null;
+  type_id: string | null;
+  department_key: ProjectDepartment | null;
+  status_name: string | null;
+  status_code: number | null;
+  step_id: string | null;
+  step_name: string | null;
+  step_sort_order: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+  measure_short: string | null;
+  measure_name: string | null;
+  created_at_hero: string | null;
+  hero_modified_at: string | null;
+  maturity_date: string | null;
+  completion_date: string | null;
+  accounting_date: string | null;
+  rework_scheduled_date: string | null;
+  closing_appointment_date: string | null;
+  is_finished: boolean;
+  accounting_amount: number | null;
   raw: Record<string, unknown> | null;
 }
 
-/**
- * Raw Supabase fetch of the project rows. Cached across requests via
- * Next.js unstable_cache so repeated dashboard renders within the TTL
- * hit the data cache rather than re-reading 3k rows.
- */
-const fetchHeroProjectRows = unstable_cache(
-  async (): Promise<HeroProjectRow[]> => {
+const fetchDashboardProjectRows = unstable_cache(
+  async (): Promise<DashboardProjectRow[]> => {
     const supabase = supabaseAdmin();
-    const { data, error } = await supabase
-      .from("hero_projects")
-      .select("id, raw")
-      .eq("is_deleted", false);
-    if (error) {
-      throw new Error(`Failed to load hero_projects: ${error.message}`);
+    const all: DashboardProjectRow[] = [];
+    for (let offset = 0; ; offset += ROW_CHUNK_SIZE) {
+      const { data, error } = await supabase
+        .from("hero_dashboard_projects")
+        .select("*")
+        .not("department_key", "is", null)
+        .order("id", { ascending: true })
+        .range(offset, offset + ROW_CHUNK_SIZE - 1);
+
+      if (error) {
+        throw new Error(`hero_dashboard_projects read failed: ${error.message}`);
+      }
+      const rows = (data ?? []) as DashboardProjectRow[];
+      all.push(...rows);
+      if (rows.length < ROW_CHUNK_SIZE) break;
     }
-    return (data ?? []) as HeroProjectRow[];
+    return all;
   },
-  ["hero_projects_raw"],
-  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_projects"] }
+  ["hero_dashboard_projects_v1"],
+  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
+
+function toHeroProject(row: DashboardProjectRow): HeroProject {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
+  const customer = (raw.customer ?? null) as HeroProject["customer"];
+  const contact = (raw.contact ?? null) as HeroProject["contact"];
+  const address = (raw.address ?? null) as HeroProject["address"];
+  const projectMatchStatuses =
+    (raw.project_match_statuses as HeroProject["project_match_statuses"]) ?? [];
+
+  return {
+    id: row.id,
+    project_number: row.project_number,
+    name: row.project_name,
+    status: row.status_name,
+    project_type: typeof raw.project_type === "string" ? raw.project_type : null,
+    type_id: row.type_id,
+    department: row.department_key,
+    step_id: row.step_id,
+    step_name: row.step_name,
+    step_sort_order: row.step_sort_order,
+    measure_short: row.measure_short,
+    measure_name: row.measure_name,
+    created_at: row.created_at_hero,
+    modified_at: row.hero_modified_at,
+    maturity_date: row.maturity_date,
+    customer,
+    contact,
+    address,
+    customer_documents: [],
+    customerDocuments: [],
+    project_match_statuses: projectMatchStatuses,
+    customer_name: row.customer_name,
+    customer_contact_name: null,
+    customer_phone: row.customer_phone,
+    customer_email: row.customer_email,
+    customer_address: row.customer_address,
+    customerName: row.customer_name,
+    customerContactName: null,
+    customerPhone: row.customer_phone,
+    customerEmail: row.customer_email,
+    customerAddress: row.customer_address,
+    completion_date: row.completion_date,
+    accounting_date: row.accounting_date,
+    accounting_amount: row.accounting_amount ?? null,
+    rework_status: null,
+    rework_scheduled_date: row.rework_scheduled_date,
+    customer_commitment_status: null,
+    closing_appointment_date: row.closing_appointment_date,
+  };
+}
 
 export const loadHeroProjectsFromSupabase = cache(
   async (): Promise<HeroProject[]> => {
-    const [projectRows, accountingSums] = await Promise.all([
-      fetchHeroProjectRows(),
-      loadAccountingSumsByProjectId(),
-    ]);
-
-    if (projectRows.length === 0) return [];
-
-    return projectRows.flatMap((row) => {
-      if (!row.raw) return [];
-      const project = normalizeHeroProject(
-        row.raw as unknown as Parameters<typeof normalizeHeroProject>[0]
-      );
-      if (!project.department) return [];
-
-      const accountingAmount = accountingSums.get(row.id);
-      if (accountingAmount != null && accountingAmount > 0) {
-        project.accounting_amount = accountingAmount;
-      }
-      return [project];
-    });
-  }
-);
-
-/**
- * Aggregate invoice totals per project_match_id via SQL. Matches the same
- * "type contains invoice/rechnung" rule the in-memory normalizer used to
- * apply, but does it in one query rather than 18k row materialisation.
- */
-const fetchAccountingSumPairs = unstable_cache(
-  async (): Promise<Array<[string, number]>> => {
-    const supabase = supabaseAdmin();
-
-    // Push the invoice/Rechnung filter to SQL — without it we'd pull all
-    // 18k+ rows just to drop >80% of them in JS.
-    const invoiceFilter = [
-      "type.ilike.%invoice%",
-      "type.ilike.%rechnung%",
-      "document_type_name.ilike.%invoice%",
-      "document_type_name.ilike.%rechnung%",
-      "document_base_type.ilike.%invoice%",
-      "document_base_type.ilike.%rechnung%",
-    ].join(",");
-
-    const { data, error } = await supabase
-      .from("hero_customer_documents")
-      .select("project_match_id, value")
-      .eq("is_deleted", false)
-      .not("project_match_id", "is", null)
-      .not("value", "is", null)
-      .or(invoiceFilter);
-
-    if (error) {
-      console.warn("accounting sums query failed:", error.message);
-      return [];
-    }
-
-    const acc = new Map<string, number>();
-    for (const row of (data ?? []) as Array<{
-      project_match_id: string | null;
-      value: number | null;
-    }>) {
-      if (!row.project_match_id || row.value == null) continue;
-      acc.set(
-        row.project_match_id,
-        (acc.get(row.project_match_id) ?? 0) + row.value
-      );
-    }
-    return Array.from(acc.entries());
-  },
-  ["hero_accounting_sums"],
-  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_customer_documents"] }
-);
-
-const loadAccountingSumsByProjectId = cache(
-  async (): Promise<Map<string, number>> => {
-    const pairs = await fetchAccountingSumPairs();
-    return new Map(pairs);
+    const rows = await fetchDashboardProjectRows();
+    return rows.map(toHeroProject);
   }
 );
 
 export const getHeroProjectsCount = cache(async (): Promise<number> => {
   const supabase = supabaseAdmin();
   const { count, error } = await supabase
-    .from("hero_projects")
+    .from("hero_dashboard_projects")
     .select("id", { count: "exact", head: true })
-    .eq("is_deleted", false);
+    .not("department_key", "is", null);
   if (error) {
-    throw new Error(`hero_projects count failed: ${error.message}`);
+    throw new Error(`hero_dashboard_projects count failed: ${error.message}`);
   }
   return count ?? 0;
 });
@@ -199,3 +201,6 @@ export const getHeroSyncStatus = cache(async (): Promise<HeroSyncStatus> => {
     projectCount,
   };
 });
+
+// Re-export the mapping constant for any legacy caller that still wants it.
+export { HERO_TYPE_ID_TO_DEPARTMENT };

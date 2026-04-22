@@ -17,6 +17,7 @@
 
 import { ALL_ENTITIES, findEntity } from "./entities";
 import { runEntitySync } from "./sync-engine";
+import { getSyncSupabaseAdmin } from "./supabase-admin";
 
 function parseArgs(argv: string[]): { entities: string[] } {
   const entitiesArg =
@@ -68,6 +69,33 @@ async function main() {
       hadError = true;
       console.error(
         `[sync:${entity.name}] FAILED after ${result.durationMs}ms — ${result.errorMessage}`
+      );
+    }
+  }
+
+  // Refresh the dashboard materialized view so fresh data is visible
+  // without waiting for the Next.js data-cache TTL to expire. Failures
+  // are logged but not fatal — the view will self-heal on the next run
+  // or a manual REFRESH MATERIALIZED VIEW call.
+  const refreshEntities = new Set([
+    "projects",
+    "customer_documents",
+    "project_types",
+  ]);
+  const refreshTriggered = entities.some((name) => refreshEntities.has(name));
+  if (refreshTriggered) {
+    try {
+      const supabase = getSyncSupabaseAdmin();
+      const { error } = await supabase.rpc("refresh_hero_dashboard_projects");
+      if (error) {
+        console.warn(`[sync] view refresh warning: ${error.message}`);
+      } else {
+        console.log("[sync] hero_dashboard_projects refreshed");
+      }
+    } catch (error) {
+      console.warn(
+        "[sync] view refresh failed:",
+        error instanceof Error ? error.message : String(error)
       );
     }
   }
