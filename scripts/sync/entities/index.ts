@@ -12,6 +12,7 @@ import type { HeroEntitySync } from "../sync-engine";
 
 import { contactsSync } from "./contacts";
 import { customerDocumentsSync } from "./customer-documents";
+import { EXTENDED_ENTITIES } from "./extended";
 import { measuresSync } from "./measures";
 import { partnersSync } from "./partners";
 import { projectsSync } from "./projects";
@@ -23,6 +24,7 @@ export const ALL_ENTITIES: HeroEntitySync<any, any>[] = [
   customerDocumentsSync,
   measuresSync,
   partnersSync,
+  ...EXTENDED_ENTITIES,
 ];
 
 export function findEntity(

@@ -38,6 +38,20 @@ export async function getHeroSyncStatusDetails(): Promise<HeroSyncStatusDto> {
     customer_documents: "hero_customer_documents",
     measures: "hero_measures",
     partners: "hero_partners",
+    tasks: "hero_tasks",
+    tracking_times: "hero_tracking_times",
+    tracking_categories: "hero_tracking_categories",
+    absences: "hero_absences",
+    histories: "hero_histories",
+    field_service_jobs: "hero_field_service_jobs",
+    calendar_events: "hero_calendar_events",
+    file_uploads: "hero_file_uploads",
+    receipts: "hero_receipts",
+    webhooks: "hero_webhooks",
+    project_types: "hero_project_types",
+    document_types: "hero_document_types",
+    company_branches: "hero_company_branches",
+    company: "hero_company",
   };
   const entities = Object.keys(entityTable);
 
