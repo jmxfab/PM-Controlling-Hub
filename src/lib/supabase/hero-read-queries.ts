@@ -72,11 +72,15 @@ const fetchDashboardProjectRows = unstable_cache(
   async (): Promise<DashboardProjectRow[]> => {
     const supabase = supabaseAdmin();
     const all: DashboardProjectRow[] = [];
+    // Page through the whole view and filter departments in JS — the
+    // supabase-js .not("col", "is", null) modifier has not been applying
+    // to our materialized view reliably, so we fetch everything (3k rows)
+    // and drop the Leads-bucket locally. The view has ~3k rows, so this
+    // is cheap.
     for (let offset = 0; ; offset += ROW_CHUNK_SIZE) {
       const { data, error } = await supabase
         .from("hero_dashboard_projects")
         .select("*")
-        .not("department_key", "is", null)
         .order("id", { ascending: true })
         .range(offset, offset + ROW_CHUNK_SIZE - 1);
 
@@ -87,9 +91,9 @@ const fetchDashboardProjectRows = unstable_cache(
       all.push(...rows);
       if (rows.length < ROW_CHUNK_SIZE) break;
     }
-    return all;
+    return all.filter((row) => row.department_key != null);
   },
-  ["hero_dashboard_projects_v1"],
+  ["hero_dashboard_projects_v2"],
   { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
 
@@ -151,15 +155,8 @@ export const loadHeroProjectsFromSupabase = cache(
 );
 
 export const getHeroProjectsCount = cache(async (): Promise<number> => {
-  const supabase = supabaseAdmin();
-  const { count, error } = await supabase
-    .from("hero_dashboard_projects")
-    .select("id", { count: "exact", head: true })
-    .not("department_key", "is", null);
-  if (error) {
-    throw new Error(`hero_dashboard_projects count failed: ${error.message}`);
-  }
-  return count ?? 0;
+  const rows = await fetchDashboardProjectRows();
+  return rows.length;
 });
 
 export interface HeroSyncStatus {
