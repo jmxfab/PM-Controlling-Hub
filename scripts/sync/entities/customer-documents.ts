@@ -11,7 +11,7 @@ import type { HeroEntitySync } from "../sync-engine";
 interface CustomerDocumentRaw {
   id: string | number;
   project_match_id?: string | number | null;
-  customer_id?: string | number | null;
+  customer?: { id?: string | number | null } | null;
   partner_id?: string | number | null;
   nr?: string | null;
   type?: string | null;
@@ -22,7 +22,6 @@ interface CustomerDocumentRaw {
   currency?: string | null;
   created?: string | null;
   modified?: string | null;
-  document_date?: string | null;
   file_upload?: { url?: string | null } | null;
   document_type?: {
     base_type?: string | null;
@@ -75,7 +74,9 @@ export const customerDocumentsSync: HeroEntitySync<CustomerDocumentRaw, Customer
       customer_documents(first: $first, offset: $offset, orderBy: "id") {
         id
         project_match_id
-        customer_id
+        customer {
+          id
+        }
         partner_id
         nr
         type
@@ -86,7 +87,6 @@ export const customerDocumentsSync: HeroEntitySync<CustomerDocumentRaw, Customer
         currency
         created
         modified
-        document_date
         file_upload {
           url
         }
@@ -102,7 +102,7 @@ export const customerDocumentsSync: HeroEntitySync<CustomerDocumentRaw, Customer
   normalize: (raw) => ({
     id: String(raw.id),
     project_match_id: raw.project_match_id != null ? String(raw.project_match_id) : null,
-    customer_id: raw.customer_id != null ? String(raw.customer_id) : null,
+    customer_id: raw.customer?.id != null ? String(raw.customer.id) : null,
     partner_id: raw.partner_id != null ? String(raw.partner_id) : null,
     nr: raw.nr ?? null,
     type: raw.type ?? null,
@@ -113,7 +113,7 @@ export const customerDocumentsSync: HeroEntitySync<CustomerDocumentRaw, Customer
     value: toNumber(raw.value),
     vat: toNumber(raw.vat),
     currency: raw.currency ?? null,
-    document_date: raw.document_date ?? null,
+    document_date: raw.created ? raw.created.slice(0, 10) : null,
     raw,
     created_at_hero: raw.created ?? null,
     hero_modified_at: raw.modified ?? raw.created ?? null,

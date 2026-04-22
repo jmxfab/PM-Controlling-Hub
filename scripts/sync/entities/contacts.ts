@@ -12,7 +12,6 @@ interface ContactRaw {
   company_name?: string | null;
   email?: string | null;
   phone_home?: string | null;
-  phone_business?: string | null;
   phone_mobile?: string | null;
   category?: string | null;
   parent_customer_id?: string | number | null;
@@ -59,7 +58,6 @@ export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
         company_name
         email
         phone_home
-        phone_business
         phone_mobile
         category
         parent_customer_id
@@ -76,7 +74,7 @@ export const contactsSync: HeroEntitySync<ContactRaw, ContactRow> = {
     company_name: raw.company_name ?? null,
     email: raw.email ?? null,
     phone_home: raw.phone_home ?? null,
-    phone_mobile: raw.phone_mobile ?? raw.phone_business ?? null,
+    phone_mobile: raw.phone_mobile ?? null,
     category: raw.category ?? null,
     parent_customer_id:
       raw.parent_customer_id != null ? String(raw.parent_customer_id) : null,

@@ -333,6 +333,9 @@ export const companySync: HeroEntitySync<BaseRaw, BaseRow> = {
   }),
 };
 
+// webhooksSync is defined but deliberately NOT registered — Hero returns
+// "External webhook access is not enabled for this company." for Jumax.
+// Enable it again once that feature is unlocked in Hero.
 export const EXTENDED_ENTITIES = [
   tasksSync,
   trackingTimesSync,
@@ -345,7 +348,6 @@ export const EXTENDED_ENTITIES = [
   projectTypesSync,
   documentTypesSync,
   trackingCategoriesSync,
-  webhooksSync,
   companyBranchesSync,
   companySync,
 ];
@@ -356,7 +358,6 @@ export const MASTER_DATA_ENTITY_NAMES = [
   "tracking_categories",
   "company_branches",
   "company",
-  "webhooks",
   "measures",
   "partners",
 ];

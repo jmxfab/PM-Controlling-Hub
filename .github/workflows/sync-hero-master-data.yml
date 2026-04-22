@@ -30,7 +30,7 @@ jobs:
       - name: Run master-data sync
         run: >-
           npx tsx scripts/sync/run-all.ts --entities
-          "measures,partners,project_types,document_types,tracking_categories,company_branches,company,webhooks"
+          "measures,partners,project_types,document_types,tracking_categories,company_branches,company"
         env:
           HERO_API_KEY: ${{ secrets.HERO_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
