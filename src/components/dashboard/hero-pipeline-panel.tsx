@@ -159,6 +159,71 @@ export function HeroPipelinePanel({
         />
       </div>
 
+      {pipeline.timeframeDelta ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Änderungen im Zeitraum</CardTitle>
+            <CardDescription>
+              Alle Status-Bewegungen zwischen{" "}
+              {new Date(pipeline.timeframeDelta.fromIso).toLocaleDateString(
+                "de-DE"
+              )}{" "}
+              und{" "}
+              {new Date(
+                new Date(pipeline.timeframeDelta.toIso).getTime() - 1
+              ).toLocaleDateString("de-DE")}
+              .
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <KpiTile
+                label="Neu angelegt"
+                value={pipeline.timeframeDelta.newProjects}
+                tone="attention"
+                icon={<ArrowDownRight className="h-4 w-4" />}
+              />
+              <KpiTile
+                label="Abgeschlossen"
+                value={pipeline.timeframeDelta.completedTransitions}
+                tone="good"
+                icon={<CheckCircle2 className="h-4 w-4" />}
+              />
+              <KpiTile
+                label="In Abrechnung"
+                value={pipeline.timeframeDelta.accountingTransitions}
+                tone="neutral"
+                icon={<Euro className="h-4 w-4" />}
+              />
+              <KpiTile
+                label="Nacharbeit-Starts"
+                value={pipeline.timeframeDelta.reworkTransitions}
+                tone="warning"
+                icon={<RotateCcw className="h-4 w-4" />}
+              />
+              <KpiTile
+                label="Reopens"
+                value={pipeline.timeframeDelta.reopenedTransitions}
+                tone="good"
+                icon={<RotateCcw className="h-4 w-4" />}
+                hint="nach vorher Abgeschlossen"
+              />
+              <KpiTile
+                label="Neu überfällig"
+                value={pipeline.timeframeDelta.overdueBecame}
+                tone={
+                  pipeline.timeframeDelta.overdueBecame > 0
+                    ? "warning"
+                    : "neutral"
+                }
+                icon={<AlertTriangle className="h-4 w-4" />}
+                hint="maturity_date im Zeitraum"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card className="lg:sticky lg:top-4 h-fit">
           <CardHeader>
@@ -228,6 +293,7 @@ export function HeroPipelinePanel({
                     <TableHead>Titel</TableHead>
                     <TableHead>Kunde</TableHead>
                     <TableHead>Step (vorher → aktuell)</TableHead>
+                    <TableHead className="text-right">Offene RG</TableHead>
                     <TableHead>Fällig</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -278,6 +344,17 @@ export function HeroPipelinePanel({
                             {project.stepName ?? "–"}
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">
+                        {project.openInvoiceAmount > 0
+                          ? formatEur(project.openInvoiceAmount)
+                          : <span className="text-muted-foreground">–</span>}
+                        {project.openInvoiceCount > 0 ? (
+                          <span className="block text-[10px] text-muted-foreground">
+                            {project.openInvoiceCount}{" "}
+                            Rechnung{project.openInvoiceCount === 1 ? "" : "en"}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {project.maturityDate

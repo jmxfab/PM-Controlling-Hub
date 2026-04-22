@@ -84,16 +84,17 @@ export function getDashboardTimeframeRange(
   }
 
   if (timeframe.mode === "7d") {
-    // Jumax-Wochenfenster: Donnerstag → Donnerstag (7 Tage inklusive).
-    // Das "to" ist der nächste (oder aktuelle) Donnerstag 00:00, das "from"
-    // sind 7 Tage vorher (ebenfalls ein Donnerstag).
+    // Jumax-Berichtswoche: Freitag 00:00 → Donnerstag 23:59. Als IsoDate-
+    // Range (from = Freitag, to = Donnerstag) exakt 7 Kalendertage.
+    // Heute fällt in die aktuelle Jumax-Woche.
     const normalizedReference = atLocalNoon(referenceDate);
-    const dayOfWeek = normalizedReference.getDay(); // 0=So … 4=Do
-    const daysUntilThursday = (4 - dayOfWeek + 7) % 7; // 0 wenn Do, sonst 1..6
-    const thursdayEnd = addDays(normalizedReference, daysUntilThursday);
-    const thursdayStart = addDays(thursdayEnd, -7);
+    const dayOfWeek = normalizedReference.getDay(); // 0=So … 5=Fr 6=Sa
+    // Tage seit letztem Freitag: Fr=0 Sa=1 So=2 Mo=3 Di=4 Mi=5 Do=6
+    const daysSinceFriday = (dayOfWeek - 5 + 7) % 7;
+    const fridayStart = addDays(normalizedReference, -daysSinceFriday);
+    const thursdayEnd = addDays(fridayStart, 6);
     return {
-      from: toIsoDate(thursdayStart),
+      from: toIsoDate(fridayStart),
       to: toIsoDate(thursdayEnd),
     };
   }
@@ -160,7 +161,7 @@ export function getDashboardTimeframeLabel(
   }
 
   if (timeframe.mode === "7d") {
-    return "Woche (Do → Do)";
+    return "Woche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {

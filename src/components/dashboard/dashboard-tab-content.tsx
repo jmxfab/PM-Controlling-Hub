@@ -12,7 +12,11 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
-import { loadHeroPipeline } from "@/lib/supabase/hero-pipeline-queries";
+import {
+  loadHeroPipeline,
+  type TimeframeRangeIso,
+} from "@/lib/supabase/hero-pipeline-queries";
+import { getDashboardTimeframeRange } from "@/lib/dashboard/dashboard-timeframe";
 
 export async function DashboardTabContent({
   department,
@@ -23,9 +27,11 @@ export async function DashboardTabContent({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
+  // Zeitraum für Deltas berechnen (bei "current" kein Zeitraum-Delta)
+  const rangeIso = buildTimeframeRangeIso(timeframe);
   const [tabData, pipeline] = await Promise.all([
     getDashboardTabData(department, timeframe),
-    loadHeroPipeline(department).catch(() => null),
+    loadHeroPipeline(department, rangeIso).catch(() => null),
   ]);
   const {
     kpiData,
@@ -94,4 +100,27 @@ function getDashboardStatusNotice(
   }
 
   return null;
+}
+
+function buildTimeframeRangeIso(
+  timeframe: DashboardTimeframe
+): TimeframeRangeIso | undefined {
+  if (timeframe.mode === "current") return undefined;
+  const range = getDashboardTimeframeRange(timeframe);
+  if (!range) return undefined;
+  // from = 00:00 local, to = nächster Tag 00:00 local (exklusiv)
+  const fromIso = `${range.from}T00:00:00+02:00`;
+  const nextDay = addDaysIso(range.to, 1);
+  const toIso = `${nextDay}T00:00:00+02:00`;
+  return {
+    fromIso,
+    toIso,
+    label: `${range.from} → ${range.to}`,
+  };
+}
+
+function addDaysIso(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
