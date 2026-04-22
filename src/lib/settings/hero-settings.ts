@@ -98,6 +98,12 @@ export async function saveHeroApiKey(rawKey: string): Promise<HeroApiKeyStatus> 
     throw new Error("Hero API key must be at least 10 characters long.");
   }
 
+  if (!isSupabaseAdminConfigured()) {
+    throw new Error(
+      "Supabase ist serverseitig nicht konfiguriert. Setze NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY als Umgebungsvariablen (lokal in .env.local oder in den Vercel Project Settings) und deploye neu."
+    );
+  }
+
   const supabase = getSupabaseAdmin();
   const { error } = await supabase.from("app_settings").upsert(
     {
@@ -123,6 +129,12 @@ export async function saveHeroApiKey(rawKey: string): Promise<HeroApiKeyStatus> 
  * Delete the stored Hero API key. Revert to env-variable behavior.
  */
 export async function clearHeroApiKey(): Promise<void> {
+  if (!isSupabaseAdminConfigured()) {
+    throw new Error(
+      "Supabase ist serverseitig nicht konfiguriert. Setze NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY als Umgebungsvariablen."
+    );
+  }
+
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("app_settings")

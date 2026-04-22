@@ -54,15 +54,12 @@ export async function POST(request: NextRequest) {
     const status = await saveHeroApiKey(parsed.data.apiKey);
     return NextResponse.json(status);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Speichern fehlgeschlagen.";
-    console.error("[settings/hero][POST] failed", message);
-    return NextResponse.json(
-      { error: "Hero API Key konnte nicht gespeichert werden." },
-      { status: 500 }
+    const message = extractErrorMessage(
+      error,
+      "Hero API Key konnte nicht gespeichert werden."
     );
+    console.error("[settings/hero][POST] failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -72,10 +69,18 @@ export async function DELETE() {
     const status = await getHeroApiKeyStatus();
     return NextResponse.json(status);
   } catch (error) {
-    console.error("[settings/hero][DELETE] failed", error);
-    return NextResponse.json(
-      { error: "Hero API Key konnte nicht entfernt werden." },
-      { status: 500 }
+    const message = extractErrorMessage(
+      error,
+      "Hero API Key konnte nicht entfernt werden."
     );
+    console.error("[settings/hero][DELETE] failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
 }
