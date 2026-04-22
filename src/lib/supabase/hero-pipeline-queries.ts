@@ -52,6 +52,11 @@ export interface HeroPipelineStep {
   reopenedCount: number;
   /** Pipeline-order key derived from Hero's status_code + sort_order. */
   stepOrder: number;
+  /**
+   * Wie viele Projekte sind im gewählten Timeframe IN diesen Step
+   * gewandert (nur gesetzt wenn timeframe = past Zeitraum).
+   */
+  periodEnteredCount?: number;
 }
 
 export interface HeroPipelineKpis {
@@ -286,6 +291,50 @@ export async function loadTimeframeDeltas(
   };
 }
 
+/**
+ * Für jeden Step (gekeyed per step_group, also ohne Emoji): wie viele
+ * Transitions sind im Zeitraum in diesen Step eingetreten? Die gleiche
+ * Normalisierung wie im View (strip leading emoji/symbols).
+ */
+async function loadStepTransitionCounts(
+  department: Department,
+  range: TimeframeRangeIso
+): Promise<Map<string, number>> {
+  const supabase = supabaseAdmin();
+  const result = new Map<string, number>();
+
+  let query = supabase
+    .from("hero_status_transitions")
+    .select("step_name, department_key, entered_at")
+    .gte("entered_at", range.fromIso)
+    .lt("entered_at", range.toIso)
+    .not("step_name", "is", null);
+
+  if (department !== "GESAMT") {
+    query = query.eq("department_key", department);
+  } else {
+    query = query.not("department_key", "is", null);
+  }
+
+  for (let offset = 0; offset < 30000; offset += 1000) {
+    const { data, error } = await query.range(offset, offset + 999);
+    if (error) break;
+    const rows = (data ?? []) as Array<{ step_name: string | null }>;
+    for (const r of rows) {
+      if (!r.step_name) continue;
+      // Gleiche Normalisierung wie step_group in der View:
+      // führende Emoji/Symbole + Whitespace stripen.
+      const groupKey = r.step_name
+        .replace(/^[^A-Za-zÄÖÜäöüß0-9]+/g, "")
+        .trim();
+      if (!groupKey) continue;
+      result.set(groupKey, (result.get(groupKey) ?? 0) + 1);
+    }
+    if (rows.length < 1000) break;
+  }
+  return result;
+}
+
 export const loadHeroPipeline = cache(
   async (
     department: Department,
@@ -426,6 +475,21 @@ export const loadHeroPipeline = cache(
       timeframeRange && timeframeRange.direction === "past"
         ? await loadTimeframeDeltas(department, timeframeRange)
         : undefined;
+
+    // Pro-Step Transition-Counts im Zeitraum (nur bei "past"). Damit jede
+    // Step-Zeile in der Pipeline einen Zähler bekommt: "X Projekte sind
+    // im gewählten Zeitraum in diesen Step eingetreten".
+    if (timeframeRange && timeframeRange.direction === "past") {
+      const entered = await loadStepTransitionCounts(
+        department,
+        timeframeRange
+      );
+      for (const step of steps) {
+        // Match über step_group (ohne Emoji). `step.id` IST step_group.
+        const count = entered.get(step.id);
+        if (count != null) step.periodEnteredCount = count;
+      }
+    }
 
     return {
       department,

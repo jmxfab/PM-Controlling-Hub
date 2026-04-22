@@ -29,6 +29,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   HeroPipelineDto,
   PipelineProjectRow,
@@ -115,13 +121,15 @@ export function HeroPipelinePanel({
           label="Alle Offenen"
           value={pipeline.totalOpen}
           hint={`von ${pipeline.totalProjects} Projekten`}
+          explain={`Anzahl Projekte deren aktueller Step weder "Abgeschlossen" noch "Archiviert" ist. Von insgesamt ${pipeline.totalProjects} Projekten im Department. Momentaufnahme, unabhängig vom gewählten Zeitraum.`}
         />
         <KpiTile
           label="Überfällig"
           value={pipeline.totalOverdue}
           tone={pipeline.totalOverdue > 0 ? "warning" : "neutral"}
           icon={<AlertTriangle className="h-4 w-4" />}
-          hint="offen & maturity_date < heute"
+          hint="offen & Fälligkeitsdatum < heute"
+          explain="Offene Projekte deren Fälligkeitsdatum (current_project_match_status.maturity_date) bereits in der Vergangenheit liegt. Signal für Projekte die ein neues Zieldatum brauchen."
         />
         <KpiTile
           label="Buchhaltung offen"
@@ -135,6 +143,7 @@ export function HeroPipelinePanel({
                 } · Projekte in Abschluss-/Teilrechnungs-Step`
               : "keine Projekte in Abrechnungs-Step"
           }
+          explain={`Summe der offenen Rechnungsbeträge (Hero status_code 100 "Erstellt" + 200 "Versendet"; storniert/gelöscht ausgeschlossen) aller Projekte die AKTUELL in einem Abrechnungs-Step stehen: Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG (1./2./…), Teilrechnung.`}
         />
         <KpiTile
           label="Letzte Woche abgeschlossen"
@@ -142,6 +151,7 @@ export function HeroPipelinePanel({
           tone="good"
           icon={<CheckCircle2 className="h-4 w-4" />}
           hint="Fr 00:00 → Do 23:59"
+          explain="Projekte die in der letzten Jumax-Berichtswoche (Freitag 00:00 bis Donnerstag 23:59 der Vorwoche) auf Abgeschlossen/Archiviert gesetzt wurden. Quelle: Hero-Status-Historie, completion_date."
         />
         <KpiTile
           label="Neu diese Woche"
@@ -149,13 +159,15 @@ export function HeroPipelinePanel({
           tone="attention"
           icon={<ArrowDownRight className="h-4 w-4" />}
           hint="Fr 00:00 → heute"
+          explain="Projekte die seit letztem Freitag 00:00 (Beginn der aktuellen Jumax-Woche) in Hero neu angelegt wurden. Quelle: created_at aus Hero (nicht das Supabase-Sync-Datum)."
         />
         <KpiTile
           label="Reopens (Nacharbeit)"
           value={pipeline.totalReopened}
-          tone="good"
+          tone="warning"
           icon={<RotateCcw className="h-4 w-4" />}
           hint="nach bereits erreichtem Abgeschlossen"
+          explain="Offene Projekte die in ihrer Status-Historie einmal auf Abgeschlossen oder Archiviert standen und jetzt wieder in einem offenen Step sind (typisch Nacharbeit/Reklamation). Erkennung: last_rework_at > last_finish_at in project_match_statuses."
         />
       </div>
 
@@ -182,31 +194,36 @@ export function HeroPipelinePanel({
                 value={pipeline.timeframeDelta.newProjects}
                 tone="attention"
                 icon={<ArrowDownRight className="h-4 w-4" />}
+                explain="Projekte deren allererster Status-Eintrag in Hero im gewählten Zeitraum liegt. Damit ist das Projekt in diesem Fenster neu aufgenommen worden."
               />
               <KpiTile
                 label="Abgeschlossen"
                 value={pipeline.timeframeDelta.completedTransitions}
                 tone="good"
                 icon={<CheckCircle2 className="h-4 w-4" />}
+                explain="Status-Wechsel IN den Step Abgeschlossen oder Archiviert im Zeitraum. Ein Projekt kann mehrfach zählen wenn es reopened und wieder abgeschlossen wurde."
               />
               <KpiTile
                 label="In Abrechnung"
                 value={pipeline.timeframeDelta.accountingTransitions}
                 tone="neutral"
                 icon={<Euro className="h-4 w-4" />}
+                explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum."
               />
               <KpiTile
                 label="Nacharbeit-Starts"
                 value={pipeline.timeframeDelta.reworkTransitions}
                 tone="warning"
                 icon={<RotateCcw className="h-4 w-4" />}
+                explain="Status-Wechsel in einen Nacharbeits- oder Reklamations-Step im Zeitraum. Inklusive erste Nacharbeit + Reopens."
               />
               <KpiTile
                 label="Reopens"
                 value={pipeline.timeframeDelta.reopenedTransitions}
-                tone="good"
+                tone="warning"
                 icon={<RotateCcw className="h-4 w-4" />}
                 hint="nach vorher Abgeschlossen"
+                explain="Teilmenge der Nacharbeit-Starts: das Projekt war zum Start-Zeitpunkt des Zeitraums schon einmal in Abgeschlossen oder Archiviert. Signal für zurückgerollte Projekte."
               />
               <KpiTile
                 label="Neu überfällig"
@@ -217,7 +234,8 @@ export function HeroPipelinePanel({
                     : "neutral"
                 }
                 icon={<AlertTriangle className="h-4 w-4" />}
-                hint="maturity_date im Zeitraum"
+                hint="Fälligkeit im Zeitraum"
+                explain="Projekte deren aktuelles Fälligkeitsdatum im gewählten Zeitraum liegt UND die aktuell noch offen sind — also Termine die in diesem Fenster verstrichen sind (oder bevorstehen, falls Zeitraum in der Zukunft)."
               />
             </div>
           </CardContent>
@@ -309,7 +327,7 @@ export function HeroPipelinePanel({
                           {project.wasReopened ? (
                             <Badge
                               variant="outline"
-                              className="gap-1 border-emerald-500 text-emerald-600"
+                              className="gap-1 border-yellow-500 text-yellow-600"
                               title="Projekt wurde nach Abgeschlossen wieder geöffnet"
                             >
                               <RotateCcw className="h-3 w-3" />
@@ -392,6 +410,7 @@ function KpiTile({
   hint,
   icon,
   tone = "neutral",
+  explain,
 }: {
   label: string;
   value?: number;
@@ -399,16 +418,18 @@ function KpiTile({
   hint?: string;
   icon?: React.ReactNode;
   tone?: KpiTone;
+  /** Detaillierter Erklärtext beim Hover über die ganze Kachel. */
+  explain?: string;
 }) {
   const toneClass = {
     neutral: "",
     good: "text-emerald-600",
-    warning: "text-orange-600",
+    warning: "text-yellow-600",
     attention: "text-rose-600",
   }[tone];
 
-  return (
-    <Card>
+  const card = (
+    <Card className="cursor-help transition-colors hover:border-primary/40">
       <CardContent className="pt-4 pb-4 space-y-1">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{label}</span>
@@ -424,6 +445,20 @@ function KpiTile({
         ) : null}
       </CardContent>
     </Card>
+  );
+
+  if (!explain) return card;
+
+  return (
+    <TooltipProvider delayDuration={180}>
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs text-xs leading-relaxed">
+          <p className="font-semibold mb-1">{label}</p>
+          <p>{explain}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -469,10 +504,20 @@ function StepList({
                   <span className="truncate">{step.name}</span>
                 </span>
                 <span className="flex items-center gap-1 shrink-0 text-xs tabular-nums">
+                  {step.periodEnteredCount != null && step.periodEnteredCount > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="h-5 gap-0.5 border-blue-500 text-blue-600 px-1.5"
+                      title={`${step.periodEnteredCount} Projekte sind im gewählten Zeitraum in diesen Step gewandert`}
+                    >
+                      <ArrowDownRight className="h-3 w-3" />
+                      {step.periodEnteredCount}
+                    </Badge>
+                  ) : null}
                   {step.reopenedCount > 0 ? (
                     <Badge
                       variant="outline"
-                      className="h-5 gap-0.5 border-emerald-500 text-emerald-600 px-1.5"
+                      className="h-5 gap-0.5 border-yellow-500 text-yellow-600 px-1.5"
                       title={`${step.reopenedCount} davon Reopens (erneut in Nacharbeit)`}
                     >
                       <RotateCcw className="h-3 w-3" />
