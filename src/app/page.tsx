@@ -36,6 +36,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     maskedKey: null,
     source: "none" as const,
     updatedAt: null,
+    supabaseConfigured: false,
   }));
   const liveHeroAvailable = heroApiKeyStatus.configured;
   const liveHeroDisabledReason = liveHeroAvailable

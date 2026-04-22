@@ -33,6 +33,7 @@ export interface HeroApiKeyStatusDto {
   maskedKey: string | null;
   source: "db" | "env" | "none";
   updatedAt: string | null;
+  supabaseConfigured: boolean;
 }
 
 interface HeroAdminPanelProps {
@@ -259,6 +260,19 @@ export function HeroAdminPanel({
               </span>
             ) : null}
           </div>
+
+          {!status.supabaseConfigured ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Supabase nicht konfiguriert</AlertTitle>
+              <AlertDescription>
+                Die Umgebungsvariablen <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code> und/oder{" "}
+                <code className="font-mono">SUPABASE_SERVICE_ROLE_KEY</code> fehlen auf dem Server.
+                Solange diese nicht gesetzt sind, kann das Dashboard den Hero API Key nicht in der DB speichern.
+                Setze sie in den Vercel Project Settings und triggere einen Redeploy.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           <form className="space-y-3" onSubmit={handleSave}>
             <div className="space-y-2">

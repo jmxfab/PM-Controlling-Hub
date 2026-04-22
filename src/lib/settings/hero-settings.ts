@@ -20,6 +20,12 @@ export interface HeroApiKeyStatus {
   maskedKey: string | null;
   source: "db" | "env" | "none";
   updatedAt: string | null;
+  /**
+   * True if the server has both NEXT_PUBLIC_SUPABASE_URL and
+   * SUPABASE_SERVICE_ROLE_KEY set. Needed to make saving via UI possible.
+   * Exposed to the browser so the admin panel can show an actionable hint.
+   */
+  supabaseConfigured: boolean;
 }
 
 interface AppSettingsRow {
@@ -57,7 +63,9 @@ export const getActiveHeroApiKey = cache(async (): Promise<string | null> => {
  */
 export const getHeroApiKeyStatus = cache(
   async (): Promise<HeroApiKeyStatus> => {
-    if (isSupabaseAdminConfigured()) {
+    const supabaseConfigured = isSupabaseAdminConfigured();
+
+    if (supabaseConfigured) {
       const dbRow = await readHeroApiKeyRowFromDb().catch(() => null);
 
       if (dbRow && dbRow.value.trim().length > 0) {
@@ -66,6 +74,7 @@ export const getHeroApiKeyStatus = cache(
           maskedKey: maskKey(dbRow.value),
           source: "db",
           updatedAt: dbRow.updated_at,
+          supabaseConfigured,
         };
       }
     }
@@ -77,6 +86,7 @@ export const getHeroApiKeyStatus = cache(
         maskedKey: maskKey(envKey),
         source: "env",
         updatedAt: null,
+        supabaseConfigured,
       };
     }
 
@@ -85,6 +95,7 @@ export const getHeroApiKeyStatus = cache(
       maskedKey: null,
       source: "none",
       updatedAt: null,
+      supabaseConfigured,
     };
   }
 );
@@ -122,6 +133,7 @@ export async function saveHeroApiKey(rawKey: string): Promise<HeroApiKeyStatus> 
     maskedKey: maskKey(trimmed),
     source: "db",
     updatedAt: new Date().toISOString(),
+    supabaseConfigured: true,
   };
 }
 
