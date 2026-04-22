@@ -1,7 +1,5 @@
 import "server-only";
 
-import { cache } from "react";
-
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 import { HistoricDataPoint } from "@/components/dashboard/dashboard-charts";
 import { type DashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
@@ -62,7 +60,7 @@ async function getLiveData(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<DashboardTabData> {
-  const allProjects = await getCachedHeroProjects();
+  const allProjects = await loadHeroProjectsFromSupabase();
   const filteredProjects = filterHeroProjectsByTimeframe(allProjects, timeframe);
   const departmentProjects = groupProjectsByDepartment(filteredProjects)[department];
 
@@ -102,8 +100,6 @@ async function getLiveData(
     source: "hero",
   };
 }
-
-const getCachedHeroProjects = cache(loadHeroProjectsFromSupabase);
 
 function buildLiveProjectList(projects: HeroProject[]): DashboardProjectListItem[] {
   return projects

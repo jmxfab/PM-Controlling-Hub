@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 import {
@@ -7,12 +8,15 @@ import {
   type Department,
   type ProjectDepartment,
 } from "@/lib/dashboard/dashboard-types";
+import { loadHeroProjectsFromSupabase } from "./hero-read-queries";
 
 /**
- * Read helpers for the per-department Hero pipeline panel.
+ * Per-department Hero pipeline panel.
  *
- * Queries Supabase directly on JSONB paths — fast enough for a few thousand
- * projects, and keeps the normalizeHeroProject hydration path out of the way.
+ * Shares the cached HeroProject[] with the rest of the dashboard — no second
+ * Supabase round trip. Step reference data still comes from
+ * hero_project_types so steps that currently have zero projects are still
+ * listed.
  */
 
 function supabaseAdmin() {
@@ -67,126 +71,123 @@ function isFinishedStep(name: string | null | undefined): boolean {
   return FINISHED_NAME_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-/**
- * Load the pipeline (all step buckets + counts) for a department.
- * For GESAMT we aggregate across all mapped type_ids.
- */
-export async function loadHeroPipeline(
-  department: Department
-): Promise<HeroPipelineDto> {
-  const supabase = supabaseAdmin();
-  const typeIds = typeIdsFor(department);
+const loadProjectTypeStepsOnce = cache(
+  async (): Promise<Map<string, Map<string, { name: string; sortOrder: number }>>> => {
+    // Map<typeId, Map<stepId, { name, sortOrder }>>
+    const supabase = supabaseAdmin();
+    const result = new Map<string, Map<string, { name: string; sortOrder: number }>>();
 
-  // 1. Load all projects for these type_ids — we only need the step info
-  //    and maturity_date, not the full row.
-  const { data, error } = await supabase
-    .from("hero_projects")
-    .select("raw")
-    .in("raw->>type_id", typeIds)
-    .eq("is_deleted", false);
-
-  if (error) {
-    throw new Error(`loadHeroPipeline: ${error.message}`);
-  }
-
-  type RawRow = { raw: Record<string, unknown> | null };
-  const rows = (data ?? []) as RawRow[];
-
-  // 2. Determine the reference set of steps we want to show. For a specific
-  //    department we read hero_project_types; for GESAMT we synthesize from
-  //    the actual projects so we don't list every type's step pool.
-  const steps = new Map<string, { name: string; sortOrder: number }>();
-
-  if (department !== "GESAMT") {
-    const { data: typeRows, error: typesError } = await supabase
+    const { data, error } = await supabase
       .from("hero_project_types")
-      .select("raw")
-      .in("id", typeIds);
-    if (typesError) {
-      throw new Error(`loadHeroPipeline (types): ${typesError.message}`);
+      .select("id, raw");
+
+    if (error) {
+      console.warn("loadProjectTypeStepsOnce:", error.message);
+      return result;
     }
 
-    for (const typeRow of (typeRows ?? []) as RawRow[]) {
-      const stepList = (typeRow.raw?.project_status_steps as
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      raw: Record<string, unknown> | null;
+    }>) {
+      const steps = (row.raw?.project_status_steps as
         | Array<{ id?: unknown; name?: unknown; sort_order?: unknown }>
         | undefined) ?? [];
-      for (const step of stepList) {
+      const perType = new Map<string, { name: string; sortOrder: number }>();
+      for (const step of steps) {
         const id = step.id != null ? String(step.id) : null;
         const name = typeof step.name === "string" ? step.name : null;
         if (!id || !name) continue;
-        if (!steps.has(id)) {
-          steps.set(id, {
-            name,
-            sortOrder: typeof step.sort_order === "number" ? step.sort_order : 0,
-          });
+        perType.set(id, {
+          name,
+          sortOrder: typeof step.sort_order === "number" ? step.sort_order : 0,
+        });
+      }
+      result.set(row.id, perType);
+    }
+    return result;
+  }
+);
+
+export const loadHeroPipeline = cache(
+  async (department: Department): Promise<HeroPipelineDto> => {
+    const typeIds = typeIdsFor(department);
+    const typeIdSet = new Set(typeIds);
+
+    const [allProjects, stepsByType] = await Promise.all([
+      loadHeroProjectsFromSupabase(),
+      loadProjectTypeStepsOnce(),
+    ]);
+
+    const projects = allProjects.filter(
+      (project) => project.type_id != null && typeIdSet.has(project.type_id)
+    );
+
+    // Step reference pool — start from hero_project_types so empty steps
+    // (zero projects currently) still appear. GESAMT: union across types.
+    const steps = new Map<string, { name: string; sortOrder: number }>();
+    for (const typeId of typeIds) {
+      const perType = stepsByType.get(typeId);
+      if (!perType) continue;
+      for (const [stepId, meta] of perType) {
+        if (!steps.has(stepId)) steps.set(stepId, meta);
+      }
+    }
+
+    // Count projects per step + overdue from the in-memory HeroProject array.
+    const counts = new Map<string, number>();
+    let totalOpen = 0;
+    let totalOverdue = 0;
+    const now = Date.now();
+
+    for (const project of projects) {
+      const stepId = project.step_id;
+      const stepName = project.step_name;
+      if (!stepId || !stepName) continue;
+
+      if (!steps.has(stepId)) {
+        steps.set(stepId, {
+          name: stepName,
+          sortOrder: project.step_sort_order ?? 0,
+        });
+      }
+      counts.set(stepId, (counts.get(stepId) ?? 0) + 1);
+
+      if (!isFinishedStep(stepName)) {
+        totalOpen += 1;
+        const maturity = project.maturity_date;
+        if (maturity) {
+          const maturityTime = Date.parse(maturity);
+          if (Number.isFinite(maturityTime) && maturityTime < now) {
+            totalOverdue += 1;
+          }
         }
       }
     }
-  }
 
-  // 3. Count projects per step + track overdue.
-  const counts = new Map<string, number>();
-  let totalOpen = 0;
-  let totalOverdue = 0;
-  const now = Date.now();
-
-  for (const row of rows) {
-    const cpms = (row.raw?.current_project_match_status ?? null) as
-      | Record<string, unknown>
-      | null;
-    const step = (cpms?.step ?? null) as
-      | { id?: unknown; name?: unknown; sort_order?: unknown }
-      | null;
-    const stepId = step?.id != null ? String(step.id) : null;
-    const stepName = typeof step?.name === "string" ? step.name : null;
-
-    if (!stepId || !stepName) continue;
-
-    if (!steps.has(stepId)) {
-      steps.set(stepId, {
-        name: stepName,
-        sortOrder: typeof step?.sort_order === "number" ? step.sort_order : 0,
+    const pipelineSteps: HeroPipelineStep[] = Array.from(steps.entries())
+      .map(([id, meta]) => ({
+        id,
+        name: meta.name,
+        sortOrder: meta.sortOrder,
+        projectCount: counts.get(id) ?? 0,
+        isFinished: isFinishedStep(meta.name),
+      }))
+      .sort((a, b) => {
+        if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
+        return b.projectCount - a.projectCount;
       });
-    }
-    counts.set(stepId, (counts.get(stepId) ?? 0) + 1);
 
-    if (!isFinishedStep(stepName)) {
-      totalOpen += 1;
-      const maturity =
-        typeof cpms?.maturity_date === "string" ? (cpms.maturity_date as string) : null;
-      if (maturity) {
-        const maturityTime = Date.parse(maturity);
-        if (Number.isFinite(maturityTime) && maturityTime < now) {
-          totalOverdue += 1;
-        }
-      }
-    }
+    return {
+      department,
+      typeIds,
+      steps: pipelineSteps,
+      totalProjects: projects.length,
+      totalOpen,
+      totalOverdue,
+    };
   }
-
-  const pipelineSteps: HeroPipelineStep[] = Array.from(steps.entries())
-    .map(([id, meta]) => ({
-      id,
-      name: meta.name,
-      sortOrder: meta.sortOrder,
-      projectCount: counts.get(id) ?? 0,
-      isFinished: isFinishedStep(meta.name),
-    }))
-    // Primary sort: active steps first, finished last.
-    // Secondary sort: descending project count (most-used steps float up).
-    .sort((a, b) => {
-      if (a.isFinished !== b.isFinished) return a.isFinished ? 1 : -1;
-      return b.projectCount - a.projectCount;
-    });
-
-  return {
-    department,
-    typeIds,
-    steps: pipelineSteps,
-    totalProjects: rows.length,
-    totalOpen,
-    totalOverdue,
-  };
-}
+);
 
 export interface PipelineProjectRow {
   id: string;
@@ -198,65 +199,33 @@ export interface PipelineProjectRow {
   department: ProjectDepartment | null;
 }
 
-/**
- * Load the projects currently sitting in one or more selected steps
- * (by step id). Used when the user picks steps in the pipeline panel.
- */
 export async function loadProjectsForSteps(
   department: Department,
   stepIds: string[]
 ): Promise<PipelineProjectRow[]> {
   if (stepIds.length === 0) return [];
-  const supabase = supabaseAdmin();
   const typeIds = typeIdsFor(department);
-
-  const { data, error } = await supabase
-    .from("hero_projects")
-    .select("id, project_number, project_name, customer_name, maturity_date, raw")
-    .in("raw->>type_id", typeIds)
-    .eq("is_deleted", false);
-
-  if (error) {
-    throw new Error(`loadProjectsForSteps: ${error.message}`);
-  }
-
-  type Row = {
-    id: string;
-    project_number: string | null;
-    project_name: string | null;
-    customer_name: string | null;
-    maturity_date: string | null;
-    raw: Record<string, unknown> | null;
-  };
-
+  const typeIdSet = new Set(typeIds);
   const stepIdSet = new Set(stepIds);
 
-  return (data ?? [])
-    .filter((r) => {
-      const raw = (r as Row).raw;
-      const stepId = ((raw?.current_project_match_status as Record<string, unknown> | null)?.step as
-        | Record<string, unknown>
-        | null)?.id;
-      return stepId != null && stepIdSet.has(String(stepId));
-    })
-    .map((r) => {
-      const raw = (r as Row).raw;
-      const cpms = raw?.current_project_match_status as
-        | Record<string, unknown>
-        | null;
-      const step = cpms?.step as Record<string, unknown> | null;
-      const typeId = raw?.type_id != null ? String(raw.type_id) : null;
-      return {
-        id: (r as Row).id,
-        projectNumber: (r as Row).project_number,
-        projectName: (r as Row).project_name,
-        customerName: (r as Row).customer_name,
-        stepName: typeof step?.name === "string" ? step.name : null,
-        maturityDate: (r as Row).maturity_date,
-        department: typeId
-          ? (HERO_TYPE_ID_TO_DEPARTMENT[typeId] ?? null)
-          : null,
-      } satisfies PipelineProjectRow;
-    })
+  const projects = await loadHeroProjectsFromSupabase();
+
+  return projects
+    .filter(
+      (project) =>
+        project.type_id != null &&
+        typeIdSet.has(project.type_id) &&
+        project.step_id != null &&
+        stepIdSet.has(project.step_id)
+    )
+    .map((project) => ({
+      id: project.id,
+      projectNumber: project.project_number,
+      projectName: project.name,
+      customerName: project.customer_name ?? null,
+      stepName: project.step_name ?? null,
+      maturityDate: project.maturity_date ?? null,
+      department: project.department ?? null,
+    }))
     .sort((a, b) => (a.projectNumber ?? "").localeCompare(b.projectNumber ?? ""));
 }

@@ -1,19 +1,24 @@
 import "server-only";
 
+import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 import {
   normalizeHeroProject,
-  type HeroCustomerDocument,
   type HeroProject,
 } from "@/lib/hero/hero-client";
 
 /**
  * Read-side accessors for the Hero mirror tables.
  *
- * Everything here returns the same shapes the dashboard used to get from the
- * live Hero GraphQL client. The sync job (outside this runtime) is what keeps
- * Supabase fresh.
+ * `loadHeroProjectsFromSupabase` is wrapped in React `cache()` so a single
+ * request that needs projects for every tab only pays for one Supabase read
+ * (plus one aggregate for accounting totals). Customer documents are NOT
+ * hydrated into each project by default — fetching 18k+ document rows just
+ * to compute a per-project invoice sum is wasteful. Instead we aggregate
+ * invoice totals server-side via SQL and merge the sum into each project
+ * as `accounting_amount`. Anything that needs the full document list on a
+ * single project can fetch it on demand.
  */
 
 function supabaseAdmin() {
@@ -33,83 +38,85 @@ interface HeroProjectRow {
   raw: Record<string, unknown> | null;
 }
 
-interface HeroCustomerDocumentRow {
-  project_match_id: string | null;
-  raw: Record<string, unknown> | null;
-}
+export const loadHeroProjectsFromSupabase = cache(
+  async (): Promise<HeroProject[]> => {
+    const supabase = supabaseAdmin();
+
+    const [projectsResult, accountingSums] = await Promise.all([
+      supabase.from("hero_projects").select("id, raw").eq("is_deleted", false),
+      loadAccountingSumsByProjectId(),
+    ]);
+
+    const { data: projectRows, error: projectsError } = projectsResult;
+    if (projectsError) {
+      throw new Error(`Failed to load hero_projects: ${projectsError.message}`);
+    }
+    if (!projectRows || projectRows.length === 0) {
+      return [];
+    }
+
+    return (projectRows as HeroProjectRow[]).flatMap((row) => {
+      if (!row.raw) return [];
+      const project = normalizeHeroProject(
+        row.raw as unknown as Parameters<typeof normalizeHeroProject>[0]
+      );
+      if (!project.department) return [];
+
+      const accountingAmount = accountingSums.get(row.id);
+      if (accountingAmount != null && accountingAmount > 0) {
+        project.accounting_amount = accountingAmount;
+      }
+      return [project];
+    });
+  }
+);
 
 /**
- * Load every mirrored project, hydrate its customer_documents from the
- * separate mirror table and run the normalizer so downstream code sees the
- * exact same `HeroProject[]` shape it got from the live GraphQL query.
+ * Aggregate invoice totals per project_match_id via SQL. Matches the same
+ * "type contains invoice/rechnung" rule the in-memory normalizer used to
+ * apply, but does it in one query rather than 18k row materialisation.
  */
-export async function loadHeroProjectsFromSupabase(): Promise<HeroProject[]> {
-  const supabase = supabaseAdmin();
+const loadAccountingSumsByProjectId = cache(
+  async (): Promise<Map<string, number>> => {
+    const supabase = supabaseAdmin();
+    const result = new Map<string, number>();
 
-  const { data: projectRows, error: projectsError } = await supabase
-    .from("hero_projects")
-    .select("id, raw")
-    .eq("is_deleted", false);
-
-  if (projectsError) {
-    throw new Error(`Failed to load hero_projects: ${projectsError.message}`);
-  }
-  if (!projectRows || projectRows.length === 0) {
-    return [];
-  }
-
-  const ids = (projectRows as HeroProjectRow[]).map((row) => row.id);
-  const documentsByProjectId = await loadDocumentsForProjects(supabase, ids);
-
-  return (projectRows as HeroProjectRow[]).flatMap((row) => {
-    if (!row.raw) return [];
-    const raw = { ...row.raw } as Record<string, unknown>;
-    const docs = documentsByProjectId.get(row.id) ?? [];
-    raw.customer_documents = docs;
-    const project = normalizeHeroProject(
-      raw as unknown as Parameters<typeof normalizeHeroProject>[0]
-    );
-    // Filter out any project type that doesn't map to a dashboard department
-    // (e.g. Leads, inactive legacy types). normalizeHeroProject populates
-    // project.department from type_id; a null department means "don't show".
-    if (!project.department) return [];
-    return [project];
-  });
-}
-
-async function loadDocumentsForProjects(
-  supabase: ReturnType<typeof supabaseAdmin>,
-  projectIds: string[]
-): Promise<Map<string, HeroCustomerDocument[]>> {
-  const result = new Map<string, HeroCustomerDocument[]>();
-  if (projectIds.length === 0) return result;
-
-  const chunkSize = 500;
-  for (let index = 0; index < projectIds.length; index += chunkSize) {
-    const chunk = projectIds.slice(index, index + chunkSize);
     const { data, error } = await supabase
       .from("hero_customer_documents")
-      .select("project_match_id, raw")
-      .in("project_match_id", chunk)
-      .eq("is_deleted", false);
+      .select("project_match_id, value, type, document_type_name, document_base_type")
+      .eq("is_deleted", false)
+      .not("project_match_id", "is", null)
+      .not("value", "is", null);
 
     if (error) {
-      throw new Error(
-        `Failed to load hero_customer_documents: ${error.message}`
+      console.warn("accounting sums query failed:", error.message);
+      return result;
+    }
+
+    for (const row of (data ?? []) as Array<{
+      project_match_id: string | null;
+      value: number | null;
+      type: string | null;
+      document_type_name: string | null;
+      document_base_type: string | null;
+    }>) {
+      if (!row.project_match_id || row.value == null) continue;
+      const typeValue =
+        `${row.type ?? ""} ${row.document_type_name ?? ""} ${row.document_base_type ?? ""}`.toLowerCase();
+      if (!typeValue.includes("invoice") && !typeValue.includes("rechnung")) {
+        continue;
+      }
+      result.set(
+        row.project_match_id,
+        (result.get(row.project_match_id) ?? 0) + row.value
       );
     }
 
-    for (const row of (data ?? []) as HeroCustomerDocumentRow[]) {
-      if (!row.project_match_id || !row.raw) continue;
-      const list = result.get(row.project_match_id) ?? [];
-      list.push(row.raw as HeroCustomerDocument);
-      result.set(row.project_match_id, list);
-    }
+    return result;
   }
-  return result;
-}
+);
 
-export async function getHeroProjectsCount(): Promise<number> {
+export const getHeroProjectsCount = cache(async (): Promise<number> => {
   const supabase = supabaseAdmin();
   const { count, error } = await supabase
     .from("hero_projects")
@@ -119,7 +126,7 @@ export async function getHeroProjectsCount(): Promise<number> {
     throw new Error(`hero_projects count failed: ${error.message}`);
   }
   return count ?? 0;
-}
+});
 
 export interface HeroSyncStatus {
   lastRunAt: string | null;
@@ -128,7 +135,7 @@ export interface HeroSyncStatus {
   projectCount: number;
 }
 
-export async function getHeroSyncStatus(): Promise<HeroSyncStatus> {
+export const getHeroSyncStatus = cache(async (): Promise<HeroSyncStatus> => {
   const supabase = supabaseAdmin();
 
   const [{ data: runRows, error: runsError }, projectCount] = await Promise.all(
@@ -159,4 +166,4 @@ export async function getHeroSyncStatus(): Promise<HeroSyncStatus> {
     lastRunError: latest?.error_message ?? null,
     projectCount,
   };
-}
+});
