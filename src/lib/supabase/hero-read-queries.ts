@@ -70,6 +70,7 @@ interface DashboardProjectRow {
   rework_scheduled_date: string | null;
   closing_appointment_date: string | null;
   is_finished: boolean;
+  is_accounting_open: boolean;
   was_reopened: boolean;
   last_finish_at: string | null;
   last_rework_at: string | null;
@@ -107,7 +108,7 @@ const fetchDashboardProjectRows = unstable_cache(
     }
     return all.filter((row) => row.department_key != null);
   },
-  ["hero_dashboard_projects_v6"],
+  ["hero_dashboard_projects_v7"],
   { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
 );
 

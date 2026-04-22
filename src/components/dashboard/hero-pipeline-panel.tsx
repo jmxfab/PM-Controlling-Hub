@@ -128,7 +128,13 @@ export function HeroPipelinePanel({
           valueText={formatEur(pipeline.openInvoiceAmount)}
           tone="neutral"
           icon={<Euro className="h-4 w-4" />}
-          hint={`${pipeline.openInvoiceCount} offene Rechnung${pipeline.openInvoiceCount === 1 ? "" : "en"}`}
+          hint={
+            pipeline.openInvoiceCount > 0
+              ? `${pipeline.openInvoiceCount} Rechnung${
+                  pipeline.openInvoiceCount === 1 ? "" : "en"
+                } · Projekte in Abschluss-/Teilrechnungs-Step`
+              : "keine Projekte in Abrechnungs-Step"
+          }
         />
         <KpiTile
           label="Letzte Woche abgeschlossen"

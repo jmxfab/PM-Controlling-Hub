@@ -169,11 +169,16 @@ export const loadHeroPipeline = cache(
           bucket.reopenedCount += 1;
           totalReopened += 1;
         }
-        if (row.accounting_open_amount != null) {
-          openInvoiceAmount += Number(row.accounting_open_amount) || 0;
-        }
-        if (row.accounting_open_count != null) {
-          openInvoiceCount += Number(row.accounting_open_count) || 0;
+        // "Offene Rechnung" in KPI-Sprech nur dann, wenn das Projekt aktuell
+        // in einem Abrechnungs-Step steht (is_accounting_open aus der View —
+        // PV/Klima/GT: Abschlussrechnung; WP zusätzlich 2. Teil-RG offen).
+        if (row.is_accounting_open) {
+          if (row.accounting_open_amount != null) {
+            openInvoiceAmount += Number(row.accounting_open_amount) || 0;
+          }
+          if (row.accounting_open_count != null) {
+            openInvoiceCount += Number(row.accounting_open_count) || 0;
+          }
         }
       }
       stepMap.set(stepKey, bucket);
