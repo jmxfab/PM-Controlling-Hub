@@ -5,48 +5,26 @@ import {
 } from "@/lib/hero/hero-client";
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 
-/** Status values in Hero that count as "active" */
-const ACTIVE_STATUSES = [
-  "in_progress",
-  "active",
-  "in_bearbeitung",
-  "aktiv",
-  "laufend",
-  "erstkontakt",
-  "auftragsvergabe",
-  "neu",
-];
-
-/** Status values that count as "completed this week" */
-const COMPLETED_STATUSES = [
-  "completed",
-  "abgeschlossen",
-  "archiviert",
-  "fertig",
-  "done",
-  "finished",
-];
-
-/** Status values that mean project was handed to accounting */
-const ACCOUNTING_STATUSES = [
-  "invoiced",
-  "accounting",
-  "fakturiert",
-  "abgerechnet",
-  "an_buchhaltung",
-  "buchhaltung",
+/**
+ * KPI matching rules — aligned to Hero's UI pipeline.
+ *
+ * We match against `step_name` (the fine-grained Hero step, e.g.
+ * "🔧 Zählermontage", "💸 Abschlussrechnung") rather than the rolled-up
+ * status name. The high-level status for most in-flight projects is just
+ * "In Umsetzung", so the old approach undercounted almost everything.
+ */
+const FINISHED_PATTERNS = ["abgeschlossen", "archiviert", "fertig", "finished"];
+const REWORK_PATTERNS = ["nacharbeit", "reklamation"];
+const ACCOUNTING_PATTERNS = [
+  "abschlussrechnung",
   "kundenrechnung",
   "schlussrechnung",
+  "fakturiert",
+  "abgerechnet",
+  "buchhaltung",
 ];
-
-/** Status values indicating open rework */
-const REWORK_STATUSES = [
-  "rework",
-  "reklamation",
-  "nacharbeit",
-  "nacharbeiten",
-  "in_nacharbeit",
-];
+const CLOSING_PATTERNS = ["abschlussgespräch"];
+const COMMITMENT_PATTERNS = ["auftragsbestätigung"];
 
 export const DASHBOARD_KPI_KEYS = [
   "activeProjects",
@@ -72,15 +50,51 @@ type DashboardKpiProjectGroups = Record<DashboardKpiKey, HeroProject[]>;
 const DASHBOARD_KPI_MATCHERS: Record<DashboardKpiKey, DashboardKpiMatcher> = {
   activeProjects: (project) => isActiveProject(project),
   completedProjectsWeek: (project, referenceTime) =>
-    matchesStatus(project, COMPLETED_STATUSES) &&
-    isCompletedSince(project, referenceTime),
+    isFinished(project) && isCompletedSince(project, referenceTime),
   accountingTransferredCount: (project) => hasAccountingTransfer(project),
-  openReworks: (project) => matchesStatus(project, REWORK_STATUSES),
+  openReworks: (project) =>
+    !isFinished(project) &&
+    (matchesStep(project, REWORK_PATTERNS) ||
+      matchesHighLevelStatus(project, REWORK_PATTERNS)),
   scheduledReworks: (project) =>
-    matchesStatus(project, REWORK_STATUSES) && isReworkScheduled(project),
-  openCustomerCommitments: (project) => isOpenCustomerCommitment(project),
-  scheduledClosings: (project) => isClosingScheduled(project),
+    !isFinished(project) &&
+    (matchesStep(project, REWORK_PATTERNS) ||
+      matchesHighLevelStatus(project, REWORK_PATTERNS)) &&
+    !!project.rework_scheduled_date,
+  openCustomerCommitments: (project) =>
+    !isFinished(project) && matchesStep(project, COMMITMENT_PATTERNS),
+  scheduledClosings: (project) =>
+    !isFinished(project) &&
+    matchesStep(project, CLOSING_PATTERNS) &&
+    !!project.maturity_date,
 };
+
+function currentStepText(project: HeroProject): string {
+  return (project.step_name ?? project.status ?? "").toLowerCase();
+}
+
+function matchesStep(project: HeroProject, patterns: string[]): boolean {
+  const value = currentStepText(project);
+  if (!value) return false;
+  return patterns.some((pattern) => value.includes(pattern));
+}
+
+function matchesHighLevelStatus(
+  project: HeroProject,
+  patterns: string[]
+): boolean {
+  const value = (project.status ?? "").toLowerCase();
+  if (!value) return false;
+  return patterns.some((pattern) => value.includes(pattern));
+}
+
+function isFinished(project: HeroProject): boolean {
+  return matchesStep(project, FINISHED_PATTERNS);
+}
+
+function isActiveProject(project: HeroProject): boolean {
+  return !isFinished(project) && !!currentStepText(project);
+}
 
 function isCompletedSince(project: HeroProject, referenceTime: number): boolean {
   if (!project.completion_date) return false;
@@ -89,35 +103,13 @@ function isCompletedSince(project: HeroProject, referenceTime: number): boolean 
   return completedAt >= weekAgo;
 }
 
-function matchesStatus(
-  project: HeroProject,
-  statusList: string[]
-): boolean {
-  const val = (project.status ?? "").toLowerCase();
-  return statusList.some((s) => val.includes(s));
-}
-
-function isReworkScheduled(project: HeroProject): boolean {
-  return !!project.rework_scheduled_date;
-}
-
-function isClosingScheduled(project: HeroProject): boolean {
-  return !!project.closing_appointment_date;
-}
-
-function isOpenCustomerCommitment(project: HeroProject): boolean {
-  const val = (project.customer_commitment_status ?? "").toLowerCase();
-  return (
-    val.includes("open") ||
-    val.includes("offen") ||
-    val.includes("pending") ||
-    val.includes("auftragsbestätigung") ||
-    val.includes("zusage")
-  );
-}
-
 function hasAccountingTransfer(project: HeroProject): boolean {
-  return matchesStatus(project, ACCOUNTING_STATUSES) || !!project.accounting_date;
+  if (isFinished(project)) return false;
+  return (
+    matchesStep(project, ACCOUNTING_PATTERNS) ||
+    matchesHighLevelStatus(project, ACCOUNTING_PATTERNS) ||
+    !!project.accounting_date
+  );
 }
 
 type ProjectsByDept = Record<HeroDepartment | "GESAMT", HeroProject[]>;
@@ -227,18 +219,3 @@ function toReferenceTime(referenceDate: Date | number): number {
     : referenceDate.getTime();
 }
 
-function isActiveProject(project: HeroProject): boolean {
-  if (matchesStatus(project, ACTIVE_STATUSES)) {
-    return true;
-  }
-
-  if (
-    matchesStatus(project, COMPLETED_STATUSES) ||
-    matchesStatus(project, ACCOUNTING_STATUSES) ||
-    matchesStatus(project, REWORK_STATUSES)
-  ) {
-    return false;
-  }
-
-  return !!project.status;
-}
