@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { MainNav } from "@/components/nav/main-nav";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: {
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className="antialiased">
         <MainNav />
         {children}
+        <Toaster richColors closeButton />
       </body>
     </html>
   );

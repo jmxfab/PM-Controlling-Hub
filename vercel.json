@@ -1,12 +1,7 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/sync-hero",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/sync-hero",
-      "schedule": "0 12 * * 4"
+  "functions": {
+    "src/app/api/admin/trigger-hero-sync/route.ts": {
+      "maxDuration": 10
     }
-  ]
+  }
 }
