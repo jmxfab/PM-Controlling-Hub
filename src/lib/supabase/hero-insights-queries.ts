@@ -586,6 +586,77 @@ const loadCashflowInner = cache(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Invoice Drill-Down pro Status
+// ---------------------------------------------------------------------------
+
+export interface InvoiceDetailRow {
+  invoiceId: string;
+  invoiceNr: string | null;
+  invoiceType: string | null;
+  documentTypeName: string | null;
+  documentDate: string | null;
+  createdAtHero: string | null;
+  value: number;
+  projectMatchId: string | null;
+  projectNumber: string | null;
+  projectName: string | null;
+  customerName: string | null;
+}
+
+/**
+ * Einzelrechnungen zu einem Hero-Status. Drill-Down hinter der
+ * Status-Breakdown-Tabelle im Cash-Tab.
+ */
+export async function loadInvoicesByStatus(
+  department: Department,
+  statusCode: number,
+  limit = 500
+): Promise<InvoiceDetailRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("load_invoices_by_status", {
+    p_department: department,
+    p_status_code: statusCode,
+    p_limit: limit,
+  });
+  if (error) {
+    console.warn(
+      `[hero-insights-queries] load_invoices_by_status failed: ${error.message}`
+    );
+    return [];
+  }
+  type DbRow = {
+    invoice_id: string;
+    invoice_nr: string | null;
+    invoice_type: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    value: number | string | null;
+    project_match_id: string | null;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+  };
+  const rows = (data ?? []) as DbRow[];
+  return rows.map((r) => ({
+    invoiceId: r.invoice_id,
+    invoiceNr: r.invoice_nr,
+    invoiceType: r.invoice_type,
+    documentTypeName: r.document_type_name,
+    documentDate: r.document_date,
+    createdAtHero: r.created_at_hero,
+    value: Number(r.value ?? 0) || 0,
+    projectMatchId: r.project_match_id,
+    projectNumber: r.project_number,
+    projectName: cleanProjectTitle(r.project_name, {
+      customerName: r.customer_name,
+      projectNumber: r.project_number,
+    }),
+    customerName: r.customer_name,
+  }));
+}
+
 export const loadCashflow = (department: Department): Promise<CashflowDto> =>
   unstable_cache(
     () => loadCashflowInner(department),

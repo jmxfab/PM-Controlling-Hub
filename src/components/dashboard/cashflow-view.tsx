@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Euro, Percent } from "lucide-react";
+import { Fragment, useState } from "react";
+import { AlertTriangle, ChevronDown, Euro, Percent } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -27,9 +28,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { CashflowDto } from "@/lib/supabase/hero-insights-queries";
+import type {
+  CashflowDto,
+  InvoiceDetailRow,
+} from "@/lib/supabase/hero-insights-queries";
 import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { HeroProjectLink } from "./hero-project-link";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
@@ -113,51 +118,12 @@ export function CashflowView({
 
       {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
       {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
-            <CardDescription>
-              Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
-              (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit
-              gezählt, damit man die Stückzahl sieht.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Anzahl</TableHead>
-                  <TableHead className="text-right">Summe (€)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dto.statusBreakdown.map((b) => (
-                  <TableRow key={b.statusCode}>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <p className="font-medium">{b.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {b.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {b.count.toLocaleString("de-DE")}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {b.totalEur === 0 ? (
-                        <span className="text-muted-foreground">0 €</span>
-                      ) : (
-                        formatEur(b.totalEur)
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <InvoiceStatusBreakdown
+          department={department}
+          deptName={deptName}
+          buckets={dto.statusBreakdown}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
       ) : null}
 
       {/* Aging Buckets */}
@@ -298,5 +264,227 @@ function Kpi({
         <p className="text-xs text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Klappbare Rechnungs-Status-Tabelle. Klick auf eine Status-Zeile lädt
+ * die zugehörigen Einzel-Rechnungen (Kunde, Projekt, Betrag, Datum)
+ * via /api/dashboard/invoice-status-details nach und zeigt sie als
+ * Detail-Block unter der Zeile.
+ */
+function InvoiceStatusBreakdown({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["statusBreakdown"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedStatus, setExpandedStatus] = useState<number | null>(null);
+  const [invoicesByStatus, setInvoicesByStatus] = useState<
+    Record<number, InvoiceDetailRow[]>
+  >({});
+  const [loadingStatus, setLoadingStatus] = useState<number | null>(null);
+
+  async function toggleStatus(statusCode: number) {
+    if (expandedStatus === statusCode) {
+      setExpandedStatus(null);
+      return;
+    }
+    setExpandedStatus(statusCode);
+    if (invoicesByStatus[statusCode]) return; // bereits geladen
+    setLoadingStatus(statusCode);
+    try {
+      const response = await fetch(
+        `/api/dashboard/invoice-status-details?department=${department}&status=${statusCode}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceDetailRow[];
+        };
+        setInvoicesByStatus((prev) => ({
+          ...prev,
+          [statusCode]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — die Detail-Tabelle bleibt leer, Header-Zeile bleibt.
+    } finally {
+      setLoadingStatus(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
+        <CardDescription>
+          Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
+          (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit gezählt,
+          damit man die Stückzahl sieht. Klick auf einen Status zeigt die
+          einzelnen Rechnungen mit Projekt + Kunde.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedStatus === b.statusCode;
+              const isLoading = loadingStatus === b.statusCode;
+              const invoices = invoicesByStatus[b.statusCode];
+              return (
+                <Fragment key={b.statusCode}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-accent/40 border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                    onClick={() => toggleStatus(b.statusCode)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={`Rechnungen im Status ${b.label} anzeigen`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleStatus(b.statusCode);
+                      }
+                    }}
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-medium">{b.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.description}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.totalEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.totalEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen mit diesem Status.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InvoiceDetailsTable({
+  invoices,
+  heroProjectLinkTemplate,
+}: {
+  invoices: InvoiceDetailRow[];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Rechnung</TableHead>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Datum</TableHead>
+          <TableHead className="py-2 text-right">Betrag</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {invoices.map((inv) => (
+          <TableRow key={inv.invoiceId}>
+            <TableCell className="py-1.5">
+              <div className="space-y-0 leading-tight">
+                <p className="font-mono text-xs font-semibold">
+                  {inv.invoiceNr ?? "–"}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                  {inv.documentTypeName ?? inv.invoiceType ?? ""}
+                </p>
+              </div>
+            </TableCell>
+            <TableCell className="py-1.5">
+              <div className="space-y-0 leading-tight">
+                <HeroProjectLink
+                  projectId={inv.projectMatchId}
+                  projectNumber={inv.projectNumber}
+                  linkTemplate={heroProjectLinkTemplate}
+                />
+                <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                  {inv.projectName ?? ""}
+                </p>
+              </div>
+            </TableCell>
+            <TableCell className="py-1.5 text-sm text-muted-foreground">
+              <span className="truncate block max-w-[180px]">
+                {inv.customerName ?? "–"}
+              </span>
+            </TableCell>
+            <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+              {formatDate(inv.documentDate ?? inv.createdAtHero)}
+            </TableCell>
+            <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+              {inv.value === 0 ? (
+                <span className="text-muted-foreground">0 €</span>
+              ) : (
+                formatEur(inv.value)
+              )}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
