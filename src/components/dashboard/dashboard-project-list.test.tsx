@@ -35,7 +35,7 @@ const projectListProps = {
       ],
     },
   ],
-  source: "sample" as const,
+  source: "hero" as const,
   timeframe: {
     mode: "current" as const,
     from: null,

@@ -77,7 +77,7 @@ describe("DashboardKpiDialog", () => {
           scheduledClosings: [],
           bewertungspoolCount: [],
         }}
-        source="sample"
+        source="hero"
         timeframe={{
           mode: "current",
           from: null,

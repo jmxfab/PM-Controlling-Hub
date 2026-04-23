@@ -743,11 +743,11 @@ function formatCountLabel(
   return `${count} ${count === 1 ? singularLabel : pluralLabel}`;
 }
 
-function getEmptyStateDescription(source: "hero" | "sample" | "empty"): string {
-  if (source === "sample") {
-    return "Im gewählten Zeitraum sind in den verfügbaren Beispieldaten keine Projekte vorhanden.";
-  }
-
+function getEmptyStateDescription(source: "hero" | "empty"): string {
+  // Früher gab es auch ein Sample-/Mock-Daten-Backend. Das ist entfernt
+  // (siehe commit 08e6361 — alles liest aus Supabase). Der DashboardProjectList-
+  // Prop-Typ erlaubt daher nur noch "hero" | "empty".
+  void source;
   return "Passe Zeitraum oder Abteilung an, um weitere Projekte zu sehen.";
 }
 

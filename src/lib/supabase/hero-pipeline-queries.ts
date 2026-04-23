@@ -17,6 +17,7 @@ import {
   classifyStep,
   isAccountingStep,
   isFinishedStep as isFinishedStepName,
+  isReworkStep as isReworkStepName,
   STEP_CATEGORIES,
   type StepCategory,
 } from "@/lib/hero/step-classifier";
@@ -751,10 +752,12 @@ export async function loadKpiProjects(
   const matchIds = new Set<string>();
   for (const t of transitions) {
     if (!t.step_name) continue;
-    const n = t.step_name.toLowerCase();
-    const isFinished = /abgeschlossen|archiviert/.test(n);
-    const isRework = /nacharbeit|reklamation/.test(n);
-    const isAccount = /abschlussrechnung|kundenrechnung|schlussrechnung|teil-rg|teilrechnung/.test(n);
+    // Dieselbe Klassifizierung wie der Pipeline-Panel + Cash — step-classifier
+    // ist die einzige Quelle der Wahrheit, damit Delta-KPI-Click und
+    // Snapshot-Zahlen garantiert zueinander passen.
+    const isFinished = isFinishedStepName(t.step_name);
+    const isRework = isReworkStepName(t.step_name);
+    const isAccount = isAccountingStep(t.step_name);
 
     if (kpi === "delta_new" && t.history_index === 1) {
       matchIds.add(t.project_match_id);

@@ -4,6 +4,14 @@ import {
   HeroProject,
 } from "@/lib/hero/hero-client";
 import { KPIData } from "@/components/dashboard/dashboard-cards";
+import {
+  ACCOUNTING_STEP_PATTERNS,
+  BEWERTUNGSPOOL_STEP_PATTERNS,
+  CLOSING_STEP_PATTERNS,
+  COMMITMENT_STEP_PATTERNS,
+  FINISHED_STEP_PATTERNS,
+  REWORK_STEP_PATTERNS,
+} from "@/lib/hero/step-classifier";
 
 /**
  * KPI matching rules — aligned to Hero's UI pipeline.
@@ -12,20 +20,20 @@ import { KPIData } from "@/components/dashboard/dashboard-cards";
  * "🔧 Zählermontage", "💸 Abschlussrechnung") rather than the rolled-up
  * status name. The high-level status for most in-flight projects is just
  * "In Umsetzung", so the old approach undercounted almost everything.
+ *
+ * Alle Pattern-Listen kommen aus step-classifier.ts — damit Aggregator,
+ * Pipeline-View und Cash-RPC dieselbe Definition von "Abschluss-Step",
+ * "Nacharbeit", etc. nutzen. Die früheren lokalen ACCOUNTING_PATTERNS
+ * haben noch `fakturiert`/`abgerechnet`/`buchhaltung` matchen wollen,
+ * die per MCP-Check aber in Production an keinem Step/Status auftauchen
+ * und dafür `teil-rg`/`teilrechnung` (20 Projekte in PV+WP) übersehen.
  */
-const FINISHED_PATTERNS = ["abgeschlossen", "archiviert", "fertig", "finished"];
-const REWORK_PATTERNS = ["nacharbeit", "reklamation"];
-const ACCOUNTING_PATTERNS = [
-  "abschlussrechnung",
-  "kundenrechnung",
-  "schlussrechnung",
-  "fakturiert",
-  "abgerechnet",
-  "buchhaltung",
-];
-const CLOSING_PATTERNS = ["abschlussgespräch"];
-const COMMITMENT_PATTERNS = ["auftragsbestätigung"];
-const BEWERTUNGSPOOL_PATTERNS = ["bewertungspool"];
+const FINISHED_PATTERNS = FINISHED_STEP_PATTERNS;
+const REWORK_PATTERNS = REWORK_STEP_PATTERNS;
+const ACCOUNTING_PATTERNS = ACCOUNTING_STEP_PATTERNS;
+const CLOSING_PATTERNS = CLOSING_STEP_PATTERNS;
+const COMMITMENT_PATTERNS = COMMITMENT_STEP_PATTERNS;
+const BEWERTUNGSPOOL_PATTERNS = BEWERTUNGSPOOL_STEP_PATTERNS;
 
 export const DASHBOARD_KPI_KEYS = [
   "activeProjects",
