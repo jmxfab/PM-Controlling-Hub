@@ -352,7 +352,7 @@ export function HeroPipelinePanel({
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[540px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[420px_minmax(0,1fr)]">
         <Card className="lg:sticky lg:top-4 h-fit">
           <CardHeader>
             <CardTitle className="text-base">
