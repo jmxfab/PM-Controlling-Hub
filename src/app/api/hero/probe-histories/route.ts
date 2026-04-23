@@ -11,24 +11,27 @@ import { heroGraphQL } from "@/lib/hero/hero-client";
 export async function GET() {
   const query = `
     query ProbeHistories {
-      histories(first: 1, orderBy: "id") {
+      histories(first: 2, orderBy: "id") {
         id
         created
         modified
-        text
-        note
-        description
-        content
-        project_match_id
-        project_match { id }
-        partner_id
-        partner { id first_name last_name }
-        user_id
-        user { id first_name last_name }
         type
-        category
-        subject
-        title
+        target_project_match_id
+        user_id
+        user { id name email username login }
+        target_id
+        message
+        log
+        entry
+        body
+        value
+        data
+        action
+        changes
+        old_value
+        new_value
+        field_name
+        field
       }
     }
   `;
