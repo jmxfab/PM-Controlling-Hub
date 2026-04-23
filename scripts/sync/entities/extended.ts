@@ -221,6 +221,25 @@ export const historiesSync = makePaginatedEntity({
   `,
 });
 
+export const notificationsSync = makePaginatedEntity({
+  name: "notifications",
+  table: "hero_notifications",
+  queryField: "notifications",
+  pageSize: 500,
+  concurrency: 2,
+  maxRows: 50_000,
+  selectionSet: `
+    id
+    created
+    modified
+    title
+    body
+    is_read
+    target_id
+    user_id
+  `,
+});
+
 // ---------------------------------------------------------------------------
 // Reference / small entities (top-level)
 // ---------------------------------------------------------------------------
@@ -351,6 +370,7 @@ export const EXTENDED_ENTITIES = [
   fileUploadsSync,
   receiptsSync,
   historiesSync,
+  notificationsSync,
   documentTypesSync,
   trackingCategoriesSync,
   companyBranchesSync,
