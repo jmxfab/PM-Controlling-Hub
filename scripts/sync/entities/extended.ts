@@ -209,6 +209,16 @@ export const historiesSync = makePaginatedEntity({
   pageSize: 500,
   concurrency: 3,
   maxRows: 500_000,
+  selectionSet: `
+    id
+    created
+    modified
+    type
+    target_project_match_id
+    target_id
+    user_id
+    user { id email }
+  `,
 });
 
 // ---------------------------------------------------------------------------

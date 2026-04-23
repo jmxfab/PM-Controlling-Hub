@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   CalendarClock,
   Euro,
   LayoutDashboard,
@@ -24,6 +25,7 @@ const navItems = [
   // /deckungsbeitrag ausgeblendet bis die Datenbasis (Materialkosten /
   // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
   { href: "/emails", label: "E-Mails", icon: Mail },
+  { href: "/logbuch", label: "Logbuch", icon: BookOpen },
 ];
 
 export function MainNav() {
