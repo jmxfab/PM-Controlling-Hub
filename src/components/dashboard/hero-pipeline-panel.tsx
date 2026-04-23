@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
-  ArrowRight,
   ArrowUpRight,
   CheckCircle2,
   CheckSquare,
+  ChevronDown,
   Euro,
   RotateCcw,
 } from "lucide-react";
@@ -134,6 +134,11 @@ export function HeroPipelinePanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [projects, setProjects] = useState<PipelineProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
+  // Inline-Details per Row. Klick auf die Zeile toggelt die Details-
+  // Sub-Zeile darunter (stepName komplett, maturity, offene Rechnungen,
+  // Hero-Öffnen-Link). Nur eine Zeile gleichzeitig offen, damit's
+  // nicht explodiert.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const activeSteps = useMemo(
     () => pipeline.steps.filter((step) => !step.isFinished),
@@ -433,120 +438,29 @@ export function HeroPipelinePanel({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Projekt-Nr.</TableHead>
-                    <TableHead>Titel</TableHead>
-                    <TableHead>Kunde</TableHead>
-                    <TableHead>Step (vorher → aktuell)</TableHead>
-                    <TableHead className="text-right">Offene RG</TableHead>
-                    <TableHead>Fällig</TableHead>
+                    <TableHead className="py-2">Projekt-Nr.</TableHead>
+                    <TableHead className="py-2">Titel / Kunde</TableHead>
+                    <TableHead className="py-2">Step</TableHead>
+                    <TableHead className="py-2 text-right">Offene RG</TableHead>
+                    <TableHead className="py-2">Fällig</TableHead>
+                    <TableHead className="py-2 w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {projects.map((project) => {
+                    const isExpanded = expandedId === project.id;
+                    const heroHref = buildHeroHref(project.id);
+                    const toggle = () =>
+                      setExpandedId(isExpanded ? null : project.id);
                     return (
-                    <TableRow key={project.id}>
-                      <TableCell className="whitespace-nowrap">
-                        <HeroProjectLink
-                          projectId={project.id}
-                          projectNumber={project.projectNumber}
-                          linkTemplate={heroProjectLinkTemplate ?? null}
-                        />
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span>{project.projectName ?? "–"}</span>
-                          {project.isNewInPeriod ? (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-rose-500 text-rose-600"
-                              title="Im gewählten Zeitraum neu angelegt"
-                            >
-                              <ArrowDownRight className="h-3 w-3" />
-                              Neu
-                            </Badge>
-                          ) : null}
-                          {project.isCompletedInPeriod ? (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-emerald-500 text-emerald-600"
-                              title="Im gewählten Zeitraum abgeschlossen"
-                            >
-                              <CheckCircle2 className="h-3 w-3" />
-                              Abgeschlossen
-                            </Badge>
-                          ) : null}
-                          {project.isOverdue ? (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-orange-500 text-orange-600"
-                              title={`Fälligkeit ${
-                                project.maturityDate
-                                  ? new Date(project.maturityDate).toLocaleDateString("de-DE")
-                                  : ""
-                              } bereits überschritten`}
-                            >
-                              <AlertTriangle className="h-3 w-3" />
-                              Überfällig
-                            </Badge>
-                          ) : null}
-                          {project.wasReopened ? (
-                            <Badge
-                              variant="outline"
-                              className="gap-1 border-yellow-500 text-yellow-600"
-                              title="Projekt wurde nach Abgeschlossen wieder geöffnet"
-                            >
-                              <RotateCcw className="h-3 w-3" />
-                              Reopen
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {project.customerName ?? "–"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {project.previousStepName ? (
-                            <>
-                              <span
-                                className="text-muted-foreground"
-                                title={
-                                  project.previousStepAt
-                                    ? `bis ${new Date(
-                                        project.previousStepAt
-                                      ).toLocaleDateString("de-DE")}`
-                                    : undefined
-                                }
-                              >
-                                {project.previousStepName}
-                              </span>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            </>
-                          ) : null}
-                          <span className="font-medium">
-                            {project.stepName ?? "–"}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs tabular-nums">
-                        {project.openInvoiceAmount > 0
-                          ? formatEur(project.openInvoiceAmount)
-                          : <span className="text-muted-foreground">–</span>}
-                        {project.openInvoiceCount > 0 ? (
-                          <span className="block text-[10px] text-muted-foreground">
-                            {project.openInvoiceCount}{" "}
-                            Rechnung{project.openInvoiceCount === 1 ? "" : "en"}
-                          </span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {project.maturityDate
-                          ? new Date(project.maturityDate).toLocaleDateString(
-                              "de-DE"
-                            )
-                          : "–"}
-                      </TableCell>
-                    </TableRow>
+                      <ProjectRow
+                        key={project.id}
+                        project={project}
+                        heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+                        isExpanded={isExpanded}
+                        onToggle={toggle}
+                        heroHref={heroHref}
+                      />
                     );
                   })}
                 </TableBody>
@@ -672,6 +586,203 @@ export function HeroPipelinePanel({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Kompakte Projektzeile im rechten Pipeline-Panel. Erste Zeile = eine
+ * Row, Klick toggelt einen expandierten Details-Block darunter. Der
+ * Projekt-Nr-Button bleibt weiter ein direkter Hero-Link, der Rest der
+ * Zeile klappt auf/zu.
+ */
+function ProjectRow({
+  project,
+  heroProjectLinkTemplate,
+  isExpanded,
+  onToggle,
+  heroHref,
+}: {
+  project: PipelineProjectRow;
+  heroProjectLinkTemplate: string | null;
+  isExpanded: boolean;
+  onToggle: () => void;
+  heroHref: string | null;
+}) {
+  return (
+    <>
+      <TableRow
+        className="cursor-pointer hover:bg-accent/40 border-b-0"
+        onClick={onToggle}
+        data-state={isExpanded ? "open" : "closed"}
+      >
+        <TableCell
+          className="py-1.5 whitespace-nowrap"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <HeroProjectLink
+            projectId={project.id}
+            projectNumber={project.projectNumber}
+            linkTemplate={heroProjectLinkTemplate}
+          />
+        </TableCell>
+        <TableCell className="py-1.5 min-w-0">
+          <div className="space-y-0 leading-tight">
+            <div className="truncate text-sm font-medium">
+              {project.projectName ?? "–"}
+            </div>
+            {project.customerName &&
+            project.customerName !== project.projectName ? (
+              <div className="truncate text-xs text-muted-foreground">
+                {project.customerName}
+              </div>
+            ) : null}
+            {project.isNewInPeriod ||
+            project.isCompletedInPeriod ||
+            project.isOverdue ||
+            project.wasReopened ? (
+              <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                {project.isNewInPeriod ? (
+                  <Badge
+                    variant="outline"
+                    className="h-4 gap-0.5 border-rose-500 text-rose-600 px-1 text-[10px]"
+                    title="Im gewählten Zeitraum neu angelegt"
+                  >
+                    <ArrowDownRight className="h-2.5 w-2.5" />
+                    Neu
+                  </Badge>
+                ) : null}
+                {project.isCompletedInPeriod ? (
+                  <Badge
+                    variant="outline"
+                    className="h-4 gap-0.5 border-emerald-500 text-emerald-600 px-1 text-[10px]"
+                    title="Im gewählten Zeitraum abgeschlossen"
+                  >
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    Abg.
+                  </Badge>
+                ) : null}
+                {project.isOverdue ? (
+                  <Badge
+                    variant="outline"
+                    className="h-4 gap-0.5 border-orange-500 text-orange-600 px-1 text-[10px]"
+                    title="Fälligkeit überschritten"
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                    Überfällig
+                  </Badge>
+                ) : null}
+                {project.wasReopened ? (
+                  <Badge
+                    variant="outline"
+                    className="h-4 gap-0.5 border-yellow-500 text-yellow-600 px-1 text-[10px]"
+                    title="Reopen"
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" />
+                    Reopen
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </TableCell>
+        <TableCell className="py-1.5 text-sm">
+          <span className="truncate block max-w-[180px]" title={project.stepName ?? undefined}>
+            {project.stepName ?? "–"}
+          </span>
+        </TableCell>
+        <TableCell className="py-1.5 text-right font-mono text-xs tabular-nums whitespace-nowrap">
+          {project.openInvoiceAmount > 0 ? (
+            formatEur(project.openInvoiceAmount)
+          ) : (
+            <span className="text-muted-foreground">–</span>
+          )}
+        </TableCell>
+        <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+          {project.maturityDate
+            ? new Date(project.maturityDate).toLocaleDateString("de-DE")
+            : "–"}
+        </TableCell>
+        <TableCell className="py-1.5 w-8 text-muted-foreground">
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${
+              isExpanded ? "rotate-180" : ""
+            }`}
+          />
+        </TableCell>
+      </TableRow>
+      {isExpanded ? (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={6} className="py-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+              <InfoBlock label="Aktueller Step">
+                {project.stepName ?? "–"}
+              </InfoBlock>
+              {project.previousStepName ? (
+                <InfoBlock label="Vorheriger Step">
+                  {project.previousStepName}
+                  {project.previousStepAt ? (
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      bis{" "}
+                      {new Date(project.previousStepAt).toLocaleDateString(
+                        "de-DE"
+                      )}
+                    </span>
+                  ) : null}
+                </InfoBlock>
+              ) : null}
+              <InfoBlock label="Kunde">
+                {project.customerName ?? "–"}
+              </InfoBlock>
+              <InfoBlock label="Fällig">
+                {project.maturityDate
+                  ? new Date(project.maturityDate).toLocaleDateString("de-DE")
+                  : "–"}
+              </InfoBlock>
+              <InfoBlock label="Angelegt">
+                {project.createdAtHero
+                  ? new Date(project.createdAtHero).toLocaleDateString("de-DE")
+                  : "–"}
+              </InfoBlock>
+              {project.openInvoiceCount > 0 ? (
+                <InfoBlock label="Offene Rechnungen">
+                  {formatEur(project.openInvoiceAmount)} ·{" "}
+                  {project.openInvoiceCount} Stück
+                </InfoBlock>
+              ) : null}
+            </div>
+            {heroHref ? (
+              <div className="mt-3">
+                <a
+                  href={heroHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-blue-500 hover:border-blue-500 hover:text-white"
+                >
+                  Im Hero öffnen →
+                </a>
+              </div>
+            ) : null}
+          </TableCell>
+        </TableRow>
+      ) : null}
+    </>
+  );
+}
+
+function InfoBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-sm">{children}</p>
     </div>
   );
 }
