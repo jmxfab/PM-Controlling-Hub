@@ -56,28 +56,23 @@ export default async function InsightsPage({
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
       dept === department ? (
-        <div key={suspenseKey} className="space-y-6">
-          <Suspense
-            key={`pipeline-${suspenseKey}`}
-            fallback={<InsightsSkeleton rows={2} />}
-          >
+        <Suspense
+          key={suspenseKey}
+          fallback={<DashboardInitialLoader />}
+        >
+          <div className="space-y-6">
             <PipelineTab
               department={department}
               timeframe={timeframe}
               heroProjectLinkTemplate={heroProjectLinkTemplate}
             />
-          </Suspense>
-          <Suspense
-            key={`main-${suspenseKey}`}
-            fallback={<DashboardInitialLoader />}
-          >
             <InsightsTab
               department={department}
               timeframe={timeframe}
               heroProjectLinkTemplate={heroProjectLinkTemplate}
             />
-          </Suspense>
-        </div>
+          </div>
+        </Suspense>
       ) : (
         <div className="text-sm text-muted-foreground py-8 text-center">
           Wechsel zu {DASHBOARD_DEPARTMENT_NAMES[dept]} lädt die Daten neu …
@@ -160,19 +155,6 @@ async function PipelineTab({
       pipeline={pipeline}
       heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
     />
-  );
-}
-
-function InsightsSkeleton({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: rows }).map((_, index) => (
-        <div
-          key={index}
-          className="h-32 animate-pulse rounded-lg border bg-muted/30"
-        />
-      ))}
-    </div>
   );
 }
 

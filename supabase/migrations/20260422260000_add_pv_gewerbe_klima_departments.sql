@@ -1,26 +1,13 @@
--- Add PV_GEWERBE and KLIMA to the project_department enum and hero_projects CHECK.
+-- Add PV_GEWERBE and KLIMA to the project_department enum.
 --
--- Background: the materialized view (20260422170000_hero_dashboard_projects_view.sql)
--- already emits these two department_key values, but the base table CHECK and the
--- kpi_snapshots enum only knew PV / WP / HAUSTECHNIK. This migration brings both
--- in sync so future inserts / historic-KPI writes don't fail.
+-- Background: hero_projects.department is of type project_department (enum).
+-- The materialized view (20260422170000_hero_dashboard_projects_view.sql) already
+-- emits PV_GEWERBE and KLIMA as department_key values derived from type_id.
+-- This migration brings the enum in sync so future inserts don't reject these values.
+--
+-- Note: ALTER TYPE ... ADD VALUE cannot be used in the same transaction as a
+-- reference to the new value. Run as two separate DDL statements (no CHECK needed
+-- since the column type itself enforces valid values).
 
--- 1. Extend project_department enum (Postgres requires ALTER TYPE … ADD VALUE)
-DO $$ BEGIN
-  ALTER TYPE public.project_department ADD VALUE IF NOT EXISTS 'PV_GEWERBE';
-EXCEPTION WHEN others THEN NULL;
-END $$;
-
-DO $$ BEGIN
-  ALTER TYPE public.project_department ADD VALUE IF NOT EXISTS 'KLIMA';
-EXCEPTION WHEN others THEN NULL;
-END $$;
-
--- 2. Drop the stale CHECK on hero_projects.department and replace it with the
---    full set of valid department keys.
-ALTER TABLE public.hero_projects
-  DROP CONSTRAINT IF EXISTS hero_projects_department_check;
-
-ALTER TABLE public.hero_projects
-  ADD CONSTRAINT hero_projects_department_check
-  CHECK (department IN ('PV', 'PV_GEWERBE', 'WP', 'KLIMA', 'HAUSTECHNIK', 'GEBAEUDETECHNIK'));
+ALTER TYPE public.project_department ADD VALUE IF NOT EXISTS 'PV_GEWERBE';
+ALTER TYPE public.project_department ADD VALUE IF NOT EXISTS 'KLIMA';

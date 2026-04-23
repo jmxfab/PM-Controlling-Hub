@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { DashboardCharts } from "./dashboard-charts-lazy";
+import { DashboardInitialLoader } from "./dashboard-initial-loader";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
@@ -56,16 +57,16 @@ export function DashboardTabContent({
   timeframe: DashboardTimeframe;
 }) {
   const suspenseKey = `${department}-${timeframe.mode}-${timeframe.from ?? ""}-${timeframe.to ?? ""}`;
+  // Ein gemeinsamer Suspense-Boundary → genau ein Full-Screen-Overlay
+  // solange irgendwas auf der Seite streamt, keine Section-Skeletons.
   return (
     <div className="space-y-4">
-      <Suspense key={`main-${suspenseKey}`} fallback={<DashboardSectionSkeleton rows={4} />}>
+      <Suspense key={suspenseKey} fallback={<DashboardInitialLoader />}>
         <DashboardMainSection
           department={department}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
           timeframe={timeframe}
         />
-      </Suspense>
-      <Suspense key={`pipeline-${suspenseKey}`} fallback={<DashboardSectionSkeleton rows={2} />}>
         <DashboardPipelineSection
           department={department}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -164,19 +165,6 @@ async function DashboardPipelineSection({
       pipeline={pipeline}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
-  );
-}
-
-function DashboardSectionSkeleton({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: rows }).map((_, index) => (
-        <div
-          key={index}
-          className="h-24 animate-pulse rounded-lg border bg-muted/30"
-        />
-      ))}
-    </div>
   );
 }
 
