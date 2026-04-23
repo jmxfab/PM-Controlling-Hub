@@ -123,9 +123,25 @@ const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([
 function buildPipelineRange(
   timeframe: DashboardTimeframe
 ): TimeframeRangeIso | undefined {
-  // Jetzt = reine Snapshot-Sicht. Keine Delta-Karte, keine Bewegungs-
-  // Badges an den Steps. Nur echte Timeframe-Auswahl triggert das.
-  if (timeframe.mode === "current") return undefined;
+  // Cash-Tab: auch im Jetzt-Modus rollende letzte 14 Tage für die
+  // Bewegungs-Badges (↘ rein / ☑ raus / ↻ reopens). Damit sieht man
+  // auch ohne expliziten Zeitraum, welche Rechnungs-Steps gerade
+  // Bewegung hatten. Auf Insights + Controlling bleibt Jetzt = reiner
+  // Snapshot, weil dort keine Rechnungs-Bewegung im Fokus steht.
+  if (timeframe.mode === "current") {
+    const now = new Date();
+    const to = new Date(now);
+    to.setHours(0, 0, 0, 0);
+    to.setDate(to.getDate() + 1);
+    const from = new Date(to);
+    from.setDate(from.getDate() - 14);
+    return {
+      fromIso: from.toISOString(),
+      toIso: to.toISOString(),
+      label: "Letzte 14 Tage",
+      direction: "past",
+    };
+  }
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
   const fromIso = `${range.from}T00:00:00+02:00`;
