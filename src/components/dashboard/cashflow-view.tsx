@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import type {
   CashflowDto,
+  ForecastProjectRow,
   InvoiceAgingRow,
   InvoiceDetailRow,
 } from "@/lib/supabase/hero-insights-queries";
@@ -116,6 +117,16 @@ export function CashflowView({
           tone="warning"
         />
       </div>
+
+      {/* Fälligkeits-Forecast: was kommt wann rein */}
+      {dto.forecast && dto.forecast.length > 0 ? (
+        <CashflowForecast
+          department={department}
+          deptName={deptName}
+          buckets={dto.forecast}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      ) : null}
 
       {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
       {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
@@ -639,5 +650,285 @@ function InvoiceAgingBreakdown({
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Fälligkeits-Forecast: welche offenen Rechnungssummen werden nach
+ * Projekt-maturity_date wann zahlungswirksam. Buckets sind klappbar und
+ * zeigen die einzelnen Projekte mit Projekt-Nr, Kunde, Step, Fälligkeit
+ * und offener Rechnungssumme.
+ */
+function CashflowForecast({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["forecast"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [projectsByBucket, setProjectsByBucket] = useState<
+    Record<string, ForecastProjectRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["forecast"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (projectsByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+        maxDays: String(bucket.maxDays),
+      });
+      const response = await fetch(
+        `/api/dashboard/cashflow-forecast-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          projects: ForecastProjectRow[];
+        };
+        setProjectsByBucket((prev) => ({
+          ...prev,
+          [key]: payload.projects ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  const totalProjects = buckets.reduce((s, b) => s + b.projectCount, 0);
+  const totalOpen = buckets.reduce((s, b) => s + b.openEur, 0);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Fälligkeits-Forecast — {deptName}</CardTitle>
+        <CardDescription>
+          Offene Rechnungssummen nach Projekt-Fälligkeit
+          (<code className="font-mono text-xs">current_project_match_status.maturity_date</code>).
+          Zeigt auf einen Blick, welche Beträge wann zahlungswirksam werden.
+          Klick auf einen Bucket zeigt die einzelnen Projekte mit Kunde +
+          Step + Fälligkeit.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fällig in</TableHead>
+              <TableHead className="text-right">Projekte</TableHead>
+              <TableHead className="text-right">Offene Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const projects = projectsByBucket[b.bucket];
+              const isOverdue = b.bucket === "Überfällig";
+              const clickable = b.projectCount > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      clickable ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={clickable ? () => toggleBucket(b) : undefined}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    aria-expanded={clickable ? isExpanded : undefined}
+                    aria-label={
+                      clickable
+                        ? `Projekte im Forecast-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      clickable
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        isOverdue
+                          ? "font-medium text-destructive"
+                          : b.minDays <= 14
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.projectCount.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.openEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.openEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {clickable ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Projekte…
+                          </div>
+                        ) : !projects || projects.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Projekte in diesem Bucket.
+                          </div>
+                        ) : (
+                          <ForecastProjectsTable
+                            projects={projects}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalProjects.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpen)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ForecastProjectsTable({
+  projects,
+  heroProjectLinkTemplate,
+}: {
+  projects: ForecastProjectRow[];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Aktueller Step</TableHead>
+          <TableHead className="py-2">Fällig</TableHead>
+          <TableHead className="py-2 text-right">Offene Summe</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {projects.map((p) => {
+          const ageLabel =
+            p.daysUntil < 0
+              ? `${Math.abs(p.daysUntil)} Tg überfällig`
+              : p.daysUntil === 0
+              ? "heute"
+              : `in ${p.daysUntil} Tg`;
+          return (
+            <TableRow key={p.projectMatchId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={p.projectMatchId}
+                    projectNumber={p.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {p.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {p.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm">
+                <span className="truncate block max-w-[200px]">
+                  {p.stepName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(p.maturityDate)}</p>
+                  <p
+                    className={`text-[10px] ${
+                      p.daysUntil < 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {ageLabel}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {p.openAmount === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  <>
+                    {formatEur(p.openAmount)}
+                    {p.openCount > 0 ? (
+                      <span className="block text-[10px] text-muted-foreground">
+                        {p.openCount} RG
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
