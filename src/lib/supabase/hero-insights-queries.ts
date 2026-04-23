@@ -1,7 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+
+const CACHE_TTL_S = 300;
 
 import {
   HERO_TYPE_ID_TO_DEPARTMENT,
@@ -48,7 +51,7 @@ export interface InsightsRange {
  * Wöchentliche Flow-Raten pro Department, optional eingeschränkt auf
  * einen Zeitraum. Default: letzte 12 Wochen ab jetzt.
  */
-export const loadWeeklyThroughput = cache(
+const loadWeeklyThroughputInner = cache(
   async (
     department: Department,
     options?: { weeks?: number; range?: InsightsRange }
@@ -148,6 +151,22 @@ export const loadWeeklyThroughput = cache(
   }
 );
 
+export const loadWeeklyThroughput = (
+  department: Department,
+  options?: { weeks?: number; range?: InsightsRange }
+): Promise<WeeklyThroughputPoint[]> =>
+  unstable_cache(
+    () => loadWeeklyThroughputInner(department, options),
+    [
+      "loadWeeklyThroughput",
+      department,
+      String(options?.weeks ?? ""),
+      options?.range?.fromIso ?? "",
+      options?.range?.toIso ?? "",
+    ],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 export interface StepDurationRow {
   stepId: string;
   stepName: string;
@@ -160,7 +179,7 @@ export interface StepDurationRow {
  * Durchschnittliche + mediane Verweildauer pro Step, optional eingeschränkt
  * auf einen Zeitraum. Default: letzte 12 Monate.
  */
-export const loadStepDurations = cache(
+const loadStepDurationsInner = cache(
   async (
     department: Department,
     options?: { range?: InsightsRange }
@@ -231,10 +250,25 @@ export const loadStepDurations = cache(
   }
 );
 
+export const loadStepDurations = (
+  department: Department,
+  options?: { range?: InsightsRange }
+): Promise<StepDurationRow[]> =>
+  unstable_cache(
+    () => loadStepDurationsInner(department, options),
+    [
+      "loadStepDurations",
+      department,
+      options?.range?.fromIso ?? "",
+      options?.range?.toIso ?? "",
+    ],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 /**
  * Longest-running open projects (derzeit offene Projekte mit hohem Alter).
  */
-export const loadLongestRunning = cache(
+const loadLongestRunningInner = cache(
   async (department: Department, limit = 15): Promise<
     Array<{
       id: string;
@@ -282,6 +316,16 @@ export const loadLongestRunning = cache(
   }
 );
 
+export const loadLongestRunning = (
+  department: Department,
+  limit = 15
+): ReturnType<typeof loadLongestRunningInner> =>
+  unstable_cache(
+    () => loadLongestRunningInner(department, limit),
+    ["loadLongestRunning", department, String(limit)],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 export { typeIdsFor };
 
 // ---------------------------------------------------------------------------
@@ -305,7 +349,7 @@ function parseKwp(measureName: string | null): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-export const loadKwpStats = cache(
+const loadKwpStatsInner = cache(
   async (department: Department): Promise<KwpStats> => {
     const supabase = supabaseAdmin();
 
@@ -349,6 +393,13 @@ export const loadKwpStats = cache(
   }
 );
 
+export const loadKwpStats = (department: Department): Promise<KwpStats> =>
+  unstable_cache(
+    () => loadKwpStatsInner(department),
+    ["loadKwpStats", department],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 // ---------------------------------------------------------------------------
 // Zeit-Metriken (Durchlauf)
 // ---------------------------------------------------------------------------
@@ -372,7 +423,7 @@ export interface DurationMetric {
  * und prüfen enthaltene Schlüsselwörter). Basis: hero_dashboard_projects
  * (ein Projekt pro Zeile, raw->project_match_statuses enthält alle Steps).
  */
-export const loadDurationMetrics = cache(
+const loadDurationMetricsInner = cache(
   async (
     department: Department,
     options?: { range?: InsightsRange }
@@ -511,6 +562,21 @@ export const loadDurationMetrics = cache(
   }
 );
 
+export const loadDurationMetrics = (
+  department: Department,
+  options?: { range?: InsightsRange }
+): Promise<DurationMetric[]> =>
+  unstable_cache(
+    () => loadDurationMetricsInner(department, options),
+    [
+      "loadDurationMetrics",
+      department,
+      options?.range?.fromIso ?? "",
+      options?.range?.toIso ?? "",
+    ],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 // ---------------------------------------------------------------------------
 // Cashflow / Forderungsmanagement
 // ---------------------------------------------------------------------------
@@ -550,7 +616,7 @@ const BUCKET_DEFS: Array<{ label: string; min: number; max: number | null }> = [
   { label: "> 90 Tage", min: 90, max: null },
 ];
 
-export const loadCashflow = cache(
+const loadCashflowInner = cache(
   async (department: Department): Promise<CashflowDto> => {
     const supabase = supabaseAdmin();
 
@@ -720,3 +786,10 @@ export const loadCashflow = cache(
     };
   }
 );
+
+export const loadCashflow = (department: Department): Promise<CashflowDto> =>
+  unstable_cache(
+    () => loadCashflowInner(department),
+    ["loadCashflow", department],
+    { revalidate: CACHE_TTL_S, tags: ["cash"] }
+  )();

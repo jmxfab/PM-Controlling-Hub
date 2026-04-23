@@ -77,55 +77,72 @@ interface DashboardProjectRow {
   accounting_amount: number | null;
   accounting_open_amount: number | null;
   accounting_open_count: number | null;
-  raw: Record<string, unknown> | null;
+  kwp_kw: number | null;
 }
 
 export type { DashboardProjectRow };
 export { fetchDashboardProjectRows };
 
-const fetchDashboardProjectRows = unstable_cache(
-  async (): Promise<DashboardProjectRow[]> => {
-    const supabase = supabaseAdmin();
-    const all: DashboardProjectRow[] = [];
-    // Page through the whole view and filter departments in JS — the
-    // supabase-js .not("col", "is", null) modifier has not been applying
-    // to our materialized view reliably, so we fetch everything (3k rows)
-    // and drop the Leads-bucket locally. The view has ~3k rows, so this
-    // is cheap.
-    for (let offset = 0; ; offset += ROW_CHUNK_SIZE) {
-      const { data, error } = await supabase
-        .from("hero_dashboard_projects")
-        .select("*")
-        .order("id", { ascending: true })
-        .range(offset, offset + ROW_CHUNK_SIZE - 1);
+// Explicit column list — intentionally excludes `raw` (saves ~3.6 MB per
+// query, going from 4.3 MB to ~600 KB per cache miss).
+const DASHBOARD_PROJECT_COLUMNS = [
+  "id", "project_number", "project_name", "type_id", "department_key",
+  "status_name", "status_code", "step_id", "step_name", "step_sort_order",
+  "step_status_code", "step_order", "step_group",
+  "previous_step_name", "previous_step_id", "previous_step_at",
+  "customer_name", "customer_email", "customer_phone", "customer_address",
+  "measure_short", "measure_name", "created_at_hero", "hero_modified_at",
+  "maturity_date", "completion_date", "accounting_date",
+  "rework_scheduled_date", "closing_appointment_date",
+  "is_finished", "is_accounting_open", "was_reopened",
+  "last_finish_at", "last_rework_at",
+  "accounting_amount", "accounting_open_amount", "accounting_open_count",
+  "kwp_kw",
+].join(",");
 
-      if (error) {
-        throw new Error(`hero_dashboard_projects read failed: ${error.message}`);
-      }
-      const rows = (data ?? []) as DashboardProjectRow[];
-      all.push(...rows);
-      if (rows.length < ROW_CHUNK_SIZE) break;
+async function fetchDashboardProjectRowsInner(
+  department?: ProjectDepartment
+): Promise<DashboardProjectRow[]> {
+  const supabase = supabaseAdmin();
+  const all: DashboardProjectRow[] = [];
+  for (let offset = 0; ; offset += ROW_CHUNK_SIZE) {
+    let query = supabase
+      .from("hero_dashboard_projects")
+      .select(DASHBOARD_PROJECT_COLUMNS)
+      .order("id", { ascending: true })
+      .range(offset, offset + ROW_CHUNK_SIZE - 1);
+    if (department) query = query.eq("department_key", department);
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`hero_dashboard_projects read failed: ${error.message}`);
     }
-    return all.filter((row) => row.department_key != null);
-  },
-  ["hero_dashboard_projects_v11_enhanced"],
-  { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
-);
+    const rows = (data ?? []) as unknown as DashboardProjectRow[];
+    all.push(...rows);
+    if (rows.length < ROW_CHUNK_SIZE) break;
+  }
+  // GESAMT / untyped: supabase-js .not("col", "is", null) is unreliable on
+  // the materialized view, so we filter null departments in JS.
+  return department ? all : all.filter((row) => row.department_key != null);
+}
+
+function fetchDashboardProjectRows(
+  department?: ProjectDepartment
+): Promise<DashboardProjectRow[]> {
+  const cacheKey = `hero_dashboard_projects_v13_${department ?? "ALL"}`;
+  return unstable_cache(
+    () => fetchDashboardProjectRowsInner(department),
+    [cacheKey],
+    { revalidate: DATA_CACHE_TTL_S, tags: ["hero_dashboard_projects"] }
+  )();
+}
 
 function toHeroProject(row: DashboardProjectRow): HeroProject {
-  const raw = (row.raw ?? {}) as Record<string, unknown>;
-  const customer = (raw.customer ?? null) as HeroProject["customer"];
-  const contact = (raw.contact ?? null) as HeroProject["contact"];
-  const address = (raw.address ?? null) as HeroProject["address"];
-  const projectMatchStatuses =
-    (raw.project_match_statuses as HeroProject["project_match_statuses"]) ?? [];
-
   return {
     id: row.id,
     project_number: row.project_number,
     name: row.project_name,
     status: row.status_name,
-    project_type: typeof raw.project_type === "string" ? raw.project_type : null,
+    project_type: null,
     type_id: row.type_id,
     department: row.department_key,
     step_id: row.step_id,
@@ -136,12 +153,12 @@ function toHeroProject(row: DashboardProjectRow): HeroProject {
     created_at: row.created_at_hero,
     modified_at: row.hero_modified_at,
     maturity_date: row.maturity_date,
-    customer,
-    contact,
-    address,
+    customer: null,
+    contact: null,
+    address: null,
     customer_documents: [],
     customerDocuments: [],
-    project_match_statuses: projectMatchStatuses,
+    project_match_statuses: [],
     customer_name: row.customer_name,
     customer_contact_name: null,
     customer_phone: row.customer_phone,

@@ -1,6 +1,9 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+
+const CACHE_TTL_S = 300;
 import { KPIData } from "@/components/dashboard/dashboard-cards";
 import { HistoricDataPoint } from "@/components/dashboard/dashboard-charts";
 import {
@@ -70,7 +73,7 @@ export async function upsertKpiSnapshot(
 }
 
 /** Fetch the latest KPI snapshot for a given department */
-export async function getLatestKPIs(
+async function getLatestKPIsInner(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<KPIData | null> {
@@ -108,8 +111,24 @@ export async function getLatestKPIs(
   };
 }
 
+export const getLatestKPIs = (
+  department: Department,
+  timeframe: DashboardTimeframe
+): Promise<KPIData | null> =>
+  unstable_cache(
+    () => getLatestKPIsInner(department, timeframe),
+    [
+      "getLatestKPIs",
+      department,
+      timeframe.mode,
+      timeframe.from ?? "",
+      timeframe.to ?? "",
+    ],
+    { revalidate: CACHE_TTL_S, tags: ["historic"] }
+  )();
+
 /** Fetch the last 8 weekly snapshots for trend chart */
-export async function getHistoricKPIs(
+async function getHistoricKPIsInner(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<HistoricDataPoint[]> {
@@ -138,3 +157,19 @@ export async function getHistoricKPIs(
 
   return aggregateSnapshotsByWeek(data).slice(-8);
 }
+
+export const getHistoricKPIs = (
+  department: Department,
+  timeframe: DashboardTimeframe
+): Promise<HistoricDataPoint[]> =>
+  unstable_cache(
+    () => getHistoricKPIsInner(department, timeframe),
+    [
+      "getHistoricKPIs",
+      department,
+      timeframe.mode,
+      timeframe.from ?? "",
+      timeframe.to ?? "",
+    ],
+    { revalidate: CACHE_TTL_S, tags: ["historic"] }
+  )();

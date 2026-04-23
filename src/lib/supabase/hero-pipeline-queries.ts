@@ -305,7 +305,9 @@ export const loadHeroPipeline = cache(
     timeframeRange?: TimeframeRangeIso,
     options?: { excludeCashSteps?: boolean; onlyCashSteps?: boolean }
   ): Promise<HeroPipelineDto> => {
-    const all = await fetchDashboardProjectRows();
+    const all = await fetchDashboardProjectRows(
+      department === "GESAMT" ? undefined : department
+    );
     let projects = rowsFor(all, department);
     const now = Date.now();
     const { currentWeekStart, lastWeekStart } = getJumaxWeekBoundaries();
@@ -606,7 +608,9 @@ export async function loadKpiProjects(
   kpi: PipelineKpi,
   options?: { timeframeRange?: TimeframeRangeIso }
 ): Promise<PipelineProjectRow[]> {
-  const all = await fetchDashboardProjectRows();
+  const all = await fetchDashboardProjectRows(
+    department === "GESAMT" ? undefined : department
+  );
   const rows = rowsFor(all, department);
   const byId = new Map(rows.map((r) => [r.id, r]));
   const now = Date.now();
@@ -786,7 +790,9 @@ export async function loadProjectsForSteps(
   options?: { timeframeRange?: TimeframeRangeIso }
 ): Promise<PipelineProjectRow[]> {
   if (stepKeys.length === 0) return [];
-  const all = await fetchDashboardProjectRows();
+  const all = await fetchDashboardProjectRows(
+    department === "GESAMT" ? undefined : department
+  );
   const rows = rowsFor(all, department);
   const stepKeySet = new Set(stepKeys);
 
