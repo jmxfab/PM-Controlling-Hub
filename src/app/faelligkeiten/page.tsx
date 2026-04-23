@@ -83,16 +83,6 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Geplant</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Projekte mit Fälligkeitsdatum in einem wählbaren Zukunftsfenster —
-          was steht operativ an, was ist überfällig. Basis:{" "}
-          <code className="font-mono">current_project_match_status.maturity_date</code>{" "}
-          aus Hero, nur offene Projekte.
-        </p>
-      </div>
-
       <UpcomingView
         department={department}
         window={win}

@@ -17,7 +17,6 @@ import {
   classifyStep,
   isAccountingStep,
   isFinishedStep as isFinishedStepName,
-  isReworkStep as isReworkStepName,
   STEP_CATEGORIES,
   type StepCategory,
 } from "@/lib/hero/step-classifier";
@@ -204,122 +203,56 @@ export async function loadTimeframeDeltas(
   range: TimeframeRangeIso
 ): Promise<TimeframeDeltaDto> {
   const supabase = supabaseAdmin();
-  const typeIds = typeIdsFor(department);
 
-  // Lade alle Transitions im Zeitraum und aggregiere in JS.
+  // Single-round-trip Postgres RPC (compute_timeframe_deltas) — replaces
+  // the old JS-side aggregation that paginated up to 10k transitions +
+  // batched IN-queries for accounting amounts.
+  const { data, error } = await supabase
+    .rpc("compute_timeframe_deltas", {
+      p_department: department,
+      p_from: range.fromIso,
+      p_to: range.toIso,
+    })
+    .single<{
+      new_projects: number;
+      completed_transitions: number;
+      rework_transitions: number;
+      accounting_transitions: number;
+      reopened_transitions: number;
+      accounting_amount: number | string | null;
+      total_transitions: number;
+      overdue_became: number;
+    }>();
 
-  let query = supabase
-    .from("hero_status_transitions")
-    .select("project_match_id, step_name, entered_at, history_index, department_key")
-    .gte("entered_at", range.fromIso)
-    .lt("entered_at", range.toIso);
-
-  if (department !== "GESAMT") {
-    query = query.eq("department_key", department);
-  } else {
-    query = query.not("department_key", "is", null);
-  }
-  // Hole in 1000er-Chunks (falls mal >1000 Transitions)
-  const chunks: Array<{
-    project_match_id: string;
-    step_name: string | null;
-    entered_at: string;
-    history_index: number;
-  }> = [];
-  for (let offset = 0; offset < 10000; offset += 1000) {
-    const { data, error } = await query.range(offset, offset + 999).order("entered_at", { ascending: true });
+  if (error || !data) {
     if (error) {
-      console.warn("loadTimeframeDeltas chunk failed:", error.message);
-      break;
+      console.warn("compute_timeframe_deltas failed:", error.message);
     }
-    const rows = (data ?? []) as Array<{
-      project_match_id: string;
-      step_name: string | null;
-      entered_at: string;
-      history_index: number;
-    }>;
-    chunks.push(...rows);
-    if (rows.length < 1000) break;
-  }
-
-  const seenNewProjects = new Set<string>();
-  let completed = 0;
-  let reworks = 0;
-  let accounting = 0;
-  let reopened = 0;
-  const accountingProjectIds = new Set<string>();
-  const finishedBefore = new Set<string>();
-
-  // Für Reopen: wir müssen wissen ob das Projekt VOR dem Zeitraum schon mal
-  // auf Abgeschlossen war. Das ist in hero_dashboard_projects.last_finish_at.
-  const { data: finishedList } = await supabase
-    .from("hero_dashboard_projects")
-    .select("id, last_finish_at")
-    .lt("last_finish_at", range.fromIso);
-  for (const r of (finishedList ?? []) as Array<{ id: string; last_finish_at: string | null }>) {
-    if (r.last_finish_at) finishedBefore.add(r.id);
-  }
-
-  for (const t of chunks) {
-    if (!t.step_name) continue;
-    if (t.history_index === 1) seenNewProjects.add(t.project_match_id);
-    if (isFinishedStepName(t.step_name)) completed += 1;
-    if (isReworkStepName(t.step_name)) {
-      reworks += 1;
-      if (finishedBefore.has(t.project_match_id)) reopened += 1;
-    }
-    if (isAccountingStep(t.step_name)) {
-      accounting += 1;
-      accountingProjectIds.add(t.project_match_id);
-    }
-  }
-
-  // Summe der Rechnungsbeträge der Projekte die im Zeitraum nach Abrechnung
-  // gegangen sind — als EUR-Anzeige für das "In Abrechnung"-Delta-Tile.
-  let accountingAmount = 0;
-  if (accountingProjectIds.size > 0) {
-    const ids = Array.from(accountingProjectIds);
-    for (let offset = 0; offset < ids.length; offset += 500) {
-      const chunkIds = ids.slice(offset, offset + 500);
-      const { data } = await supabase
-        .from("hero_dashboard_projects")
-        .select("id, accounting_open_amount, accounting_amount")
-        .in("id", chunkIds);
-      for (const r of (data ?? []) as Array<{
-        accounting_open_amount: number | null;
-        accounting_amount: number | null;
-      }>) {
-        // Bevorzuge offene Summe (noch nicht bezahlt), sonst Gesamtsumme
-        accountingAmount += Number(r.accounting_open_amount ?? r.accounting_amount ?? 0) || 0;
-      }
-    }
-  }
-
-  // Projekte die in diesem Zeitraum überfällig wurden = maturity_date fiel
-  // in den Zeitraum und Projekt war zu diesem Zeitpunkt noch offen.
-  let overdueBecame = 0;
-  const { data: overdueList } = await supabase
-    .from("hero_dashboard_projects")
-    .select("id, maturity_date, is_finished")
-    .gte("maturity_date", range.fromIso)
-    .lt("maturity_date", range.toIso);
-  for (const r of (overdueList ?? []) as Array<{
-    id: string; maturity_date: string | null; is_finished: boolean;
-  }>) {
-    if (r.maturity_date && !r.is_finished) overdueBecame += 1;
+    return {
+      fromIso: range.fromIso,
+      toIso: range.toIso,
+      newProjects: 0,
+      completedTransitions: 0,
+      reworkTransitions: 0,
+      reopenedTransitions: 0,
+      accountingTransitions: 0,
+      accountingTransitionsAmount: 0,
+      totalTransitions: 0,
+      overdueBecame: 0,
+    };
   }
 
   return {
     fromIso: range.fromIso,
     toIso: range.toIso,
-    newProjects: seenNewProjects.size,
-    completedTransitions: completed,
-    reworkTransitions: reworks,
-    reopenedTransitions: reopened,
-    accountingTransitions: accounting,
-    accountingTransitionsAmount: accountingAmount,
-    totalTransitions: chunks.length,
-    overdueBecame,
+    newProjects: Number(data.new_projects) || 0,
+    completedTransitions: Number(data.completed_transitions) || 0,
+    reworkTransitions: Number(data.rework_transitions) || 0,
+    reopenedTransitions: Number(data.reopened_transitions) || 0,
+    accountingTransitions: Number(data.accounting_transitions) || 0,
+    accountingTransitionsAmount: Number(data.accounting_amount) || 0,
+    totalTransitions: Number(data.total_transitions) || 0,
+    overdueBecame: Number(data.overdue_became) || 0,
   };
 }
 
@@ -336,53 +269,31 @@ async function loadStepTransitionCounts(
   const entered = new Map<string, number>();
   const left = new Map<string, number>();
 
-  const groupOf = (stepName: string): string =>
-    stepName.replace(/^[^A-Za-zÄÖÜäöüß0-9]+/g, "").trim();
+  const { data, error } = await supabase.rpc("compute_step_transition_counts", {
+    p_department: department,
+    p_from: range.fromIso,
+    p_to: range.toIso,
+  });
 
-  // 1) Eintritte im Zeitraum (entered_at zwischen from/to)
-  let qEntered = supabase
-    .from("hero_status_transitions")
-    .select("step_name, department_key, entered_at")
-    .gte("entered_at", range.fromIso)
-    .lt("entered_at", range.toIso)
-    .not("step_name", "is", null);
-  if (department !== "GESAMT") qEntered = qEntered.eq("department_key", department);
-  else qEntered = qEntered.not("department_key", "is", null);
-
-  for (let offset = 0; offset < 30000; offset += 1000) {
-    const { data, error } = await qEntered.range(offset, offset + 999);
-    if (error) break;
-    const rows = (data ?? []) as Array<{ step_name: string | null }>;
-    for (const r of rows) {
-      if (!r.step_name) continue;
-      const key = groupOf(r.step_name);
-      if (!key) continue;
-      entered.set(key, (entered.get(key) ?? 0) + 1);
+  if (error || !data) {
+    if (error) {
+      console.warn("compute_step_transition_counts failed:", error.message);
     }
-    if (rows.length < 1000) break;
+    return { entered, left };
   }
 
-  // 2) Austritte im Zeitraum (left_at zwischen from/to)
-  let qLeft = supabase
-    .from("hero_status_transitions")
-    .select("step_name, department_key, left_at")
-    .gte("left_at", range.fromIso)
-    .lt("left_at", range.toIso)
-    .not("step_name", "is", null);
-  if (department !== "GESAMT") qLeft = qLeft.eq("department_key", department);
-  else qLeft = qLeft.not("department_key", "is", null);
-
-  for (let offset = 0; offset < 30000; offset += 1000) {
-    const { data, error } = await qLeft.range(offset, offset + 999);
-    if (error) break;
-    const rows = (data ?? []) as Array<{ step_name: string | null }>;
-    for (const r of rows) {
-      if (!r.step_name) continue;
-      const key = groupOf(r.step_name);
-      if (!key) continue;
-      left.set(key, (left.get(key) ?? 0) + 1);
-    }
-    if (rows.length < 1000) break;
+  for (const row of data as Array<{
+    step_group: string | null;
+    entered_count: number | string | null;
+    left_count: number | string | null;
+  }>) {
+    if (!row.step_group) continue;
+    const key = row.step_group.trim();
+    if (!key) continue;
+    const enteredCount = Number(row.entered_count) || 0;
+    const leftCount = Number(row.left_count) || 0;
+    if (enteredCount > 0) entered.set(key, enteredCount);
+    if (leftCount > 0) left.set(key, leftCount);
   }
 
   return { entered, left };

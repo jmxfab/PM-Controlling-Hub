@@ -51,16 +51,6 @@ export default async function DeckungsbeitragPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Deckungsbeitrag</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Umsatz minus Materialkosten für abgeschlossene Projekte —{" "}
-          <span className="font-medium">
-            {DASHBOARD_DEPARTMENT_NAMES[department]}
-          </span>
-        </p>
-      </div>
-
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}

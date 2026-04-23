@@ -32,14 +32,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Einstellungen</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Hero-Schnittstelle, API-Key und Sync-Status. Keine KPI-Daten — die
-            leben auf dem Dashboard.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <SyncButton
           liveHeroAvailable={liveHeroAvailable}
           disabledReason={liveHeroDisabledReason}

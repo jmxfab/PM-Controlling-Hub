@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
-import { CashflowView } from "@/components/dashboard/cashflow-view";
+import { CashflowView } from "@/components/dashboard/cashflow-view-lazy";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
 import {
   loadHeroPipeline,
@@ -64,20 +64,6 @@ export default async function CashPage({ searchParams }: PageProps) {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Cash</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Offene Rechnungen, Forderungs-Aging und Abrechnungsquote für{" "}
-          <span className="font-medium">
-            {DASHBOARD_DEPARTMENT_NAMES[department]}
-          </span>{" "}
-          — Zeitraum:{" "}
-          <span className="font-medium">
-            {getDashboardTimeframeLabel(timeframe)}
-          </span>
-        </p>
-      </div>
-
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}

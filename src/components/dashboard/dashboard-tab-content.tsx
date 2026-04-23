@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { DashboardCharts } from "./dashboard-charts";
+import { DashboardCharts } from "./dashboard-charts-lazy";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";

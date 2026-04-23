@@ -33,15 +33,11 @@ export default async function EmailsPage() {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">E-Mail Posteingang</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {pendingCount > 0
-            ? `${pendingCount} E-Mail${pendingCount !== 1 ? "s" : ""} warten auf Freigabe.`
-            : "Alle E-Mails sind bearbeitet."}
-          {" "}Freigegebene Todos werden direkt in Notion eingetragen.
+      {pendingCount > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {pendingCount} E-Mail{pendingCount !== 1 ? "s" : ""} warten auf Freigabe.
         </p>
-      </div>
+      ) : null}
 
       {loadError ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
