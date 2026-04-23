@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { Clock, RotateCcw } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -55,6 +55,7 @@ interface InsightsViewProps {
     stepName: string | null;
     customerName: string | null;
     ageDays: number;
+    wasReopened?: boolean;
   }>;
   durationMetrics?: DurationMetric[];
   kwpStats?: KwpStats | null;
@@ -305,10 +306,22 @@ export function InsightsView({
                   </TableCell>
                   <TableCell className="text-sm">{p.stepName ?? "–"}</TableCell>
                   <TableCell className="text-right">
-                    <Badge variant={p.ageDays > 365 ? "destructive" : "outline"} className="gap-1">
-                      <Clock className="h-3 w-3" />
-                      {p.ageDays} Tg
-                    </Badge>
+                    <div className="flex items-center justify-end gap-1">
+                      <Badge variant={p.ageDays > 365 ? "destructive" : "outline"} className="gap-1">
+                        <Clock className="h-3 w-3" />
+                        {p.ageDays} Tg
+                      </Badge>
+                      {p.wasReopened ? (
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-yellow-500 text-yellow-600"
+                          title="Projekt war schon einmal abgeschlossen — Alter ab letztem Reopen"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          seit Reopen
+                        </Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
                 );

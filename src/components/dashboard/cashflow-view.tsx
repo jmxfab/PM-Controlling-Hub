@@ -111,6 +111,55 @@ export function CashflowView({
         />
       </div>
 
+      {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
+      {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
+            <CardDescription>
+              Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
+              (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit
+              gezählt, damit man die Stückzahl sieht.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Anzahl</TableHead>
+                  <TableHead className="text-right">Summe (€)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dto.statusBreakdown.map((b) => (
+                  <TableRow key={b.statusCode}>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-medium">{b.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.description}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.totalEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.totalEur)
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Aging Buckets */}
       <Card>
         <CardHeader>

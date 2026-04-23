@@ -179,6 +179,14 @@ export const loadStepDurations = (
 
 /**
  * Longest-running open projects (derzeit offene Projekte mit hohem Alter).
+ *
+ * Altersberechnung: wenn das Projekt schon einmal abgeschlossen war und
+ * danach wieder aufgemacht wurde (was_reopened = true), wird das Alter ab
+ * dem letzten Reopen-Zeitpunkt (last_rework_at, sonst last_finish_at)
+ * gezählt statt ab created_at_hero. Sonst würde ein Reopen aus 2024 als
+ * "3 Jahre alt" erscheinen, obwohl es operativ gerade erst wieder offen
+ * ist. Die Liste holt sich daher alle offenen Projekte, rechnet das
+ * effektive Alter in JS und sortiert danach.
  */
 const loadLongestRunningInner = cache(
   async (department: Department, limit = 15): Promise<
@@ -190,41 +198,70 @@ const loadLongestRunningInner = cache(
       customerName: string | null;
       createdAtHero: string | null;
       ageDays: number;
+      wasReopened: boolean;
     }>
   > => {
     const supabase = supabaseAdmin();
-    let query = supabase
-      .from("hero_dashboard_projects")
-      .select("id, project_number, project_name, step_name, customer_name, created_at_hero, department_key, is_finished")
-      .eq("is_finished", false)
-      .not("created_at_hero", "is", null);
-    if (department !== "GESAMT") query = query.eq("department_key", department);
-    else query = query.not("department_key", "is", null);
-
-    const { data } = await query.order("created_at_hero", { ascending: true }).limit(limit);
-    const rows = (data ?? []) as Array<{
+    const all: Array<{
       id: string;
       project_number: string | null;
       project_name: string | null;
       step_name: string | null;
       customer_name: string | null;
       created_at_hero: string | null;
-    }>;
+      was_reopened: boolean | null;
+      last_finish_at: string | null;
+      last_rework_at: string | null;
+    }> = [];
+    for (let offset = 0; offset < 10000; offset += 1000) {
+      let query = supabase
+        .from("hero_dashboard_projects")
+        .select(
+          "id, project_number, project_name, step_name, customer_name, created_at_hero, was_reopened, last_finish_at, last_rework_at, department_key"
+        )
+        .eq("is_finished", false)
+        .not("created_at_hero", "is", null);
+      if (department !== "GESAMT") query = query.eq("department_key", department);
+      else query = query.not("department_key", "is", null);
+      const { data } = await query.range(offset, offset + 999);
+      const rows = (data ?? []) as typeof all;
+      all.push(...rows);
+      if (rows.length < 1000) break;
+    }
+
     const now = Date.now();
-    return rows.map((r) => ({
-      id: r.id,
-      projectNumber: r.project_number,
-      projectName: cleanProjectTitle(r.project_name, {
-        customerName: r.customer_name,
+    const withAge = all.map((r) => {
+      const wasReopened = r.was_reopened === true;
+      // Startzeitpunkt fürs "offen seit" — beim Reopen der Zeitpunkt
+      // der letzten Abschluss (last_finish_at), nicht der letzte
+      // Nacharbeit-Eintrag. Die "wieder offen"-Uhr startet, wenn der
+      // Abschluss gebrochen wurde. Fallback: last_rework_at, zuletzt
+      // created_at_hero.
+      const reopenStart = wasReopened
+        ? r.last_finish_at ?? r.last_rework_at
+        : null;
+      const effectiveStart = reopenStart ?? r.created_at_hero;
+      const ageMs = effectiveStart
+        ? now - Date.parse(effectiveStart)
+        : 0;
+      return {
+        id: r.id,
         projectNumber: r.project_number,
-      }),
-      stepName: r.step_name,
-      customerName: r.customer_name,
-      createdAtHero: r.created_at_hero,
-      ageDays: r.created_at_hero
-        ? Math.round((now - Date.parse(r.created_at_hero)) / 86400000)
-        : 0,
-    }));
+        projectName: cleanProjectTitle(r.project_name, {
+          customerName: r.customer_name,
+          projectNumber: r.project_number,
+        }),
+        stepName: r.step_name,
+        customerName: r.customer_name,
+        createdAtHero: r.created_at_hero,
+        ageDays: ageMs > 0 ? Math.round(ageMs / 86400000) : 0,
+        wasReopened,
+      };
+    });
+
+    return withAge
+      .sort((a, b) => b.ageDays - a.ageDays)
+      .slice(0, limit);
   }
 );
 
@@ -412,6 +449,16 @@ export interface CashflowRevenueByDepartmentPoint {
   GEBAEUDETECHNIK: number;
 }
 
+export interface InvoiceStatusBucket {
+  /** Hero status_code: 0 Entwurf · 100 Erstellt · 200 Versendet · 600 Storniert · 1000 Gelöscht */
+  statusCode: number;
+  /** Menschlich lesbares Label, inkl. Erläuterung */
+  label: string;
+  description: string;
+  count: number;
+  totalEur: number;
+}
+
 export interface CashflowDto {
   aging: AgingBucket[];
   pipelineRevenueEur: number;
@@ -420,15 +467,44 @@ export interface CashflowDto {
   revenueByMonth: CashflowRevenueByDepartmentPoint[];
   totalOpenEur: number;
   totalOpenCount: number;
+  /** Verteilung der Rechnungen nach Hero-Status (was ist mit denen passiert). */
+  statusBreakdown: InvoiceStatusBucket[];
 }
+
+const INVOICE_STATUS_META: Record<number, { label: string; description: string }> = {
+  0: {
+    label: "Entwurf",
+    description: "noch nicht freigegeben, intern in Bearbeitung",
+  },
+  100: {
+    label: "Erstellt / freigegeben",
+    description: "freigegeben, aber noch nicht an den Kunden raus",
+  },
+  200: {
+    label: "Versendet",
+    description: "an den Kunden geschickt",
+  },
+  600: {
+    label: "Storniert",
+    description: "aktiv storniert, Stornorechnung",
+  },
+  1000: {
+    label: "Gelöscht",
+    description: "aus Hero entfernt / archiviert",
+  },
+};
 
 const loadCashflowInner = cache(
   async (department: Department): Promise<CashflowDto> => {
     const supabase = supabaseAdmin();
 
-    const { data, error } = await supabase.rpc("compute_cashflow_summary", {
-      p_department: department,
-    });
+    const [summaryResp, statusResp] = await Promise.all([
+      supabase.rpc("compute_cashflow_summary", { p_department: department }),
+      supabase.rpc("compute_invoice_status_breakdown", {
+        p_department: department,
+      }),
+    ]);
+    const { data, error } = summaryResp;
     if (error) throw new Error(`compute_cashflow_summary: ${error.message}`);
 
     const dto = (data ?? {}) as Partial<{
@@ -461,6 +537,25 @@ const loadCashflowInner = cache(
     const num = (v: number | string | null | undefined): number =>
       v == null ? 0 : Number(v) || 0;
 
+    const statusRows = (statusResp.data ?? []) as Array<{
+      status_code: number;
+      count: number | string;
+      total_eur: number | string;
+    }>;
+    const statusBreakdown: InvoiceStatusBucket[] = statusRows.map((row) => {
+      const meta = INVOICE_STATUS_META[row.status_code] ?? {
+        label: `Status ${row.status_code}`,
+        description: "unbekannter Hero-Status",
+      };
+      return {
+        statusCode: row.status_code,
+        label: meta.label,
+        description: meta.description,
+        count: num(row.count),
+        totalEur: num(row.total_eur),
+      };
+    });
+
     return {
       aging: (dto.aging ?? []).map((a) => ({
         bucket: a.bucket,
@@ -486,6 +581,7 @@ const loadCashflowInner = cache(
         KLIMA: num(r.KLIMA),
         GEBAEUDETECHNIK: num(r.GEBAEUDETECHNIK),
       })),
+      statusBreakdown,
     };
   }
 );
