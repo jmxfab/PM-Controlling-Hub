@@ -342,7 +342,9 @@ export function UpcomingView({
                   <TableRow
                     key={p.id}
                     className={`${p.isOverdue ? "bg-destructive/5" : ""} ${
-                      heroHref ? "cursor-pointer hover:bg-accent/40" : ""
+                      heroHref
+                        ? "cursor-pointer hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                        : ""
                     }`}
                     onClick={
                       heroHref
@@ -352,6 +354,27 @@ export function UpcomingView({
                               "_blank",
                               "noopener,noreferrer"
                             )
+                        : undefined
+                    }
+                    role={heroHref ? "button" : undefined}
+                    tabIndex={heroHref ? 0 : undefined}
+                    onKeyDown={
+                      heroHref
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              window.open(
+                                heroHref,
+                                "_blank",
+                                "noopener,noreferrer"
+                              );
+                            }
+                          }
+                        : undefined
+                    }
+                    aria-label={
+                      heroHref
+                        ? `Im Hero öffnen: ${p.projectNumber ?? p.projectName ?? p.id}`
                         : undefined
                     }
                     title={heroHref ? "Im Hero öffnen" : undefined}

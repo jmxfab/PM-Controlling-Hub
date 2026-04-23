@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
-import { InsightsView } from "@/components/dashboard/insights-view-lazy";
+import { InsightsView } from "@/components/dashboard/insights-view";
 import { HeroPipelinePanel } from "@/components/dashboard/hero-pipeline-panel";
 import {
   loadWeeklyThroughput,

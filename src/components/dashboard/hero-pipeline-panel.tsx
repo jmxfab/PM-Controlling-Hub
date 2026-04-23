@@ -612,8 +612,18 @@ function ProjectRow({
   return (
     <>
       <TableRow
-        className="cursor-pointer hover:bg-accent/40 border-b-0"
+        className="cursor-pointer hover:bg-accent/40 border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
         onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-label={`Details zu Projekt ${project.projectNumber ?? project.id}`}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggle();
+          }
+        }}
         data-state={isExpanded ? "open" : "closed"}
       >
         <TableCell

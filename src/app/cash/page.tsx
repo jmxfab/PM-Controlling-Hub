@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
-import { CashflowView } from "@/components/dashboard/cashflow-view-lazy";
+import { CashflowView } from "@/components/dashboard/cashflow-view";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
 import {
   loadHeroPipeline,
