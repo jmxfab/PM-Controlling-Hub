@@ -184,8 +184,10 @@ export function UpcomingView({
             </Tabs>
           </div>
 
-          {/* Zusatz-Filter: Suche + Step-Multi-Select + "nur überfällig" */}
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto] items-end pt-1 border-t">
+          {/* Zusatz-Filter: Suche + Step-Multi-Select + "nur überfällig"
+              Mobile-First: volle Breite, ab md zwei Spalten, ab lg die
+              originale vier-Spalten-Anordnung (Suche nimmt den Rest). */}
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] items-end pt-1 border-t">
             <div className="space-y-2">
               <Label htmlFor="upcoming-search">Suche</Label>
               <div className="relative">

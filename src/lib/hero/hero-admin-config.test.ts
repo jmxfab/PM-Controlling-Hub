@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import type { HeroProjectLinkSource } from "./hero-admin-config";
 import {
   HERO_ADMIN_DRAFT_DEFAULTS,
-  HERO_PROJECT_LINK_PREVIEW_SAMPLE,
   HERO_PROJECT_URL_TEMPLATE_ENV_NAME,
   formatHeroProjectLink,
   validateHeroAdminDraft,
 } from "./hero-admin-config";
+
+// Sample-Projekt nur für die URL-Template-Vorschau in diesen Tests.
+// Früher als Public Export in hero-admin-config — jetzt lokal im Test,
+// da es in keiner Runtime-Komponente mehr verwendet wird.
+const HERO_PROJECT_LINK_PREVIEW_SAMPLE: HeroProjectLinkSource = {
+  id: "hero-preview-project-42",
+  project_number: "PV24-101",
+};
 
 describe("hero admin config", () => {
   it("validates the default endpoint draft", () => {
