@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, Snowflake, Sun, Sunrise, Wind, Wrench } from "lucide-react";
 
@@ -14,6 +14,7 @@ import {
   DASHBOARD_DEPARTMENT_SHORT_LABELS,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,18 +48,11 @@ export function DashboardShell({
 
   const [customFrom, setCustomFrom] = useState(timeframe.from ?? "");
   const [customTo, setCustomTo] = useState(timeframe.to ?? "");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setCustomFrom(timeframe.from ?? "");
     setCustomTo(timeframe.to ?? "");
   }, [timeframe.from, timeframe.to]);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
 
   // Idle-time prefetch aller Department-URLs, damit Tab-Wechsel instant sind.
   // Kostet einmal RSC-Payload pro Department im Hintergrund.
@@ -146,39 +140,25 @@ export function DashboardShell({
     });
   }
 
-  function handleCustomRangeChange(field: "from" | "to", value: string) {
-    if (field === "from") {
-      setCustomFrom(value);
-    } else {
-      setCustomTo(value);
-    }
+  function applyCustomRange() {
+    if (!customFrom || !customTo) return;
+    let nextFrom = customFrom;
+    let nextTo = customTo;
+    if (nextFrom > nextTo) nextTo = nextFrom;
 
-    if (!value) return;
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const defaultRange = getDefaultDashboardCustomRange();
-      let nextFrom = field === "from"
-        ? value
-        : customFrom || (timeframe.mode === "frei" && timeframe.from) || defaultRange.from;
-      let nextTo = field === "to"
-        ? value
-        : customTo || (timeframe.mode === "frei" && timeframe.to) || defaultRange.to;
-
-      if (nextFrom > nextTo) {
-        if (field === "from") nextTo = nextFrom;
-        else nextFrom = nextTo;
-      }
-
-      updateUrl({
-        ...toDashboardTimeframeSearchParams({
-          mode: "frei",
-          from: nextFrom,
-          to: nextTo,
-        }),
-      });
-    }, 350);
+    updateUrl({
+      ...toDashboardTimeframeSearchParams({
+        mode: "frei",
+        from: nextFrom,
+        to: nextTo,
+      }),
+    });
   }
+
+  const customRangeDirty =
+    !!customFrom &&
+    !!customTo &&
+    (customFrom !== (timeframe.from ?? "") || customTo !== (timeframe.to ?? ""));
 
   return (
     <div className="space-y-4">
@@ -211,29 +191,38 @@ export function DashboardShell({
           </div>
 
           {timeframe.mode === "frei" ? (
-            <div className="grid gap-4 sm:grid-cols-2 mt-3">
-              <div className="space-y-2">
-                <Label htmlFor="dashboard-timeframe-from">Von</Label>
+            <div className="flex flex-wrap items-end gap-3 mt-3">
+              <div className="space-y-1">
+                <Label htmlFor="dashboard-timeframe-from" className="text-xs">
+                  Von
+                </Label>
                 <Input
                   id="dashboard-timeframe-from"
                   type="date"
                   value={customFrom}
-                  onChange={(event) =>
-                    handleCustomRangeChange("from", event.target.value)
-                  }
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                  className="h-8 w-[150px] text-sm"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="dashboard-timeframe-to">Bis</Label>
+              <div className="space-y-1">
+                <Label htmlFor="dashboard-timeframe-to" className="text-xs">
+                  Bis
+                </Label>
                 <Input
                   id="dashboard-timeframe-to"
                   type="date"
                   value={customTo}
-                  onChange={(event) =>
-                    handleCustomRangeChange("to", event.target.value)
-                  }
+                  onChange={(event) => setCustomTo(event.target.value)}
+                  className="h-8 w-[150px] text-sm"
                 />
               </div>
+              <Button
+                size="sm"
+                onClick={applyCustomRange}
+                disabled={!customRangeDirty}
+              >
+                Anwenden
+              </Button>
             </div>
           ) : null}
         </Tabs>
