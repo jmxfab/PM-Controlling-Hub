@@ -443,31 +443,16 @@ export function HeroPipelinePanel({
                 </TableHeader>
                 <TableBody>
                   {projects.map((project) => {
-                    const heroHref = buildHeroHref(project.id);
                     return (
-                    <TableRow
-                      key={project.id}
-                      className={heroHref ? "cursor-pointer hover:bg-accent/40" : undefined}
-                      onClick={
-                        heroHref
-                          ? () =>
-                              window.open(
-                                heroHref,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                          : undefined
-                      }
-                      title={heroHref ? "Im Hero öffnen" : undefined}
-                    >
-                      <TableCell>
+                    <TableRow key={project.id}>
+                      <TableCell className="whitespace-nowrap">
                         <HeroProjectLink
                           projectId={project.id}
                           projectNumber={project.projectNumber}
                           linkTemplate={heroProjectLinkTemplate ?? null}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{project.projectName ?? "–"}</span>
                           {project.isNewInPeriod ? (
@@ -516,7 +501,7 @@ export function HeroPipelinePanel({
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {project.customerName ?? "–"}
                       </TableCell>
                       <TableCell className="text-sm">
