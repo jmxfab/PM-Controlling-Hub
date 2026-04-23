@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, Snowflake, Sun, Sunrise, Wind, Wrench } from "lucide-react";
 
@@ -44,6 +44,21 @@ export function DashboardShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+
+  const [customFrom, setCustomFrom] = useState(timeframe.from ?? "");
+  const [customTo, setCustomTo] = useState(timeframe.to ?? "");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setCustomFrom(timeframe.from ?? "");
+    setCustomTo(timeframe.to ?? "");
+  }, [timeframe.from, timeframe.to]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   function updateUrl(nextValues: Record<string, string | null>) {
     const nextSearchParams = new URLSearchParams(searchParams.toString());
@@ -96,39 +111,37 @@ export function DashboardShell({
   }
 
   function handleCustomRangeChange(field: "from" | "to", value: string) {
-    if (!value) {
-      return;
+    if (field === "from") {
+      setCustomFrom(value);
+    } else {
+      setCustomTo(value);
     }
 
-    const defaultRange = getDefaultDashboardCustomRange();
-    let nextFrom = timeframe.mode === "frei" && timeframe.from
-      ? timeframe.from
-      : defaultRange.from;
-    let nextTo = timeframe.mode === "frei" && timeframe.to
-      ? timeframe.to
-      : defaultRange.to;
+    if (!value) return;
 
-    if (field === "from") {
-      nextFrom = value;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const defaultRange = getDefaultDashboardCustomRange();
+      let nextFrom = field === "from"
+        ? value
+        : customFrom || (timeframe.mode === "frei" && timeframe.from) || defaultRange.from;
+      let nextTo = field === "to"
+        ? value
+        : customTo || (timeframe.mode === "frei" && timeframe.to) || defaultRange.to;
 
       if (nextFrom > nextTo) {
-        nextTo = nextFrom;
+        if (field === "from") nextTo = nextFrom;
+        else nextFrom = nextTo;
       }
-    } else {
-      nextTo = value;
 
-      if (nextTo < nextFrom) {
-        nextFrom = nextTo;
-      }
-    }
-
-    updateUrl({
-      ...toDashboardTimeframeSearchParams({
-        mode: "frei",
-        from: nextFrom,
-        to: nextTo,
-      }),
-    });
+      updateUrl({
+        ...toDashboardTimeframeSearchParams({
+          mode: "frei",
+          from: nextFrom,
+          to: nextTo,
+        }),
+      });
+    }, 350);
   }
 
   return (
@@ -168,7 +181,7 @@ export function DashboardShell({
                 <Input
                   id="dashboard-timeframe-from"
                   type="date"
-                  value={timeframe.from ?? ""}
+                  value={customFrom}
                   onChange={(event) =>
                     handleCustomRangeChange("from", event.target.value)
                   }
@@ -179,7 +192,7 @@ export function DashboardShell({
                 <Input
                   id="dashboard-timeframe-to"
                   type="date"
-                  value={timeframe.to ?? ""}
+                  value={customTo}
                   onChange={(event) =>
                     handleCustomRangeChange("to", event.target.value)
                   }

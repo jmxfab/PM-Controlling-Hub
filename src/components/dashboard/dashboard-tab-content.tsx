@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
@@ -45,7 +46,7 @@ function addOneDay(isoDate: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function DashboardTabContent({
+export function DashboardTabContent({
   department,
   heroProjectLinkTemplate,
   timeframe,
@@ -54,15 +55,37 @@ export async function DashboardTabContent({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
-  const pipelineRange = buildPipelineRange(timeframe);
-  const [tabData, pipeline] = await Promise.all([
-    getDashboardTabData(department, timeframe),
-    // Controlling zeigt den operativen Pipeline-Panel (ohne Cash-Steps).
-    // Cash-Steps haben eine eigene Sicht im /cash-Tab.
-    loadHeroPipeline(department, pipelineRange, {
-      excludeCashSteps: true,
-    }).catch(() => null),
-  ]);
+  const suspenseKey = `${department}-${timeframe.mode}-${timeframe.from ?? ""}-${timeframe.to ?? ""}`;
+  return (
+    <div className="space-y-4">
+      <Suspense key={`main-${suspenseKey}`} fallback={<DashboardSectionSkeleton rows={4} />}>
+        <DashboardMainSection
+          department={department}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+          timeframe={timeframe}
+        />
+      </Suspense>
+      <Suspense key={`pipeline-${suspenseKey}`} fallback={<DashboardSectionSkeleton rows={2} />}>
+        <DashboardPipelineSection
+          department={department}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+          timeframe={timeframe}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+async function DashboardMainSection({
+  department,
+  heroProjectLinkTemplate,
+  timeframe,
+}: {
+  department: Department;
+  heroProjectLinkTemplate: string | null;
+  timeframe: DashboardTimeframe;
+}) {
+  const tabData = await getDashboardTabData(department, timeframe);
   const {
     kpiData,
     historicData,
@@ -108,13 +131,6 @@ export async function DashboardTabContent({
           emptyMessage={emptyHistoricMessage}
         />
       ) : null}
-      {pipeline ? (
-        <HeroPipelinePanel
-          department={department}
-          pipeline={pipeline}
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-        />
-      ) : null}
       <DashboardProjectList
         departmentName={departmentName}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -122,6 +138,44 @@ export async function DashboardTabContent({
         source={source}
         timeframe={timeframe}
       />
+    </div>
+  );
+}
+
+async function DashboardPipelineSection({
+  department,
+  heroProjectLinkTemplate,
+  timeframe,
+}: {
+  department: Department;
+  heroProjectLinkTemplate: string | null;
+  timeframe: DashboardTimeframe;
+}) {
+  const pipelineRange = buildPipelineRange(timeframe);
+  const pipeline = await loadHeroPipeline(department, pipelineRange, {
+    excludeCashSteps: true,
+  }).catch(() => null);
+
+  if (!pipeline) return null;
+
+  return (
+    <HeroPipelinePanel
+      department={department}
+      pipeline={pipeline}
+      heroProjectLinkTemplate={heroProjectLinkTemplate}
+    />
+  );
+}
+
+function DashboardSectionSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div
+          key={index}
+          className="h-24 animate-pulse rounded-lg border bg-muted/30"
+        />
+      ))}
     </div>
   );
 }

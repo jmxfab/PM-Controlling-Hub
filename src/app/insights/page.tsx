@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { InsightsView } from "@/components/dashboard/insights-view";
+import { HeroPipelinePanel } from "@/components/dashboard/hero-pipeline-panel";
 import {
   loadWeeklyThroughput,
   loadStepDurations,
@@ -49,20 +50,34 @@ export default async function InsightsPage({
   const timeframe = parseDashboardTimeframe(resolved);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
+  const suspenseKey = `${department}-${timeframe.mode}-${timeframe.from ?? ""}-${timeframe.to ?? ""}`;
+
   const tabContents = Object.fromEntries(
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
       dept === department ? (
-        <Suspense
-          key={`${department}-${timeframe.mode}-${timeframe.from ?? ""}-${timeframe.to ?? ""}`}
-          fallback={<DashboardInitialLoader />}
-        >
-          <InsightsTab
-            department={department}
-            timeframe={timeframe}
-            heroProjectLinkTemplate={heroProjectLinkTemplate}
-          />
-        </Suspense>
+        <div key={suspenseKey} className="space-y-6">
+          <Suspense
+            key={`pipeline-${suspenseKey}`}
+            fallback={<InsightsSkeleton rows={2} />}
+          >
+            <PipelineTab
+              department={department}
+              timeframe={timeframe}
+              heroProjectLinkTemplate={heroProjectLinkTemplate}
+            />
+          </Suspense>
+          <Suspense
+            key={`main-${suspenseKey}`}
+            fallback={<DashboardInitialLoader />}
+          >
+            <InsightsTab
+              department={department}
+              timeframe={timeframe}
+              heroProjectLinkTemplate={heroProjectLinkTemplate}
+            />
+          </Suspense>
+        </div>
       ) : (
         <div className="text-sm text-muted-foreground py-8 text-center">
           Wechsel zu {DASHBOARD_DEPARTMENT_NAMES[dept]} lädt die Daten neu …
@@ -107,31 +122,20 @@ async function InsightsTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const range = buildInsightsRange(timeframe);
-  const pipelineRange = buildPipelineRange(timeframe);
-  const [
-    weekly,
-    stepDurations,
-    longestRunning,
-    durationMetrics,
-    kwpStats,
-    pipeline,
-  ] = await Promise.all([
-    loadWeeklyThroughput(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadStepDurations(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadLongestRunning(department).catch(() => []),
-    loadDurationMetrics(department, range ? { range } : undefined).catch(
-      () => []
-    ),
-    loadKwpStats(department).catch(() => null),
-    // Operatives Pipeline-Panel: OFFENE STEPS ohne Cash/Rechnungs-Steps.
-    loadHeroPipeline(department, pipelineRange, {
-      excludeCashSteps: true,
-    }).catch(() => null),
-  ]);
+  const [weekly, stepDurations, longestRunning, durationMetrics, kwpStats] =
+    await Promise.all([
+      loadWeeklyThroughput(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+      loadStepDurations(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+      loadLongestRunning(department).catch(() => []),
+      loadDurationMetrics(department, range ? { range } : undefined).catch(
+        () => []
+      ),
+      loadKwpStats(department).catch(() => null),
+    ]);
 
   return (
     <InsightsView
@@ -142,9 +146,47 @@ async function InsightsTab({
       durationMetrics={durationMetrics}
       kwpStats={kwpStats}
       timeframeLabel={getDashboardTimeframeLabel(timeframe)}
-      pipeline={pipeline}
+      pipeline={null}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
+  );
+}
+
+async function PipelineTab({
+  department,
+  timeframe,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  timeframe: DashboardTimeframe;
+  heroProjectLinkTemplate: string | null;
+}) {
+  const pipelineRange = buildPipelineRange(timeframe);
+  const pipeline = await loadHeroPipeline(department, pipelineRange, {
+    excludeCashSteps: true,
+  }).catch(() => null);
+
+  if (!pipeline) return null;
+
+  return (
+    <HeroPipelinePanel
+      department={department}
+      pipeline={pipeline}
+      heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+    />
+  );
+}
+
+function InsightsSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div
+          key={index}
+          className="h-32 animate-pulse rounded-lg border bg-muted/30"
+        />
+      ))}
+    </div>
   );
 }
 
@@ -170,9 +212,6 @@ const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([
 function buildPipelineRange(
   timeframe: DashboardTimeframe
 ): TimeframeRangeIso | undefined {
-  // Jetzt = reine Snapshot-Sicht. Kein historischer Vergleichszeitraum,
-  // also auch keine Bewegungs-Badges (Blau/Grün). Nur echte Timeframe-
-  // Auswahl triggert die Delta-Berechnung.
   if (timeframe.mode === "current") return undefined;
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
