@@ -1,16 +1,49 @@
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardProjectList } from "./dashboard-project-list";
+import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
   getDashboardHistoricDescription,
+  getDashboardTimeframeRange,
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import {
+  loadHeroPipeline,
+  type TimeframeRangeIso,
+} from "@/lib/supabase/hero-pipeline-queries";
+
+const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([
+  "morgen",
+  "next3d",
+  "next7d",
+  "30d",
+]);
+
+function buildPipelineRange(
+  timeframe: DashboardTimeframe
+): TimeframeRangeIso | undefined {
+  if (timeframe.mode === "current") return undefined;
+  const range = getDashboardTimeframeRange(timeframe);
+  if (!range) return undefined;
+  return {
+    fromIso: `${range.from}T00:00:00+02:00`,
+    toIso: `${addOneDay(range.to)}T00:00:00+02:00`,
+    label: `${range.from} → ${range.to}`,
+    direction: FUTURE_MODES.has(timeframe.mode) ? "future" : "past",
+  };
+}
+
+function addOneDay(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 export async function DashboardTabContent({
   department,
@@ -21,10 +54,15 @@ export async function DashboardTabContent({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
-  // Das operative Pipeline-Panel (OFFENE STEPS) lebt im /insights-Tab,
-  // das Cash-Pipeline-Panel im /cash-Tab. Das Controlling-Dashboard zeigt
-  // KPI-Kacheln, Verlaufscharts und die Projektliste.
-  const tabData = await getDashboardTabData(department, timeframe);
+  const pipelineRange = buildPipelineRange(timeframe);
+  const [tabData, pipeline] = await Promise.all([
+    getDashboardTabData(department, timeframe),
+    // Controlling zeigt den operativen Pipeline-Panel (ohne Cash-Steps).
+    // Cash-Steps haben eine eigene Sicht im /cash-Tab.
+    loadHeroPipeline(department, pipelineRange, {
+      excludeCashSteps: true,
+    }).catch(() => null),
+  ]);
   const {
     kpiData,
     historicData,
@@ -68,6 +106,13 @@ export async function DashboardTabContent({
           historicDescription={historicDescription}
           departmentName={departmentName}
           emptyMessage={emptyHistoricMessage}
+        />
+      ) : null}
+      {pipeline ? (
+        <HeroPipelinePanel
+          department={department}
+          pipeline={pipeline}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       ) : null}
       <DashboardProjectList
