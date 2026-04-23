@@ -60,6 +60,30 @@ export function DashboardShell({
     };
   }, []);
 
+  // Idle-time prefetch aller Department-URLs, damit Tab-Wechsel instant sind.
+  // Kostet einmal RSC-Payload pro Department im Hintergrund.
+  useEffect(() => {
+    const others = departments.filter((d) => d !== department);
+    const run = () => {
+      for (const d of others) {
+        router.prefetch(buildDepartmentHref(d));
+      }
+    };
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(run, { timeout: 2000 });
+      return () => {
+        if (typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(id);
+      };
+    }
+    const id = setTimeout(run, 1500);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [department, pathname, searchParams]);
+
   function updateUrl(nextValues: Record<string, string | null>) {
     const nextSearchParams = new URLSearchParams(searchParams.toString());
 
@@ -81,6 +105,18 @@ export function DashboardShell({
 
   function handleDepartmentChange(nextDepartment: string) {
     updateUrl({ department: nextDepartment });
+  }
+
+  function buildDepartmentHref(nextDepartment: Department): string {
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.set("department", nextDepartment);
+    const qs = nextSearchParams.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
+
+  function prefetchDepartment(nextDepartment: Department) {
+    if (nextDepartment === department) return;
+    router.prefetch(buildDepartmentHref(nextDepartment));
   }
 
   function handleTimeframeChange(nextMode: string) {
@@ -213,6 +249,8 @@ export function DashboardShell({
                 key={departmentKey}
                 value={departmentKey}
                 className="flex items-center gap-2"
+                onMouseEnter={() => prefetchDepartment(departmentKey)}
+                onFocus={() => prefetchDepartment(departmentKey)}
               >
                 <DepartmentIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">
