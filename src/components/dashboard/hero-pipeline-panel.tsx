@@ -278,19 +278,18 @@ export function HeroPipelinePanel({
                 onClick={() => openKpi("delta_new")}
               />
               <KpiTile
-                label="Abgeschlossen"
-                value={pipeline.timeframeDelta.completedTransitions}
-                tone="good"
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                explain="Status-Wechsel IN den Step Abgeschlossen oder Archiviert im Zeitraum. Ein Projekt kann mehrfach zählen wenn es reopened und wieder abgeschlossen wurde."
-                onClick={() => openKpi("delta_completed")}
-              />
-              <KpiTile
                 label="In Abrechnung"
                 value={pipeline.timeframeDelta.accountingTransitions}
                 tone="neutral"
                 icon={<Euro className="h-4 w-4" />}
-                explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum."
+                hint={
+                  pipeline.timeframeDelta.accountingTransitionsAmount > 0
+                    ? formatEur(
+                        pipeline.timeframeDelta.accountingTransitionsAmount
+                      )
+                    : undefined
+                }
+                explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Betrag = Summe der offenen Rechnungen dieser Projekte."
                 onClick={() => openKpi("delta_accounting")}
               />
               <KpiTile
@@ -323,6 +322,16 @@ export function HeroPipelinePanel({
                 explain="Projekte deren aktuelles Fälligkeitsdatum im gewählten Zeitraum liegt UND die aktuell noch offen sind — also Termine die in diesem Fenster verstrichen sind (oder bevorstehen, falls Zeitraum in der Zukunft)."
                 onClick={() => openKpi("delta_overdue_became")}
               />
+              {/* Abgeschlossen bewusst ganz rechts + gedämpft — ist operativ
+                  weniger relevant als die anderen Deltas. */}
+              <KpiTile
+                label="Abgeschlossen"
+                value={pipeline.timeframeDelta.completedTransitions}
+                tone="good"
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                explain="Status-Wechsel IN den Step Abgeschlossen oder Archiviert im Zeitraum. Ein Projekt kann mehrfach zählen wenn es reopened und wieder abgeschlossen wurde."
+                onClick={() => openKpi("delta_completed")}
+              />
             </div>
           </CardContent>
         </Card>
@@ -346,13 +355,26 @@ export function HeroPipelinePanel({
               onToggle={toggleStep}
             />
             {finishedSteps.length > 0 ? (
-              <StepList
-                title={STEP_CATEGORIES.fertig.label}
-                steps={finishedSteps}
-                selected={selected}
-                onToggle={toggleStep}
-                muted
-              />
+              <details className="group pt-2 border-t">
+                <summary className="flex items-baseline justify-between gap-2 cursor-pointer text-xs uppercase tracking-wide text-muted-foreground/60 hover:text-muted-foreground py-1">
+                  <span className="flex items-center gap-1">
+                    <span className="transition-transform group-open:rotate-90">▸</span>
+                    {STEP_CATEGORIES.fertig.label}
+                  </span>
+                  <span className="tabular-nums text-[10px]">
+                    {finishedSteps.reduce((sum, s) => sum + s.projectCount, 0)}
+                  </span>
+                </summary>
+                <div className="pt-2">
+                  <StepList
+                    title=""
+                    steps={finishedSteps}
+                    selected={selected}
+                    onToggle={toggleStep}
+                    muted
+                  />
+                </div>
+              </details>
             ) : null}
 
             {selected.size > 0 ? (
@@ -772,18 +794,20 @@ function StepList({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <p
-          className={`text-xs uppercase tracking-wide font-medium ${
-            muted ? "text-muted-foreground/60" : "text-muted-foreground"
-          }`}
-        >
-          {title}
-        </p>
-        <span className="text-[10px] text-muted-foreground tabular-nums">
-          {steps.reduce((sum, s) => sum + s.projectCount, 0)}
-        </span>
-      </div>
+      {title ? (
+        <div className="flex items-baseline justify-between gap-2">
+          <p
+            className={`text-xs uppercase tracking-wide font-medium ${
+              muted ? "text-muted-foreground/60" : "text-muted-foreground"
+            }`}
+          >
+            {title}
+          </p>
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {steps.reduce((sum, s) => sum + s.projectCount, 0)}
+          </span>
+        </div>
+      ) : null}
       {description ? (
         <p className="text-[10px] text-muted-foreground/70 leading-snug">
           {description}

@@ -111,6 +111,8 @@ export interface TimeframeDeltaDto {
   reworkTransitions: number;     // Übergänge nach Nacharbeit/Reklamation
   reopenedTransitions: number;   // Projekt war vorher Abgeschlossen und ist wieder offen geworden
   accountingTransitions: number; // Übergänge in Abschlussrechnung / Teil-RG / Kundenrechnung
+  /** Summe der Rechnungsbeträge der Projekte die im Zeitraum nach Abrechnung gingen. */
+  accountingTransitionsAmount: number;
   totalTransitions: number;      // alle Status-Wechsel insgesamt
   overdueBecame: number;         // Projekte die in diesem Zeitraum überfällig wurden
 }
@@ -245,6 +247,7 @@ export async function loadTimeframeDeltas(
   let reworks = 0;
   let accounting = 0;
   let reopened = 0;
+  const accountingProjectIds = new Set<string>();
   const finishedBefore = new Set<string>();
 
   // Für Reopen: wir müssen wissen ob das Projekt VOR dem Zeitraum schon mal
@@ -265,7 +268,31 @@ export async function loadTimeframeDeltas(
       reworks += 1;
       if (finishedBefore.has(t.project_match_id)) reopened += 1;
     }
-    if (isAccountingStep(t.step_name)) accounting += 1;
+    if (isAccountingStep(t.step_name)) {
+      accounting += 1;
+      accountingProjectIds.add(t.project_match_id);
+    }
+  }
+
+  // Summe der Rechnungsbeträge der Projekte die im Zeitraum nach Abrechnung
+  // gegangen sind — als EUR-Anzeige für das "In Abrechnung"-Delta-Tile.
+  let accountingAmount = 0;
+  if (accountingProjectIds.size > 0) {
+    const ids = Array.from(accountingProjectIds);
+    for (let offset = 0; offset < ids.length; offset += 500) {
+      const chunkIds = ids.slice(offset, offset + 500);
+      const { data } = await supabase
+        .from("hero_dashboard_projects")
+        .select("id, accounting_open_amount, accounting_amount")
+        .in("id", chunkIds);
+      for (const r of (data ?? []) as Array<{
+        accounting_open_amount: number | null;
+        accounting_amount: number | null;
+      }>) {
+        // Bevorzuge offene Summe (noch nicht bezahlt), sonst Gesamtsumme
+        accountingAmount += Number(r.accounting_open_amount ?? r.accounting_amount ?? 0) || 0;
+      }
+    }
   }
 
   // Projekte die in diesem Zeitraum überfällig wurden = maturity_date fiel
@@ -290,6 +317,7 @@ export async function loadTimeframeDeltas(
     reworkTransitions: reworks,
     reopenedTransitions: reopened,
     accountingTransitions: accounting,
+    accountingTransitionsAmount: accountingAmount,
     totalTransitions: chunks.length,
     overdueBecame,
   };
