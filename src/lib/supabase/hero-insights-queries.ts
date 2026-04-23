@@ -657,6 +657,70 @@ export async function loadInvoicesByStatus(
   }));
 }
 
+export interface InvoiceAgingRow extends InvoiceDetailRow {
+  ageDays: number;
+  statusCode: number;
+}
+
+/**
+ * Offene Rechnungen in einem Alters-Bucket (z. B. 30-60 Tage).
+ * Drill-Down hinter der Forderungs-Aging-Tabelle im Cash-Tab.
+ */
+export async function loadInvoicesByAgingBucket(
+  department: Department,
+  minDays: number,
+  maxDays: number | null,
+  limit = 500
+): Promise<InvoiceAgingRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("load_invoices_by_aging_bucket", {
+    p_department: department,
+    p_min_days: minDays,
+    p_max_days: maxDays,
+    p_limit: limit,
+  });
+  if (error) {
+    console.warn(
+      `[hero-insights-queries] load_invoices_by_aging_bucket failed: ${error.message}`
+    );
+    return [];
+  }
+  type DbRow = {
+    invoice_id: string;
+    invoice_nr: string | null;
+    invoice_type: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    age_days: number | null;
+    status_code: number | null;
+    value: number | string | null;
+    project_match_id: string | null;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+  };
+  const rows = (data ?? []) as DbRow[];
+  return rows.map((r) => ({
+    invoiceId: r.invoice_id,
+    invoiceNr: r.invoice_nr,
+    invoiceType: r.invoice_type,
+    documentTypeName: r.document_type_name,
+    documentDate: r.document_date,
+    createdAtHero: r.created_at_hero,
+    value: Number(r.value ?? 0) || 0,
+    ageDays: Number(r.age_days ?? 0) || 0,
+    statusCode: Number(r.status_code ?? 0) || 0,
+    projectMatchId: r.project_match_id,
+    projectNumber: r.project_number,
+    projectName: cleanProjectTitle(r.project_name, {
+      customerName: r.customer_name,
+      projectNumber: r.project_number,
+    }),
+    customerName: r.customer_name,
+  }));
+}
+
 export const loadCashflow = (department: Department): Promise<CashflowDto> =>
   unstable_cache(
     () => loadCashflowInner(department),

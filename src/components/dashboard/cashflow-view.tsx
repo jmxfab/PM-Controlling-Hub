@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import type {
   CashflowDto,
+  InvoiceAgingRow,
   InvoiceDetailRow,
 } from "@/lib/supabase/hero-insights-queries";
 import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
@@ -127,56 +128,14 @@ export function CashflowView({
       ) : null}
 
       {/* Aging Buckets */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
-          <CardDescription>
-            Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
-            Tagen seit Erstellung. Stornierte/gelöschte sind ausgeschlossen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Alter</TableHead>
-                <TableHead className="text-right">Anzahl</TableHead>
-                <TableHead className="text-right">Summe (€)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dto.aging.map((b) => (
-                <TableRow key={b.bucket}>
-                  <TableCell
-                    className={
-                      b.minDays >= 30
-                        ? "font-medium text-orange-600"
-                        : "font-medium"
-                    }
-                  >
-                    {b.bucket}
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {b.count.toLocaleString("de-DE")}
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {formatEur(b.totalEur)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="border-t-2 font-semibold">
-                <TableCell>Gesamt</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {dto.totalOpenCount.toLocaleString("de-DE")}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatEur(dto.totalOpenEur)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <InvoiceAgingBreakdown
+        department={department}
+        deptName={deptName}
+        buckets={dto.aging}
+        totalOpenCount={dto.totalOpenCount}
+        totalOpenEur={dto.totalOpenEur}
+        heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+      />
 
       {/* Umsatz nach Sparte + Monat */}
       <Card>
@@ -420,9 +379,12 @@ function InvoiceStatusBreakdown({
 function InvoiceDetailsTable({
   invoices,
   heroProjectLinkTemplate,
+  showAgeDays = false,
 }: {
-  invoices: InvoiceDetailRow[];
+  invoices: (InvoiceDetailRow | InvoiceAgingRow)[];
   heroProjectLinkTemplate: string | null;
+  /** Wenn true, wird hinter dem Datum zusätzlich "X Tg alt" gezeigt. */
+  showAgeDays?: boolean;
 }) {
   const formatDate = (iso: string | null): string => {
     if (!iso) return "–";
@@ -443,48 +405,239 @@ function InvoiceDetailsTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {invoices.map((inv) => (
-          <TableRow key={inv.invoiceId}>
-            <TableCell className="py-1.5">
-              <div className="space-y-0 leading-tight">
-                <p className="font-mono text-xs font-semibold">
-                  {inv.invoiceNr ?? "–"}
-                </p>
-                <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                  {inv.documentTypeName ?? inv.invoiceType ?? ""}
-                </p>
-              </div>
-            </TableCell>
-            <TableCell className="py-1.5">
-              <div className="space-y-0 leading-tight">
-                <HeroProjectLink
-                  projectId={inv.projectMatchId}
-                  projectNumber={inv.projectNumber}
-                  linkTemplate={heroProjectLinkTemplate}
-                />
-                <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
-                  {inv.projectName ?? ""}
-                </p>
-              </div>
-            </TableCell>
-            <TableCell className="py-1.5 text-sm text-muted-foreground">
-              <span className="truncate block max-w-[180px]">
-                {inv.customerName ?? "–"}
-              </span>
-            </TableCell>
-            <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
-              {formatDate(inv.documentDate ?? inv.createdAtHero)}
-            </TableCell>
-            <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-              {inv.value === 0 ? (
-                <span className="text-muted-foreground">0 €</span>
-              ) : (
-                formatEur(inv.value)
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
+        {invoices.map((inv) => {
+          const ageDays =
+            showAgeDays && "ageDays" in inv ? inv.ageDays : null;
+          return (
+            <TableRow key={inv.invoiceId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <p className="font-mono text-xs font-semibold">
+                    {inv.invoiceNr ?? "–"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                    {inv.documentTypeName ?? inv.invoiceType ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={inv.projectMatchId}
+                    projectNumber={inv.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {inv.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {inv.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(inv.documentDate ?? inv.createdAtHero)}</p>
+                  {ageDays != null ? (
+                    <p className="text-[10px] opacity-70">{ageDays} Tg alt</p>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {inv.value === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  formatEur(inv.value)
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * Forderungs-Aging-Tabelle mit Klappmechanik wie der Status-Breakdown.
+ * Klick auf einen Alters-Bucket ruft /api/dashboard/invoice-aging-details
+ * und zeigt die einzelnen offenen Rechnungen im Bucket.
+ */
+function InvoiceAgingBreakdown({
+  department,
+  deptName,
+  buckets,
+  totalOpenCount,
+  totalOpenEur,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["aging"];
+  totalOpenCount: number;
+  totalOpenEur: number;
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [invoicesByBucket, setInvoicesByBucket] = useState<
+    Record<string, InvoiceAgingRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["aging"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (invoicesByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+      });
+      if (bucket.maxDays != null) {
+        params.set("maxDays", String(bucket.maxDays));
+      }
+      const response = await fetch(
+        `/api/dashboard/invoice-aging-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceAgingRow[];
+        };
+        setInvoicesByBucket((prev) => ({
+          ...prev,
+          [key]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — Detail-Tabelle bleibt leer.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
+        <CardDescription>
+          Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
+          Tagen seit Erstellung. Stornierte/gelöschte sind ausgeschlossen.
+          Klick auf einen Bucket zeigt die einzelnen Rechnungen mit
+          Projekt + Kunde.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Alter</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const invoices = invoicesByBucket[b.bucket];
+              const hasItems = b.count > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      hasItems ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={hasItems ? () => toggleBucket(b) : undefined}
+                    role={hasItems ? "button" : undefined}
+                    tabIndex={hasItems ? 0 : undefined}
+                    aria-expanded={hasItems ? isExpanded : undefined}
+                    aria-label={
+                      hasItems
+                        ? `Rechnungen im Alters-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      hasItems
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        b.minDays >= 30
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatEur(b.totalEur)}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {hasItems ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen in diesem Alters-Bucket.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                            showAgeDays
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalOpenCount.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpenEur)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
