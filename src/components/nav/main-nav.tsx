@@ -9,7 +9,7 @@ import {
   CalendarClock,
   Euro,
   LayoutDashboard,
-  Mail,
+  ListTodo,
   Settings,
 } from "lucide-react";
 
@@ -24,7 +24,7 @@ const navItems = [
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
   // /deckungsbeitrag ausgeblendet bis die Datenbasis (Materialkosten /
   // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
-  { href: "/emails", label: "E-Mails", icon: Mail },
+  { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
 ];
 
