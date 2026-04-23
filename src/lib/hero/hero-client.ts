@@ -153,7 +153,7 @@ export function getDepartmentFromProjectNumber(
 }
 
 /** Generic GraphQL fetch helper */
-async function heroGraphQL<T = unknown>(
+export async function heroGraphQL<T = unknown>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
