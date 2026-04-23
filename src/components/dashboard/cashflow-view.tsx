@@ -63,6 +63,7 @@ export function CashflowView({
           department={department}
           pipeline={pipeline}
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          variant="cash"
         />
       ) : null}
       {!dto ? (

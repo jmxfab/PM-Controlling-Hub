@@ -64,6 +64,13 @@ interface HeroPipelinePanelProps {
    * Wenn gesetzt, wird die Projekt-Nr. zum klickbaren Link ins Hero-Projekt.
    */
   heroProjectLinkTemplate?: string | null;
+  /**
+   * "operational" (Default) = Fokus auf Bewegung/Termine/Überfälligkeit —
+   * keine €-Badges an den Steps, keine "Buchhaltung offen"-Kachel oben.
+   * "cash" = Fokus auf Geld — jeder Step zeigt offene Rechnungssumme,
+   * die Buchhaltung-offen-Kachel ist prominent.
+   */
+  variant?: "operational" | "cash";
 }
 
 const KPI_LABELS: Record<PipelineKpi, string> = {
@@ -85,7 +92,9 @@ export function HeroPipelinePanel({
   department,
   pipeline,
   heroProjectLinkTemplate,
+  variant = "operational",
 }: HeroPipelinePanelProps) {
+  const showEur = variant === "cash";
   const buildHeroHref = (projectId: string | null): string | null => {
     if (!heroProjectLinkTemplate || !projectId) return null;
     return heroProjectLinkTemplate.replace("{projectId}", projectId);
@@ -190,7 +199,11 @@ export function HeroPipelinePanel({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div
+        className={`grid gap-3 sm:grid-cols-2 ${
+          showEur ? "lg:grid-cols-6" : "lg:grid-cols-5"
+        }`}
+      >
         <KpiTile
           label="Alle Offenen"
           value={pipeline.totalOpen}
@@ -207,21 +220,23 @@ export function HeroPipelinePanel({
           explain="Offene Projekte deren Fälligkeitsdatum (current_project_match_status.maturity_date) bereits in der Vergangenheit liegt. Signal für Projekte die ein neues Zieldatum brauchen."
           onClick={() => openKpi("overdue")}
         />
-        <KpiTile
-          label="Buchhaltung offen"
-          valueText={formatEur(pipeline.openInvoiceAmount)}
-          tone="neutral"
-          icon={<Euro className="h-4 w-4" />}
-          hint={
-            pipeline.openInvoiceCount > 0
-              ? `${pipeline.openInvoiceCount} Rechnung${
-                  pipeline.openInvoiceCount === 1 ? "" : "en"
-                } · Projekte in Abschluss-/Teilrechnungs-Step`
-              : "keine Projekte in Abrechnungs-Step"
-          }
-          explain={`Summe der offenen Rechnungsbeträge (Hero status_code 100 "Erstellt" + 200 "Versendet"; storniert/gelöscht ausgeschlossen) aller Projekte die AKTUELL in einem Abrechnungs-Step stehen: Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG (1./2./…), Teilrechnung.`}
-          onClick={() => openKpi("accounting_open")}
-        />
+        {showEur ? (
+          <KpiTile
+            label="Buchhaltung offen"
+            valueText={formatEur(pipeline.openInvoiceAmount)}
+            tone="neutral"
+            icon={<Euro className="h-4 w-4" />}
+            hint={
+              pipeline.openInvoiceCount > 0
+                ? `${pipeline.openInvoiceCount} Rechnung${
+                    pipeline.openInvoiceCount === 1 ? "" : "en"
+                  } · Projekte in Abschluss-/Teilrechnungs-Step`
+                : "keine Projekte in Abrechnungs-Step"
+            }
+            explain={`Summe der offenen Rechnungsbeträge (Hero status_code 100 "Erstellt" + 200 "Versendet"; storniert/gelöscht ausgeschlossen) aller Projekte die AKTUELL in einem Abrechnungs-Step stehen: Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG (1./2./…), Teilrechnung.`}
+            onClick={() => openKpi("accounting_open")}
+          />
+        ) : null}
         <KpiTile
           label="Letzte Woche abgeschlossen"
           value={pipeline.completedLastWeek}
@@ -353,6 +368,7 @@ export function HeroPipelinePanel({
               steps={activeSteps}
               selected={selected}
               onToggle={toggleStep}
+              showEur={showEur}
             />
             {finishedSteps.length > 0 ? (
               <details className="group pt-2 border-t">
@@ -372,6 +388,7 @@ export function HeroPipelinePanel({
                     selected={selected}
                     onToggle={toggleStep}
                     muted
+                    showEur={showEur}
                   />
                 </div>
               </details>
@@ -782,6 +799,7 @@ function StepList({
   onToggle,
   muted,
   description,
+  showEur = false,
 }: {
   title: string;
   steps: HeroPipelineDto["steps"];
@@ -789,6 +807,7 @@ function StepList({
   onToggle: (id: string) => void;
   muted?: boolean;
   description?: string;
+  showEur?: boolean;
 }) {
   if (steps.length === 0) return null;
 
@@ -817,7 +836,9 @@ function StepList({
         {steps.map((step) => {
           const checked = selected.has(step.id);
           const hasInvoice =
-            step.openInvoiceAmount != null && step.openInvoiceAmount > 0;
+            showEur &&
+            step.openInvoiceAmount != null &&
+            step.openInvoiceAmount > 0;
           return (
             <li key={step.id}>
               <label
@@ -906,10 +927,12 @@ function GroupedStepList({
   steps,
   selected,
   onToggle,
+  showEur = false,
 }: {
   steps: HeroPipelineDto["steps"];
   selected: Set<string>;
   onToggle: (id: string) => void;
+  showEur?: boolean;
 }) {
   const groups = useMemo(() => {
     const map = new Map<StepCategory, HeroPipelineDto["steps"]>();
@@ -944,6 +967,7 @@ function GroupedStepList({
           steps={list}
           selected={selected}
           onToggle={onToggle}
+          showEur={showEur}
         />
       ))}
     </div>

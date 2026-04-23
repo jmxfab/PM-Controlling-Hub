@@ -48,15 +48,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
-      <div>
-        <h1
-          className="text-3xl font-bold tracking-tight cursor-help inline-block"
-          title="Operativer Überblick über Projekte, Status, Dokumente und Verlauf."
-        >
-          Controlling
-        </h1>
-      </div>
-
       <Suspense fallback={null}>
         <SyncInProgressBanner />
       </Suspense>
