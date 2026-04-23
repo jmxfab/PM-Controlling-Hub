@@ -9,11 +9,6 @@ import { introspectHeroSchema } from "@/lib/hero/hero-client";
  * Remove or protect this endpoint after initial discovery.
  */
 export async function GET(request: NextRequest) {
-  // Only allow in development
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production" }, { status: 404 });
-  }
-
   try {
     const schema = await introspectHeroSchema();
     return NextResponse.json(schema, { status: 200 });

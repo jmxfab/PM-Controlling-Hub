@@ -389,6 +389,7 @@ export async function introspectHeroSchema(): Promise<Record<string, unknown>> {
       CalendarEvent: __type(name: "CalendarEvent") { ${INTROSPECT_TYPE_FRAGMENT} }
       Contact: __type(name: "Contact") { ${INTROSPECT_TYPE_FRAGMENT} }
       Partner: __type(name: "Partner") { ${INTROSPECT_TYPE_FRAGMENT} }
+      History: __type(name: "History") { ${INTROSPECT_TYPE_FRAGMENT} }
     }
   `;
   return heroGraphQL<Record<string, unknown>>(query);
