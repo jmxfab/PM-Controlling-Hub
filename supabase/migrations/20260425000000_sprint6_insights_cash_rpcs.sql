@@ -290,7 +290,7 @@ LANGUAGE sql
 STABLE
 AS $$
   WITH t AS (
-    SELECT step_id, step_name, duration_seconds
+    SELECT step_id::text AS step_id, step_name, duration_seconds
     FROM public.hero_status_transitions
     WHERE entered_at >= p_from
       AND (p_to IS NULL OR entered_at < p_to)
@@ -304,13 +304,13 @@ AS $$
       )
   )
   SELECT
-    step_id,
-    MIN(step_name) AS step_name,
-    round(AVG(duration_seconds) / 86400.0, 1)::numeric AS avg_days,
-    round((percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_seconds) / 86400.0)::numeric, 1) AS median_days,
+    t.step_id,
+    MIN(t.step_name) AS step_name,
+    round(AVG(t.duration_seconds) / 86400.0, 1)::numeric AS avg_days,
+    round((percentile_cont(0.5) WITHIN GROUP (ORDER BY t.duration_seconds) / 86400.0)::numeric, 1) AS median_days,
     COUNT(*)::bigint AS sample_size
   FROM t
-  GROUP BY step_id
+  GROUP BY t.step_id
   ORDER BY avg_days DESC;
 $$;
 

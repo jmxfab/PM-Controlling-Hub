@@ -65,89 +65,32 @@ const loadWeeklyThroughputInner = cache(
         since.setDate(since.getDate() - weeks * 7);
         return since.toISOString();
       })();
-    const untilIso = range?.toIso;
+    const untilIso = range?.toIso ?? null;
 
-    let query = supabase
-      .from("hero_status_transitions")
-      .select("project_match_id, step_name, entered_at, history_index, department_key")
-      .gte("entered_at", sinceIso);
-    if (untilIso) query = query.lt("entered_at", untilIso);
+    const { data, error } = await supabase.rpc("compute_weekly_throughput", {
+      p_department: department,
+      p_from: sinceIso,
+      p_to: untilIso,
+    });
+    if (error) throw new Error(`compute_weekly_throughput: ${error.message}`);
 
-    if (department !== "GESAMT") {
-      query = query.eq("department_key", department);
-    } else {
-      query = query.not("department_key", "is", null);
-    }
+    const rows = (data ?? []) as Array<{
+      week_start: string;
+      new_projects: number;
+      completed: number;
+      accounting: number;
+      rework: number;
+      reopens: number;
+    }>;
 
-    const rows: Array<{
-      project_match_id: string;
-      step_name: string | null;
-      entered_at: string;
-      history_index: number;
-    }> = [];
-    for (let offset = 0; offset < 20000; offset += 1000) {
-      const { data, error } = await query
-        .range(offset, offset + 999)
-        .order("entered_at", { ascending: true });
-      if (error) break;
-      const chunk = (data ?? []) as typeof rows;
-      rows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-
-    // Für Reopen-Erkennung: welche Projekte hatten VOR der ersten Transition
-    // im Fenster bereits ein last_finish_at.
-    const { data: finishedPriorList } = await supabase
-      .from("hero_dashboard_projects")
-      .select("id, last_finish_at")
-      .lt("last_finish_at", sinceIso);
-    const finishedBefore = new Set<string>(
-      ((finishedPriorList ?? []) as Array<{ id: string; last_finish_at: string | null }>)
-        .filter((r) => r.last_finish_at)
-        .map((r) => r.id)
-    );
-
-    const weekKeys = new Map<string, WeeklyThroughputPoint>();
-
-    function weekKeyFor(iso: string): string {
-      // Montag-Start (ISO week), konsistent zu date_trunc('week')
-      const d = new Date(iso);
-      const day = d.getDay(); // 0=So
-      const diffToMonday = (day + 6) % 7;
-      d.setDate(d.getDate() - diffToMonday);
-      d.setHours(0, 0, 0, 0);
-      return d.toISOString().slice(0, 10);
-    }
-
-    for (const t of rows) {
-      if (!t.step_name) continue;
-      const key = weekKeyFor(t.entered_at);
-      const bucket =
-        weekKeys.get(key) ??
-        {
-          weekStart: key,
-          newProjects: 0,
-          completed: 0,
-          accounting: 0,
-          rework: 0,
-          reopens: 0,
-        };
-      const n = t.step_name.toLowerCase();
-      if (t.history_index === 1) bucket.newProjects += 1;
-      if (/abgeschlossen|archiviert/.test(n)) bucket.completed += 1;
-      if (/abschlussrechnung|kundenrechnung|schlussrechnung|teil-rg|teilrechnung/.test(n)) {
-        bucket.accounting += 1;
-      }
-      if (/nacharbeit|reklamation/.test(n)) {
-        bucket.rework += 1;
-        if (finishedBefore.has(t.project_match_id)) bucket.reopens += 1;
-      }
-      weekKeys.set(key, bucket);
-    }
-
-    return Array.from(weekKeys.values()).sort((a, b) =>
-      a.weekStart.localeCompare(b.weekStart)
-    );
+    return rows.map((r) => ({
+      weekStart: r.week_start,
+      newProjects: Number(r.new_projects) || 0,
+      completed: Number(r.completed) || 0,
+      accounting: Number(r.accounting) || 0,
+      rework: Number(r.rework) || 0,
+      reopens: Number(r.reopens) || 0,
+    }));
   }
 );
 
@@ -194,59 +137,28 @@ const loadStepDurationsInner = cache(
         return c.toISOString();
       })();
 
-    let query = supabase
-      .from("hero_status_transitions")
-      .select("step_id, step_name, duration_seconds, department_key")
-      .gte("entered_at", sinceIso)
-      .not("duration_seconds", "is", null)
-      .not("step_name", "is", null);
-    if (range?.toIso) query = query.lt("entered_at", range.toIso);
+    const { data, error } = await supabase.rpc("compute_step_durations", {
+      p_department: department,
+      p_from: sinceIso,
+      p_to: range?.toIso ?? null,
+    });
+    if (error) throw new Error(`compute_step_durations: ${error.message}`);
 
-    if (department !== "GESAMT") {
-      query = query.eq("department_key", department);
-    } else {
-      query = query.not("department_key", "is", null);
-    }
+    const rows = (data ?? []) as Array<{
+      step_id: string;
+      step_name: string;
+      avg_days: number | string;
+      median_days: number | string;
+      sample_size: number;
+    }>;
 
-    const rows: Array<{
-      step_id: string | null;
-      step_name: string | null;
-      duration_seconds: number | null;
-    }> = [];
-    for (let offset = 0; offset < 30000; offset += 1000) {
-      const { data, error } = await query.range(offset, offset + 999);
-      if (error) break;
-      const chunk = (data ?? []) as typeof rows;
-      rows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-
-    const grouped = new Map<string, { name: string; durations: number[] }>();
-    for (const r of rows) {
-      if (r.step_id == null || r.step_name == null || r.duration_seconds == null) continue;
-      const entry = grouped.get(r.step_id) ?? {
-        name: r.step_name,
-        durations: [],
-      };
-      entry.durations.push(r.duration_seconds / 86400); // Tage
-      grouped.set(r.step_id, entry);
-    }
-
-    const out: StepDurationRow[] = [];
-    for (const [id, { name, durations }] of grouped) {
-      if (durations.length === 0) continue;
-      const sorted = [...durations].sort((a, b) => a - b);
-      const avg = durations.reduce((s, v) => s + v, 0) / durations.length;
-      const median = sorted[Math.floor(sorted.length / 2)];
-      out.push({
-        stepId: id,
-        stepName: name,
-        avgDays: Math.round(avg * 10) / 10,
-        medianDays: Math.round(median * 10) / 10,
-        sampleSize: durations.length,
-      });
-    }
-    return out.sort((a, b) => b.avgDays - a.avgDays);
+    return rows.map((r) => ({
+      stepId: r.step_id,
+      stepName: r.step_name,
+      avgDays: Number(r.avg_days) || 0,
+      medianDays: Number(r.median_days) || 0,
+      sampleSize: Number(r.sample_size) || 0,
+    }));
   }
 );
 
@@ -339,56 +251,31 @@ export interface KwpStats {
   projectsCompleted: number;
 }
 
-const KWP_REGEX = /(\d+(?:[.,]\d+)?)\s*kwp/i;
-
-function parseKwp(measureName: string | null): number | null {
-  if (!measureName) return null;
-  const m = KWP_REGEX.exec(measureName);
-  if (!m) return null;
-  const parsed = parseFloat(m[1].replace(",", "."));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
 const loadKwpStatsInner = cache(
   async (department: Department): Promise<KwpStats> => {
     const supabase = supabaseAdmin();
 
-    let query = supabase
-      .from("hero_dashboard_projects")
-      .select("measure_name, is_finished, department_key")
-      .eq("is_finished", true);
+    const { data, error } = await supabase.rpc("compute_kwp_stats", {
+      p_department: department,
+    });
+    if (error) throw new Error(`compute_kwp_stats: ${error.message}`);
 
-    if (department !== "GESAMT") query = query.eq("department_key", department);
-    else query = query.not("department_key", "is", null);
+    const row = ((data ?? []) as Array<{
+      total_kwp: number | string;
+      avg_kwp: number | string | null;
+      projects_with_kwp: number;
+      projects_completed: number;
+    }>)[0];
 
-    const rows: Array<{ measure_name: string | null; is_finished: boolean }> = [];
-    for (let offset = 0; offset < 20000; offset += 1000) {
-      const { data, error } = await query.range(offset, offset + 999);
-      if (error) break;
-      const chunk = (data ?? []) as typeof rows;
-      rows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-
-    let totalKwp = 0;
-    let projectsWithKwp = 0;
-
-    for (const r of rows) {
-      const kwp = parseKwp(r.measure_name);
-      if (kwp !== null) {
-        totalKwp += kwp;
-        projectsWithKwp++;
-      }
+    if (!row) {
+      return { totalKwp: 0, avgKwp: null, projectsWithKwp: 0, projectsCompleted: 0 };
     }
 
     return {
-      totalKwp: Math.round(totalKwp * 10) / 10,
-      avgKwp:
-        projectsWithKwp > 0
-          ? Math.round((totalKwp / projectsWithKwp) * 10) / 10
-          : null,
-      projectsWithKwp,
-      projectsCompleted: rows.length,
+      totalKwp: Number(row.total_kwp) || 0,
+      avgKwp: row.avg_kwp == null ? null : Number(row.avg_kwp),
+      projectsWithKwp: Number(row.projects_with_kwp) || 0,
+      projectsCompleted: Number(row.projects_completed) || 0,
     };
   }
 );
@@ -423,142 +310,69 @@ export interface DurationMetric {
  * und prüfen enthaltene Schlüsselwörter). Basis: hero_dashboard_projects
  * (ein Projekt pro Zeile, raw->project_match_statuses enthält alle Steps).
  */
+const DURATION_METRIC_MAP: Record<
+  string,
+  { label: string; description: string; order: number }
+> = {
+  ramp_up: {
+    label: "Ramp-up (AB → Montage)",
+    description: "Von Auftragsbestätigung bis Start der Montage.",
+    order: 0,
+  },
+  ausfuehrung: {
+    label: "Ausführung (Montage → Abschlussrechnung)",
+    description: "Wie lange dauert die Montage bis zur Abschlussrechnung.",
+    order: 1,
+  },
+  abrechnung: {
+    label: "Abrechnungsverzug (Abschlussrechnung → Abgeschlossen)",
+    description:
+      "Wie lange nach der Rechnungsstellung bis zum Abschluss des Projekts.",
+    order: 2,
+  },
+  gesamt: {
+    label: "Gesamtdurchlaufzeit (Anlage → Abgeschlossen)",
+    description: "End-to-End: vom Anlegen in Hero bis Projekt abgeschlossen.",
+    order: 3,
+  },
+};
+
 const loadDurationMetricsInner = cache(
   async (
     department: Department,
     options?: { range?: InsightsRange }
   ): Promise<DurationMetric[]> => {
     const supabase = supabaseAdmin();
-    let query = supabase
-      .from("hero_dashboard_projects")
-      .select("id, created_at_hero, completion_date, raw, department_key");
+    const { data, error } = await supabase.rpc("compute_duration_metrics", {
+      p_department: department,
+      p_from: options?.range?.fromIso ?? null,
+      p_to: options?.range?.toIso ?? null,
+    });
+    if (error) throw new Error(`compute_duration_metrics: ${error.message}`);
 
-    if (department !== "GESAMT") query = query.eq("department_key", department);
-    else query = query.not("department_key", "is", null);
+    const rows = (data ?? []) as Array<{
+      metric_key: string;
+      avg_days: number | string | null;
+      median_days: number | string | null;
+      sample_size: number;
+    }>;
+    const byKey = new Map(rows.map((r) => [r.metric_key, r]));
 
-    const rows: Array<{
-      id: string;
-      created_at_hero: string | null;
-      completion_date: string | null;
-      raw: Record<string, unknown> | null;
-    }> = [];
-    for (let offset = 0; offset < 10000; offset += 1000) {
-      const { data, error } = await query.range(offset, offset + 999);
-      if (error) break;
-      const chunk = (data ?? []) as typeof rows;
-      rows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-
-    const fromTs = options?.range?.fromIso
-      ? new Date(options.range.fromIso).getTime()
-      : null;
-    const toTs = options?.range?.toIso
-      ? new Date(options.range.toIso).getTime()
-      : null;
-
-    // Per Projekt: aus raw.project_match_statuses die earliest entered_at für
-    // AB / Montage / Abschlussrechnung extrahieren, dann 4 Differenzen bilden.
-    const rampUps: number[] = [];
-    const ausfuehrungen: number[] = [];
-    const abrechnungen: number[] = [];
-    const gesamt: number[] = [];
-
-    for (const r of rows) {
-      const raw = r.raw ?? {};
-      const statuses =
-        ((raw as Record<string, unknown>).project_match_statuses as
-          | Array<{ step?: { name?: string | null }; created?: string | null }>
-          | undefined) ?? [];
-
-      // erste Transition in jeweiligen Step — Keywords tolerant
-      const first = (re: RegExp): number | null => {
-        for (const s of statuses) {
-          const name = s.step?.name?.toLowerCase() ?? "";
-          if (re.test(name) && s.created) {
-            const ts = Date.parse(s.created);
-            if (Number.isFinite(ts)) return ts;
-          }
-        }
-        return null;
-      };
-
-      const tAB = first(/auftragsbestätigung|^ab$|\bab\b/);
-      const tMontage = first(
-        /montage|zählermontage|projektvorbereitung|umsetzungsbeginn|projektplanung|heizlastberechnung/
-      );
-      const tAbschluss = first(/abschlussrechnung|kundenrechnung|schlussrechnung/);
-      const tCreate = r.created_at_hero ? Date.parse(r.created_at_hero) : null;
-      const tDone = r.completion_date ? Date.parse(r.completion_date) : null;
-
-      // Range-Filter auf completion_date (abgeschlossene Projekte)
-      if (tDone != null) {
-        if (fromTs != null && tDone < fromTs) continue;
-        if (toTs != null && tDone >= toTs) continue;
-      } else if (fromTs != null) {
-        // noch offen → im Zeitraum nicht abgeschlossen → skip
-        continue;
-      }
-
-      if (tAB != null && tMontage != null && tMontage > tAB)
-        rampUps.push((tMontage - tAB) / 86400000);
-      if (tMontage != null && tAbschluss != null && tAbschluss > tMontage)
-        ausfuehrungen.push((tAbschluss - tMontage) / 86400000);
-      if (tAbschluss != null && tDone != null && tDone > tAbschluss)
-        abrechnungen.push((tDone - tAbschluss) / 86400000);
-      if (tCreate != null && tDone != null && tDone > tCreate)
-        gesamt.push((tDone - tCreate) / 86400000);
-    }
-
-    const stat = (arr: number[]) => {
-      if (arr.length === 0) return { avg: null, median: null, n: 0 };
-      const sorted = [...arr].sort((a, b) => a - b);
-      const avg = arr.reduce((s, v) => s + v, 0) / arr.length;
-      const median = sorted[Math.floor(sorted.length / 2)];
-      return {
-        avg: Math.round(avg * 10) / 10,
-        median: Math.round(median * 10) / 10,
-        n: arr.length,
-      };
-    };
-
-    const mk = (
-      label: string,
-      description: string,
-      arr: number[]
-    ): DurationMetric => {
-      const s = stat(arr);
-      return {
-        label,
-        avgDays: s.avg,
-        medianDays: s.median,
-        sampleSize: s.n,
-        description,
-      };
-    };
-
-    return [
-      mk(
-        "Ramp-up (AB → Montage)",
-        "Von Auftragsbestätigung bis Start der Montage.",
-        rampUps
-      ),
-      mk(
-        "Ausführung (Montage → Abschlussrechnung)",
-        "Wie lange dauert die Montage bis zur Abschlussrechnung.",
-        ausfuehrungen
-      ),
-      mk(
-        "Abrechnungsverzug (Abschlussrechnung → Abgeschlossen)",
-        "Wie lange nach der Rechnungsstellung bis zum Abschluss des Projekts.",
-        abrechnungen
-      ),
-      mk(
-        "Gesamtdurchlaufzeit (Anlage → Abgeschlossen)",
-        "End-to-End: vom Anlegen in Hero bis Projekt abgeschlossen.",
-        gesamt
-      ),
-    ];
+    return Object.entries(DURATION_METRIC_MAP)
+      .sort((a, b) => a[1].order - b[1].order)
+      .map(([key, meta]) => {
+        const r = byKey.get(key);
+        const avg = r?.avg_days == null ? null : Number(r.avg_days);
+        const median = r?.median_days == null ? null : Number(r.median_days);
+        return {
+          label: meta.label,
+          description: meta.description,
+          avgDays: avg != null && Number.isFinite(avg) ? avg : null,
+          medianDays:
+            median != null && Number.isFinite(median) ? median : null,
+          sampleSize: r ? Number(r.sample_size) || 0 : 0,
+        };
+      });
   }
 );
 
@@ -608,181 +422,70 @@ export interface CashflowDto {
   totalOpenCount: number;
 }
 
-const BUCKET_DEFS: Array<{ label: string; min: number; max: number | null }> = [
-  { label: "0–14 Tage", min: 0, max: 14 },
-  { label: "14–30 Tage", min: 14, max: 30 },
-  { label: "30–60 Tage", min: 30, max: 60 },
-  { label: "60–90 Tage", min: 60, max: 90 },
-  { label: "> 90 Tage", min: 90, max: null },
-];
-
 const loadCashflowInner = cache(
   async (department: Department): Promise<CashflowDto> => {
     const supabase = supabaseAdmin();
 
-    // 1. Alle offenen Rechnungen (status_code 100/200) mit Zeitstempel
-    let docQuery = supabase
-      .from("hero_customer_documents")
-      .select(
-        "project_match_id, value, status_code, created_at_hero, hero_modified_at, type, document_type_name, document_base_type"
-      )
-      .eq("is_deleted", false)
-      .in("status_code", [100, 200])
-      .not("value", "is", null)
-      .not("project_match_id", "is", null);
-
-    const docRows: Array<{
-      project_match_id: string;
-      value: number | null;
-      created_at_hero: string | null;
-      type: string | null;
-      document_type_name: string | null;
-      document_base_type: string | null;
-    }> = [];
-    for (let offset = 0; offset < 30000; offset += 1000) {
-      const { data, error } = await docQuery.range(offset, offset + 999);
-      if (error) break;
-      const chunk = (data ?? []) as typeof docRows;
-      docRows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-    void docQuery;
-
-    // 2. Join mit Department + Step (aus hero_dashboard_projects)
-    let projQuery = supabase
-      .from("hero_dashboard_projects")
-      .select("id, department_key, step_name, is_finished, is_accounting_open");
-    if (department !== "GESAMT") projQuery = projQuery.eq("department_key", department);
-    else projQuery = projQuery.not("department_key", "is", null);
-
-    const projRows: Array<{
-      id: string;
-      department_key: string | null;
-      step_name: string | null;
-      is_finished: boolean;
-      is_accounting_open: boolean;
-    }> = [];
-    for (let offset = 0; offset < 20000; offset += 1000) {
-      const { data, error } = await projQuery.range(offset, offset + 999);
-      if (error) break;
-      const chunk = (data ?? []) as typeof projRows;
-      projRows.push(...chunk);
-      if (chunk.length < 1000) break;
-    }
-    const projMap = new Map(projRows.map((p) => [p.id, p]));
-
-    // Nur Invoices zu Projekten aus dem aktuellen Department behalten.
-    const relevantDocs = docRows.filter((d) => projMap.has(d.project_match_id));
-
-    // 3. Invoice-Filter: nur echte Rechnungen (invoice/rechnung keyword)
-    const invoiceDocs = relevantDocs.filter((d) => {
-      const t = `${d.type ?? ""} ${d.document_type_name ?? ""} ${d.document_base_type ?? ""}`.toLowerCase();
-      return t.includes("invoice") || t.includes("rechnung");
+    const { data, error } = await supabase.rpc("compute_cashflow_summary", {
+      p_department: department,
     });
+    if (error) throw new Error(`compute_cashflow_summary: ${error.message}`);
 
-    // 4. Aging Buckets
-    const now = Date.now();
-    const buckets: AgingBucket[] = BUCKET_DEFS.map((b) => ({
-      bucket: b.label,
-      minDays: b.min,
-      maxDays: b.max,
-      count: 0,
-      totalEur: 0,
-    }));
-    let totalOpenEur = 0;
-    let totalOpenCount = 0;
-    for (const d of invoiceDocs) {
-      if (d.value == null) continue;
-      const created = d.created_at_hero ? Date.parse(d.created_at_hero) : null;
-      if (!created || !Number.isFinite(created)) continue;
-      const ageDays = (now - created) / 86400000;
-      totalOpenEur += d.value;
-      totalOpenCount += 1;
-      const b =
-        buckets.find(
-          (x) =>
-            ageDays >= x.minDays &&
-            (x.maxDays == null || ageDays < x.maxDays)
-        ) ?? buckets[buckets.length - 1];
-      b.count += 1;
-      b.totalEur += d.value;
-    }
+    const dto = (data ?? {}) as Partial<{
+      aging: Array<{
+        bucket: string;
+        minDays: number;
+        maxDays: number | null;
+        count: number | string;
+        totalEur: number | string;
+      }>;
+      totalOpenEur: number | string;
+      totalOpenCount: number | string;
+      pipelineRevenueEur: number | string;
+      pipelineRevenueInvoices: number | string;
+      billingRate: {
+        billed: number | string;
+        completed: number | string;
+        percent: number | string;
+      };
+      revenueByMonth: Array<{
+        month: string;
+        PV: number | string;
+        PV_GEWERBE: number | string;
+        WP: number | string;
+        KLIMA: number | string;
+        GEBAEUDETECHNIK: number | string;
+      }>;
+    }>;
 
-    // 5. Pipeline-Umsatz: Projekte die aktuell in Abschluss-/Montage-Step stehen
-    const pipelineProjectIds = new Set(
-      projRows
-        .filter((p) => {
-          const n = (p.step_name ?? "").toLowerCase();
-          return (
-            p.is_accounting_open ||
-            /montage|zählermontage|umsetzungsbeginn/.test(n)
-          );
-        })
-        .map((p) => p.id)
-    );
-    let pipelineRevenueEur = 0;
-    let pipelineRevenueInvoices = 0;
-    for (const d of invoiceDocs) {
-      if (pipelineProjectIds.has(d.project_match_id) && d.value != null) {
-        pipelineRevenueEur += d.value;
-        pipelineRevenueInvoices += 1;
-      }
-    }
-
-    // 6. Abrechnungsquote: Anteil abgeschlossener Projekte die mindestens
-    //    eine Invoice haben (Status unabhängig).
-    const completedProjects = projRows.filter((p) => p.is_finished);
-    const projectsWithInvoice = new Set(
-      relevantDocs.map((d) => d.project_match_id)
-    );
-    const completedWithInvoice = completedProjects.filter((p) =>
-      projectsWithInvoice.has(p.id)
-    );
-    const billingRate = {
-      billed: completedWithInvoice.length,
-      completed: completedProjects.length,
-      percent:
-        completedProjects.length === 0
-          ? 0
-          : Math.round(
-              (completedWithInvoice.length / completedProjects.length) * 1000
-            ) / 10,
-    };
-
-    // 7. Umsatz nach Department + Monat — über ALLE Invoices (auch historisch).
-    //    Wir nutzen hierzu alle invoiceDocs incl. der Department-Zuordnung.
-    const monthMap = new Map<string, CashflowRevenueByDepartmentPoint>();
-    for (const d of invoiceDocs) {
-      const created = d.created_at_hero ? new Date(d.created_at_hero) : null;
-      if (!created || Number.isNaN(created.getTime())) continue;
-      const month = created.toISOString().slice(0, 7);
-      const dept = projMap.get(d.project_match_id)?.department_key;
-      if (!dept) continue;
-      const bucket =
-        monthMap.get(month) ??
-        ({
-          month,
-          PV: 0,
-          PV_GEWERBE: 0,
-          WP: 0,
-          KLIMA: 0,
-          GEBAEUDETECHNIK: 0,
-        } as CashflowRevenueByDepartmentPoint);
-      (bucket as unknown as Record<string, number>)[dept] += d.value ?? 0;
-      monthMap.set(month, bucket);
-    }
-    const revenueByMonth = Array.from(monthMap.values())
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .slice(-12);
+    const num = (v: number | string | null | undefined): number =>
+      v == null ? 0 : Number(v) || 0;
 
     return {
-      aging: buckets,
-      pipelineRevenueEur,
-      pipelineRevenueInvoices,
-      billingRate,
-      revenueByMonth,
-      totalOpenEur,
-      totalOpenCount,
+      aging: (dto.aging ?? []).map((a) => ({
+        bucket: a.bucket,
+        minDays: Number(a.minDays) || 0,
+        maxDays: a.maxDays == null ? null : Number(a.maxDays),
+        count: num(a.count),
+        totalEur: num(a.totalEur),
+      })),
+      totalOpenEur: num(dto.totalOpenEur),
+      totalOpenCount: num(dto.totalOpenCount),
+      pipelineRevenueEur: num(dto.pipelineRevenueEur),
+      pipelineRevenueInvoices: num(dto.pipelineRevenueInvoices),
+      billingRate: {
+        billed: num(dto.billingRate?.billed),
+        completed: num(dto.billingRate?.completed),
+        percent: num(dto.billingRate?.percent),
+      },
+      revenueByMonth: (dto.revenueByMonth ?? []).map((r) => ({
+        month: r.month,
+        PV: num(r.PV),
+        PV_GEWERBE: num(r.PV_GEWERBE),
+        WP: num(r.WP),
+        KLIMA: num(r.KLIMA),
+        GEBAEUDETECHNIK: num(r.GEBAEUDETECHNIK),
+      })),
     };
   }
 );
