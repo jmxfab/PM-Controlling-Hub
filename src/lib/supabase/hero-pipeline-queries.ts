@@ -695,12 +695,27 @@ export async function loadKpiProjects(
     if (department !== "GESAMT") q = q.eq("department_key", department);
     else q = q.not("department_key", "is", null);
     const ids = new Set<string>();
-    for (let offset = 0; offset < 10000; offset += 1000) {
+    const OVERDUE_MAX_OFFSET = 10000;
+    let reachedOverdueMax = true;
+    for (let offset = 0; offset < OVERDUE_MAX_OFFSET; offset += 1000) {
       const { data, error } = await q.range(offset, offset + 999);
-      if (error) break;
+      if (error) {
+        reachedOverdueMax = false;
+        break;
+      }
       const chunk = (data ?? []) as Array<{ id: string }>;
       for (const row of chunk) ids.add(row.id);
-      if (chunk.length < 1000) break;
+      if (chunk.length < 1000) {
+        reachedOverdueMax = false;
+        break;
+      }
+    }
+    if (reachedOverdueMax) {
+      // Wenn das überhaupt jemals zieht, ist die Datenbasis explodiert
+      // und wir liefern still truncated Ergebnisse. Besser laut werden.
+      console.warn(
+        `[hero-pipeline-queries] loadKpiProjects(delta_overdue_became) pagination hit max ${OVERDUE_MAX_OFFSET} for department=${department} range=${range.fromIso}..${range.toIso}`
+      );
     }
     return Array.from(ids)
       .map((id) => byId.get(id))
@@ -725,12 +740,25 @@ export async function loadKpiProjects(
     step_name: string | null;
     history_index: number | null;
   }> = [];
-  for (let offset = 0; offset < 30000; offset += 1000) {
+  const TRANSITIONS_MAX_OFFSET = 30000;
+  let reachedTransitionsMax = true;
+  for (let offset = 0; offset < TRANSITIONS_MAX_OFFSET; offset += 1000) {
     const { data, error } = await tq.range(offset, offset + 999);
-    if (error) break;
+    if (error) {
+      reachedTransitionsMax = false;
+      break;
+    }
     const chunk = (data ?? []) as typeof transitions;
     transitions.push(...chunk);
-    if (chunk.length < 1000) break;
+    if (chunk.length < 1000) {
+      reachedTransitionsMax = false;
+      break;
+    }
+  }
+  if (reachedTransitionsMax) {
+    console.warn(
+      `[hero-pipeline-queries] loadKpiProjects(${kpi}) transitions pagination hit max ${TRANSITIONS_MAX_OFFSET} for department=${department} range=${range.fromIso}..${range.toIso} — delta values may be truncated`
+    );
   }
 
   // Für Reopens brauchen wir zusätzlich, welche Projekte VOR dem Zeitraum

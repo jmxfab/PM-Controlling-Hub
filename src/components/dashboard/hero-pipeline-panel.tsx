@@ -697,9 +697,25 @@ function ProjectRow({
           </div>
         </TableCell>
         <TableCell className="py-1.5 text-sm">
-          <span className="truncate block max-w-[180px]" title={project.stepName ?? undefined}>
-            {project.stepName ?? "–"}
-          </span>
+          {project.stepName ? (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="truncate block max-w-[180px] cursor-help"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {project.stepName}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs">
+                  {project.stepName}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <span className="text-muted-foreground">–</span>
+          )}
         </TableCell>
         <TableCell className="py-1.5 text-right font-mono text-xs tabular-nums whitespace-nowrap">
           {project.openInvoiceAmount > 0 ? (

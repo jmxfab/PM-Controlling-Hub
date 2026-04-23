@@ -1,7 +1,4 @@
-import {
-  HeroProject,
-  getDepartmentFromProjectNumber,
-} from "@/lib/hero/hero-client";
+import { getDepartmentFromProjectNumber } from "@/lib/hero/hero-client";
 
 export const HERO_ADMIN_DEFAULT_ENDPOINT =
   "https://login.hero-software.de/api/external/v7/graphql";
@@ -33,13 +30,6 @@ export interface HeroProjectLinkSource {
 export const HERO_ADMIN_DRAFT_DEFAULTS: HeroAdminDraft = {
   endpoint: HERO_ADMIN_DEFAULT_ENDPOINT,
   projectLinkTemplate: "",
-};
-
-export const HERO_PROJECT_LINK_PREVIEW_SAMPLE: HeroProject = {
-  id: "hero-preview-project-42",
-  project_number: "PV24-101",
-  name: "PV Musterprojekt 42",
-  status: "aktiv",
 };
 
 export function validateHeroAdminDraft(

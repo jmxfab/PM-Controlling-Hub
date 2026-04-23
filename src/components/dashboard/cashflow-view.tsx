@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Euro, Percent } from "lucide-react";
+import { Fragment, useState } from "react";
+import { AlertTriangle, ChevronDown, Euro, Percent } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -27,9 +28,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { CashflowDto } from "@/lib/supabase/hero-insights-queries";
+import type {
+  CashflowDto,
+  ForecastProjectRow,
+  InvoiceAgingRow,
+  InvoiceDetailRow,
+} from "@/lib/supabase/hero-insights-queries";
 import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { HeroProjectLink } from "./hero-project-link";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
@@ -111,106 +118,35 @@ export function CashflowView({
         />
       </div>
 
+      {/* Fälligkeits-Forecast: was kommt wann rein */}
+      {dto.forecast && dto.forecast.length > 0 ? (
+        <CashflowForecast
+          department={department}
+          deptName={deptName}
+          buckets={dto.forecast}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      ) : null}
+
       {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
       {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
-            <CardDescription>
-              Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
-              (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit
-              gezählt, damit man die Stückzahl sieht.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Anzahl</TableHead>
-                  <TableHead className="text-right">Summe (€)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dto.statusBreakdown.map((b) => (
-                  <TableRow key={b.statusCode}>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <p className="font-medium">{b.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {b.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {b.count.toLocaleString("de-DE")}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {b.totalEur === 0 ? (
-                        <span className="text-muted-foreground">0 €</span>
-                      ) : (
-                        formatEur(b.totalEur)
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <InvoiceStatusBreakdown
+          department={department}
+          deptName={deptName}
+          buckets={dto.statusBreakdown}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
       ) : null}
 
       {/* Aging Buckets */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
-          <CardDescription>
-            Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
-            Tagen seit Erstellung. Stornierte/gelöschte sind ausgeschlossen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Alter</TableHead>
-                <TableHead className="text-right">Anzahl</TableHead>
-                <TableHead className="text-right">Summe (€)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dto.aging.map((b) => (
-                <TableRow key={b.bucket}>
-                  <TableCell
-                    className={
-                      b.minDays >= 30
-                        ? "font-medium text-orange-600"
-                        : "font-medium"
-                    }
-                  >
-                    {b.bucket}
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {b.count.toLocaleString("de-DE")}
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {formatEur(b.totalEur)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="border-t-2 font-semibold">
-                <TableCell>Gesamt</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {dto.totalOpenCount.toLocaleString("de-DE")}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatEur(dto.totalOpenEur)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <InvoiceAgingBreakdown
+        department={department}
+        deptName={deptName}
+        buckets={dto.aging}
+        totalOpenCount={dto.totalOpenCount}
+        totalOpenEur={dto.totalOpenEur}
+        heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+      />
 
       {/* Umsatz nach Sparte + Monat */}
       <Card>
@@ -298,5 +234,701 @@ function Kpi({
         <p className="text-xs text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Klappbare Rechnungs-Status-Tabelle. Klick auf eine Status-Zeile lädt
+ * die zugehörigen Einzel-Rechnungen (Kunde, Projekt, Betrag, Datum)
+ * via /api/dashboard/invoice-status-details nach und zeigt sie als
+ * Detail-Block unter der Zeile.
+ */
+function InvoiceStatusBreakdown({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["statusBreakdown"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedStatus, setExpandedStatus] = useState<number | null>(null);
+  const [invoicesByStatus, setInvoicesByStatus] = useState<
+    Record<number, InvoiceDetailRow[]>
+  >({});
+  const [loadingStatus, setLoadingStatus] = useState<number | null>(null);
+
+  async function toggleStatus(statusCode: number) {
+    if (expandedStatus === statusCode) {
+      setExpandedStatus(null);
+      return;
+    }
+    setExpandedStatus(statusCode);
+    if (invoicesByStatus[statusCode]) return; // bereits geladen
+    setLoadingStatus(statusCode);
+    try {
+      const response = await fetch(
+        `/api/dashboard/invoice-status-details?department=${department}&status=${statusCode}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceDetailRow[];
+        };
+        setInvoicesByStatus((prev) => ({
+          ...prev,
+          [statusCode]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — die Detail-Tabelle bleibt leer, Header-Zeile bleibt.
+    } finally {
+      setLoadingStatus(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
+        <CardDescription>
+          Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
+          (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit gezählt,
+          damit man die Stückzahl sieht. Klick auf einen Status zeigt die
+          einzelnen Rechnungen mit Projekt + Kunde.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedStatus === b.statusCode;
+              const isLoading = loadingStatus === b.statusCode;
+              const invoices = invoicesByStatus[b.statusCode];
+              return (
+                <Fragment key={b.statusCode}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-accent/40 border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                    onClick={() => toggleStatus(b.statusCode)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={`Rechnungen im Status ${b.label} anzeigen`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleStatus(b.statusCode);
+                      }
+                    }}
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-medium">{b.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.description}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.totalEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.totalEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen mit diesem Status.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InvoiceDetailsTable({
+  invoices,
+  heroProjectLinkTemplate,
+  showAgeDays = false,
+}: {
+  invoices: (InvoiceDetailRow | InvoiceAgingRow)[];
+  heroProjectLinkTemplate: string | null;
+  /** Wenn true, wird hinter dem Datum zusätzlich "X Tg alt" gezeigt. */
+  showAgeDays?: boolean;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Rechnung</TableHead>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Datum</TableHead>
+          <TableHead className="py-2 text-right">Betrag</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {invoices.map((inv) => {
+          const ageDays =
+            showAgeDays && "ageDays" in inv ? inv.ageDays : null;
+          return (
+            <TableRow key={inv.invoiceId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <p className="font-mono text-xs font-semibold">
+                    {inv.invoiceNr ?? "–"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                    {inv.documentTypeName ?? inv.invoiceType ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={inv.projectMatchId}
+                    projectNumber={inv.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {inv.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {inv.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(inv.documentDate ?? inv.createdAtHero)}</p>
+                  {ageDays != null ? (
+                    <p className="text-[10px] opacity-70">{ageDays} Tg alt</p>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {inv.value === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  formatEur(inv.value)
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * Forderungs-Aging-Tabelle mit Klappmechanik wie der Status-Breakdown.
+ * Klick auf einen Alters-Bucket ruft /api/dashboard/invoice-aging-details
+ * und zeigt die einzelnen offenen Rechnungen im Bucket.
+ */
+function InvoiceAgingBreakdown({
+  department,
+  deptName,
+  buckets,
+  totalOpenCount,
+  totalOpenEur,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["aging"];
+  totalOpenCount: number;
+  totalOpenEur: number;
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [invoicesByBucket, setInvoicesByBucket] = useState<
+    Record<string, InvoiceAgingRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["aging"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (invoicesByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+      });
+      if (bucket.maxDays != null) {
+        params.set("maxDays", String(bucket.maxDays));
+      }
+      const response = await fetch(
+        `/api/dashboard/invoice-aging-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceAgingRow[];
+        };
+        setInvoicesByBucket((prev) => ({
+          ...prev,
+          [key]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — Detail-Tabelle bleibt leer.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
+        <CardDescription>
+          Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
+          Tagen seit Erstellung. Stornierte/gelöschte sind ausgeschlossen.
+          Klick auf einen Bucket zeigt die einzelnen Rechnungen mit
+          Projekt + Kunde.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Alter</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const invoices = invoicesByBucket[b.bucket];
+              const hasItems = b.count > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      hasItems ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={hasItems ? () => toggleBucket(b) : undefined}
+                    role={hasItems ? "button" : undefined}
+                    tabIndex={hasItems ? 0 : undefined}
+                    aria-expanded={hasItems ? isExpanded : undefined}
+                    aria-label={
+                      hasItems
+                        ? `Rechnungen im Alters-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      hasItems
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        b.minDays >= 30
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatEur(b.totalEur)}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {hasItems ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen in diesem Alters-Bucket.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                            showAgeDays
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalOpenCount.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpenEur)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Fälligkeits-Forecast: welche offenen Rechnungssummen werden nach
+ * Projekt-maturity_date wann zahlungswirksam. Buckets sind klappbar und
+ * zeigen die einzelnen Projekte mit Projekt-Nr, Kunde, Step, Fälligkeit
+ * und offener Rechnungssumme.
+ */
+function CashflowForecast({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["forecast"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [projectsByBucket, setProjectsByBucket] = useState<
+    Record<string, ForecastProjectRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["forecast"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (projectsByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+        maxDays: String(bucket.maxDays),
+      });
+      const response = await fetch(
+        `/api/dashboard/cashflow-forecast-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          projects: ForecastProjectRow[];
+        };
+        setProjectsByBucket((prev) => ({
+          ...prev,
+          [key]: payload.projects ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  const totalProjects = buckets.reduce((s, b) => s + b.projectCount, 0);
+  const totalOpen = buckets.reduce((s, b) => s + b.openEur, 0);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Fälligkeits-Forecast — {deptName}</CardTitle>
+        <CardDescription>
+          Offene Rechnungssummen nach Projekt-Fälligkeit
+          (<code className="font-mono text-xs">current_project_match_status.maturity_date</code>).
+          Zeigt auf einen Blick, welche Beträge wann zahlungswirksam werden.
+          Klick auf einen Bucket zeigt die einzelnen Projekte mit Kunde +
+          Step + Fälligkeit.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fällig in</TableHead>
+              <TableHead className="text-right">Projekte</TableHead>
+              <TableHead className="text-right">Offene Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const projects = projectsByBucket[b.bucket];
+              const isOverdue = b.bucket === "Überfällig";
+              const clickable = b.projectCount > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      clickable ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={clickable ? () => toggleBucket(b) : undefined}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    aria-expanded={clickable ? isExpanded : undefined}
+                    aria-label={
+                      clickable
+                        ? `Projekte im Forecast-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      clickable
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        isOverdue
+                          ? "font-medium text-destructive"
+                          : b.minDays <= 14
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.projectCount.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.openEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.openEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {clickable ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Projekte…
+                          </div>
+                        ) : !projects || projects.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Projekte in diesem Bucket.
+                          </div>
+                        ) : (
+                          <ForecastProjectsTable
+                            projects={projects}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalProjects.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpen)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ForecastProjectsTable({
+  projects,
+  heroProjectLinkTemplate,
+}: {
+  projects: ForecastProjectRow[];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Aktueller Step</TableHead>
+          <TableHead className="py-2">Fällig</TableHead>
+          <TableHead className="py-2 text-right">Offene Summe</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {projects.map((p) => {
+          const ageLabel =
+            p.daysUntil < 0
+              ? `${Math.abs(p.daysUntil)} Tg überfällig`
+              : p.daysUntil === 0
+              ? "heute"
+              : `in ${p.daysUntil} Tg`;
+          return (
+            <TableRow key={p.projectMatchId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={p.projectMatchId}
+                    projectNumber={p.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {p.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {p.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm">
+                <span className="truncate block max-w-[200px]">
+                  {p.stepName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(p.maturityDate)}</p>
+                  <p
+                    className={`text-[10px] ${
+                      p.daysUntil < 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {ageLabel}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {p.openAmount === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  <>
+                    {formatEur(p.openAmount)}
+                    {p.openCount > 0 ? (
+                      <span className="block text-[10px] text-muted-foreground">
+                        {p.openCount} RG
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

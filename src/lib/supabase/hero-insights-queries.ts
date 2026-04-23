@@ -459,6 +459,19 @@ export interface InvoiceStatusBucket {
   totalEur: number;
 }
 
+export interface CashflowForecastBucket {
+  /** Label für die UI, z. B. "0-7 Tage" oder "Überfällig". */
+  bucket: string;
+  /** Inklusive Untergrenze in Tagen relativ zu heute (kann negativ sein). */
+  minDays: number;
+  /** Exklusive Obergrenze (Überfällig geht effektiv bis -∞, >90 Tage bis +∞). */
+  maxDays: number;
+  /** Anzahl offener Projekte deren maturity_date in diesem Fenster liegt. */
+  projectCount: number;
+  /** Summe der offenen Rechnungen dieser Projekte. */
+  openEur: number;
+}
+
 export interface CashflowDto {
   aging: AgingBucket[];
   pipelineRevenueEur: number;
@@ -469,6 +482,11 @@ export interface CashflowDto {
   totalOpenCount: number;
   /** Verteilung der Rechnungen nach Hero-Status (was ist mit denen passiert). */
   statusBreakdown: InvoiceStatusBucket[];
+  /**
+   * Forecast: offene Rechnungssummen nach Projekt-Fälligkeit (maturity_date).
+   * Buckets: Überfällig / 0-7 / 8-14 / 15-30 / 31-60 / 61-90 / >90 Tage.
+   */
+  forecast: CashflowForecastBucket[];
 }
 
 const INVOICE_STATUS_META: Record<number, { label: string; description: string }> = {
@@ -498,11 +516,12 @@ const loadCashflowInner = cache(
   async (department: Department): Promise<CashflowDto> => {
     const supabase = supabaseAdmin();
 
-    const [summaryResp, statusResp] = await Promise.all([
+    const [summaryResp, statusResp, forecastResp] = await Promise.all([
       supabase.rpc("compute_cashflow_summary", { p_department: department }),
       supabase.rpc("compute_invoice_status_breakdown", {
         p_department: department,
       }),
+      supabase.rpc("compute_cashflow_forecast", { p_department: department }),
     ]);
     const { data, error } = summaryResp;
     if (error) throw new Error(`compute_cashflow_summary: ${error.message}`);
@@ -556,6 +575,21 @@ const loadCashflowInner = cache(
       };
     });
 
+    const forecastRows = (forecastResp.data ?? []) as Array<{
+      bucket: string;
+      min_days: number;
+      max_days: number;
+      project_count: number | string;
+      open_eur: number | string;
+    }>;
+    const forecast: CashflowForecastBucket[] = forecastRows.map((row) => ({
+      bucket: row.bucket,
+      minDays: Number(row.min_days) || 0,
+      maxDays: Number(row.max_days) || 0,
+      projectCount: num(row.project_count),
+      openEur: num(row.open_eur),
+    }));
+
     return {
       aging: (dto.aging ?? []).map((a) => ({
         bucket: a.bucket,
@@ -582,9 +616,145 @@ const loadCashflowInner = cache(
         GEBAEUDETECHNIK: num(r.GEBAEUDETECHNIK),
       })),
       statusBreakdown,
+      forecast,
     };
   }
 );
+
+// ---------------------------------------------------------------------------
+// Invoice Drill-Down pro Status
+// ---------------------------------------------------------------------------
+
+export interface InvoiceDetailRow {
+  invoiceId: string;
+  invoiceNr: string | null;
+  invoiceType: string | null;
+  documentTypeName: string | null;
+  documentDate: string | null;
+  createdAtHero: string | null;
+  value: number;
+  projectMatchId: string | null;
+  projectNumber: string | null;
+  projectName: string | null;
+  customerName: string | null;
+}
+
+/**
+ * Einzelrechnungen zu einem Hero-Status. Drill-Down hinter der
+ * Status-Breakdown-Tabelle im Cash-Tab.
+ */
+export async function loadInvoicesByStatus(
+  department: Department,
+  statusCode: number,
+  limit = 500
+): Promise<InvoiceDetailRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("load_invoices_by_status", {
+    p_department: department,
+    p_status_code: statusCode,
+    p_limit: limit,
+  });
+  if (error) {
+    console.warn(
+      `[hero-insights-queries] load_invoices_by_status failed: ${error.message}`
+    );
+    return [];
+  }
+  type DbRow = {
+    invoice_id: string;
+    invoice_nr: string | null;
+    invoice_type: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    value: number | string | null;
+    project_match_id: string | null;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+  };
+  const rows = (data ?? []) as DbRow[];
+  return rows.map((r) => ({
+    invoiceId: r.invoice_id,
+    invoiceNr: r.invoice_nr,
+    invoiceType: r.invoice_type,
+    documentTypeName: r.document_type_name,
+    documentDate: r.document_date,
+    createdAtHero: r.created_at_hero,
+    value: Number(r.value ?? 0) || 0,
+    projectMatchId: r.project_match_id,
+    projectNumber: r.project_number,
+    projectName: cleanProjectTitle(r.project_name, {
+      customerName: r.customer_name,
+      projectNumber: r.project_number,
+    }),
+    customerName: r.customer_name,
+  }));
+}
+
+export interface InvoiceAgingRow extends InvoiceDetailRow {
+  ageDays: number;
+  statusCode: number;
+}
+
+/**
+ * Offene Rechnungen in einem Alters-Bucket (z. B. 30-60 Tage).
+ * Drill-Down hinter der Forderungs-Aging-Tabelle im Cash-Tab.
+ */
+export async function loadInvoicesByAgingBucket(
+  department: Department,
+  minDays: number,
+  maxDays: number | null,
+  limit = 500
+): Promise<InvoiceAgingRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("load_invoices_by_aging_bucket", {
+    p_department: department,
+    p_min_days: minDays,
+    p_max_days: maxDays,
+    p_limit: limit,
+  });
+  if (error) {
+    console.warn(
+      `[hero-insights-queries] load_invoices_by_aging_bucket failed: ${error.message}`
+    );
+    return [];
+  }
+  type DbRow = {
+    invoice_id: string;
+    invoice_nr: string | null;
+    invoice_type: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    age_days: number | null;
+    status_code: number | null;
+    value: number | string | null;
+    project_match_id: string | null;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+  };
+  const rows = (data ?? []) as DbRow[];
+  return rows.map((r) => ({
+    invoiceId: r.invoice_id,
+    invoiceNr: r.invoice_nr,
+    invoiceType: r.invoice_type,
+    documentTypeName: r.document_type_name,
+    documentDate: r.document_date,
+    createdAtHero: r.created_at_hero,
+    value: Number(r.value ?? 0) || 0,
+    ageDays: Number(r.age_days ?? 0) || 0,
+    statusCode: Number(r.status_code ?? 0) || 0,
+    projectMatchId: r.project_match_id,
+    projectNumber: r.project_number,
+    projectName: cleanProjectTitle(r.project_name, {
+      customerName: r.customer_name,
+      projectNumber: r.project_number,
+    }),
+    customerName: r.customer_name,
+  }));
+}
 
 export const loadCashflow = (department: Department): Promise<CashflowDto> =>
   unstable_cache(
@@ -592,3 +762,70 @@ export const loadCashflow = (department: Department): Promise<CashflowDto> =>
     ["loadCashflow", department],
     { revalidate: CACHE_TTL_S, tags: ["cash"] }
   )();
+
+// ---------------------------------------------------------------------------
+// Forecast-Drill-Down — Projekte hinter einem Forecast-Bucket
+// ---------------------------------------------------------------------------
+
+export interface ForecastProjectRow {
+  projectMatchId: string;
+  projectNumber: string | null;
+  projectName: string | null;
+  customerName: string | null;
+  stepName: string | null;
+  maturityDate: string | null;
+  daysUntil: number;
+  openAmount: number;
+  openCount: number;
+}
+
+/**
+ * Projekte in einem Forecast-Bucket (definiert durch Tage-Intervall).
+ * min_days kann negativ sein (Überfällig-Bucket). max_days ist exklusiv.
+ */
+export async function loadForecastProjects(
+  department: Department,
+  minDays: number,
+  maxDays: number,
+  limit = 500
+): Promise<ForecastProjectRow[]> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc("load_forecast_projects", {
+    p_department: department,
+    p_min_days: minDays,
+    p_max_days: maxDays,
+    p_limit: limit,
+  });
+  if (error) {
+    console.warn(
+      `[hero-insights-queries] load_forecast_projects failed: ${error.message}`
+    );
+    return [];
+  }
+  type DbRow = {
+    project_match_id: string;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+    step_name: string | null;
+    maturity_date: string | null;
+    days_until: number | string | null;
+    open_amount: number | string | null;
+    open_count: number | string | null;
+  };
+  const rows = (data ?? []) as DbRow[];
+  return rows.map((r) => ({
+    projectMatchId: r.project_match_id,
+    projectNumber: r.project_number,
+    projectName: cleanProjectTitle(r.project_name, {
+      customerName: r.customer_name,
+      projectNumber: r.project_number,
+    }),
+    customerName: r.customer_name,
+    stepName: r.step_name,
+    maturityDate: r.maturity_date,
+    daysUntil: Number(r.days_until ?? 0) || 0,
+    openAmount: Number(r.open_amount ?? 0) || 0,
+    openCount: Number(r.open_count ?? 0) || 0,
+  }));
+}

@@ -62,10 +62,38 @@ async function getLiveData(
   department: Department,
   timeframe: DashboardTimeframe
 ): Promise<DashboardTabData> {
-  const [allProjects, historicData] = await Promise.all([
+  // Supabase-Reads dürfen das gesamte Dashboard nicht killen. Ein einzelner
+  // Timeout oder Incremental-Cache-Miss auf Vercel-Deploy würde sonst in
+  // der Error-Boundary landen ("Fehler beim Laden der Dashboard-Daten").
+  // Wir fangen den Fehler hier ab und rendern einen leeren Stand mit
+  // sichtbarem Hinweis — ähnlich wie bei Department ohne Projekte.
+  const [allProjectsResult, historicDataResult] = await Promise.allSettled([
     loadHeroProjectsFromSupabase(),
-    getHistoricKPIs(department, timeframe).catch((): HistoricDataPoint[] => []),
+    getHistoricKPIs(department, timeframe),
   ]);
+
+  if (allProjectsResult.status === "rejected") {
+    const message =
+      allProjectsResult.reason instanceof Error
+        ? allProjectsResult.reason.message
+        : String(allProjectsResult.reason);
+    console.warn(
+      `[dashboard-data] loadHeroProjectsFromSupabase failed — rendering empty state. Reason: ${message}`
+    );
+    return {
+      kpiData: EMPTY_KPIS,
+      historicData: [],
+      projectList: [],
+      kpiProjectGroups: createEmptyDashboardKpiProjectGroups(),
+      source: "empty",
+      notice:
+        "Supabase-Verbindung kurz unterbrochen. Aktualisiere die Seite in ein paar Sekunden — der Sync läuft im Hintergrund weiter.",
+    };
+  }
+
+  const allProjects = allProjectsResult.value;
+  const historicData: HistoricDataPoint[] =
+    historicDataResult.status === "fulfilled" ? historicDataResult.value : [];
   const filteredProjects = filterHeroProjectsByTimeframe(allProjects, timeframe);
   const departmentProjects = groupProjectsByDepartment(filteredProjects)[department];
 
