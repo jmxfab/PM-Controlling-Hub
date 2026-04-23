@@ -35,17 +35,23 @@ export function MainNav() {
       <div className="relative max-w-[1400px] mx-auto pl-3 pr-4 h-16 flex items-center gap-6 overflow-visible">
         <Link
           href="/"
-          className="shrink-0 relative block self-center -mb-12 z-40 transition-transform hover:scale-[1.03]"
+          className="group shrink-0 relative block self-center translate-y-8 z-40"
           aria-label="Jumax Controlling · Startseite"
         >
-          <Image
-            src="/jumax-logo.png"
-            alt="Jumax Logo"
-            width={96}
-            height={96}
-            priority
-            className="block"
-          />
+          {/* Größeres Logo (140×140) hängt bewusst über die Header-Unterkante.
+              Eigene dunkle Fläche mit sanftem Schatten + leichtem Ring für
+              saubere Kante gegenüber dem Page-Background, ohne "Sticker"-
+              Eindruck. Auf Hover leicht anheben. */}
+          <div className="relative rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-2xl shadow-black/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]">
+            <Image
+              src="/jumax-logo.png"
+              alt="Jumax Logo"
+              width={140}
+              height={140}
+              priority
+              className="block"
+            />
+          </div>
         </Link>
         <nav className="flex items-center gap-1 flex-1">
           {navItems.map(({ href, label, icon: Icon }) => {
