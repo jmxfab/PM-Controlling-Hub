@@ -181,9 +181,9 @@ export function DashboardShell({
               <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
               <TabsTrigger
                 value="7d"
-                title="Jumax-Woche: Fr 00:00 → Do 23:59"
+                title="Letzte abgeschlossene Jumax-Berichtswoche: Fr 00:00 → Do 23:59. Nicht die laufende Woche, damit Bewegungs-Badges (rein/raus/überfällig) immer eine komplette Vergleichswoche haben."
               >
-                Woche (Fr→Do)
+                Letzte Woche
               </TabsTrigger>
               <TabsTrigger value="14d">14 Tage</TabsTrigger>
               <TabsTrigger value="frei">Frei</TabsTrigger>

@@ -116,18 +116,29 @@ export function getDashboardTimeframeRange(
   }
 
   if (timeframe.mode === "7d") {
-    // Jumax-Berichtswoche: Freitag 00:00 → Donnerstag 23:59. Als IsoDate-
-    // Range (from = Freitag, to = Donnerstag) exakt 7 Kalendertage.
-    // Heute fällt in die aktuelle Jumax-Woche.
+    // Jumax-Berichtswoche: Freitag 00:00 → Donnerstag 23:59.
+    //
+    // Wir zeigen die **letzte abgeschlossene** Jumax-Woche, nicht die
+    // laufende. Grund: an einem Freitag wäre die "aktuelle" Woche
+    // (heute Fr → Do+6 Tage) fast komplett Zukunft → keine Status-
+    // Bewegungen, leere Delta-Badges. An einem Dienstag wäre sie
+    // halb leer. Für Reporting passt eine komplette Vergleichswoche.
+    //
+    // Heute = Fr  → 17.4. → 23.4. (letzten Fr, letzten Do)
+    // Heute = Di  → 17.4. → 23.4. (dieselbe letzte komplette Woche)
+    // Heute = Do  → 17.4. → 23.4. (die laufende Do-Woche ist noch
+    //                               nicht vorbei, zeig die vorige)
     const normalizedReference = atLocalNoon(referenceDate);
     const dayOfWeek = normalizedReference.getDay(); // 0=So … 5=Fr 6=Sa
     // Tage seit letztem Freitag: Fr=0 Sa=1 So=2 Mo=3 Di=4 Mi=5 Do=6
     const daysSinceFriday = (dayOfWeek - 5 + 7) % 7;
-    const fridayStart = addDays(normalizedReference, -daysSinceFriday);
-    const thursdayEnd = addDays(fridayStart, 6);
+    const currentFriday = addDays(normalizedReference, -daysSinceFriday);
+    // 7 Tage zurück → Fr der letzten abgeschlossenen Woche
+    const lastFridayStart = addDays(currentFriday, -7);
+    const lastThursdayEnd = addDays(lastFridayStart, 6);
     return {
-      from: toIsoDate(fridayStart),
-      to: toIsoDate(thursdayEnd),
+      from: toIsoDate(lastFridayStart),
+      to: toIsoDate(lastThursdayEnd),
     };
   }
 
@@ -197,7 +208,7 @@ export function getDashboardTimeframeLabel(
   }
 
   if (timeframe.mode === "7d") {
-    return "Woche (Fr → Do)";
+    return "Letzte Woche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {
