@@ -16,6 +16,9 @@ export interface LogbuchEntry {
   project_match_id: string | null;
   project_number: string | null;
   project_name: string | null;
+  target_id: string | null;
+  hero_modified_at: string | null;
+  raw: Record<string, unknown> | null;
 }
 
 export interface LogbuchFilters {
@@ -52,9 +55,10 @@ export async function loadLogbuchPage(
 
   let query = supabase
     .from("hero_histories")
-    .select("id, entry_date, event_type, user_email, project_match_id", {
-      count: "exact",
-    })
+    .select(
+      "id, entry_date, event_type, user_email, project_match_id, target_id, hero_modified_at, raw",
+      { count: "exact" }
+    )
     .eq("is_deleted", false)
     .order("entry_date", { ascending: false, nullsFirst: false })
     .range(offset, offset + pageSize - 1);
@@ -105,6 +109,9 @@ export async function loadLogbuchPage(
         projectMap[e.project_match_id ?? ""]?.project_number ?? null,
       project_name:
         projectMap[e.project_match_id ?? ""]?.project_name ?? null,
+      target_id: e.target_id ?? null,
+      hero_modified_at: e.hero_modified_at ?? null,
+      raw: (e.raw as Record<string, unknown> | null) ?? null,
     })),
     total: count ?? 0,
   };
