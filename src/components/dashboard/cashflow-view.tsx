@@ -293,10 +293,12 @@ function InvoiceStatusBreakdown({
       <CardHeader>
         <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
         <CardDescription>
-          Verteilung aller Rechnungen nach Hero-Status. 0 €-Einträge
-          (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit gezählt,
-          damit man die Stückzahl sieht. Klick auf einen Status zeigt die
-          einzelnen Rechnungen mit Projekt + Kunde.
+          Verteilung aller Rechnungen nach Hero-Status. Stornorechnungen
+          (negative Beträge) sind mit saldiert — pro Zeile siehst du
+          darunter, wie viele Stornos in der Netto-Summe stecken. 0 €-
+          Einträge (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit
+          gezählt, damit man die Stückzahl sieht. Klick auf einen Status
+          zeigt die einzelnen Rechnungen mit Projekt + Kunde.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -337,6 +339,17 @@ function InvoiceStatusBreakdown({
                         <p className="text-xs text-muted-foreground">
                           {b.description}
                         </p>
+                        {b.reversalCount > 0 ? (
+                          <p
+                            className="text-[10px] text-yellow-600"
+                            title="Stornorechnungen sind mit negativem Wert bereits in der Summe rechts saldiert."
+                          >
+                            davon {b.reversalCount} Storno
+                            {b.reversalCount === 1 ? "" : "s"}
+                            {" · "}
+                            {formatEur(b.reversalEur)}
+                          </p>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
@@ -539,9 +552,11 @@ function InvoiceAgingBreakdown({
         <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
         <CardDescription>
           Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
-          Tagen seit Erstellung. Stornierte/gelöschte sind ausgeschlossen.
-          Klick auf einen Bucket zeigt die einzelnen Rechnungen mit
-          Projekt + Kunde.
+          Tagen seit Erstellung. Originale mit Status „Storniert" und
+          gelöschte sind ausgeschlossen; Stornorechnungen (reversal_invoice
+          mit negativen Werten) sind in den Summen saldiert enthalten und
+          reduzieren den Netto-Betrag entsprechend. Klick auf einen Bucket
+          zeigt die einzelnen Rechnungen mit Projekt + Kunde.
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -457,6 +457,14 @@ export interface InvoiceStatusBucket {
   description: string;
   count: number;
   totalEur: number;
+  /**
+   * Stornorechnungen (type = reversal_invoice, negative Werte) innerhalb
+   * dieses Buckets. Sind in count + totalEur bereits saldiert enthalten —
+   * werden hier separat ausgewiesen, damit der User sieht wie viel Storno
+   * die Netto-Summe schon abzieht.
+   */
+  reversalCount: number;
+  reversalEur: number;
 }
 
 export interface CashflowForecastBucket {
@@ -560,6 +568,8 @@ const loadCashflowInner = cache(
       status_code: number;
       count: number | string;
       total_eur: number | string;
+      reversal_count: number | string | null;
+      reversal_eur: number | string | null;
     }>;
     const statusBreakdown: InvoiceStatusBucket[] = statusRows.map((row) => {
       const meta = INVOICE_STATUS_META[row.status_code] ?? {
@@ -572,6 +582,8 @@ const loadCashflowInner = cache(
         description: meta.description,
         count: num(row.count),
         totalEur: num(row.total_eur),
+        reversalCount: num(row.reversal_count),
+        reversalEur: num(row.reversal_eur),
       };
     });
 
