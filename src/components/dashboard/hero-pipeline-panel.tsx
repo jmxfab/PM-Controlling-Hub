@@ -303,13 +303,18 @@ export function HeroPipelinePanel({
                 tone="neutral"
                 icon={<Euro className="h-4 w-4" />}
                 hint={
+                  showEur &&
                   pipeline.timeframeDelta.accountingTransitionsAmount > 0
                     ? formatEur(
                         pipeline.timeframeDelta.accountingTransitionsAmount
                       )
                     : undefined
                 }
-                explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Betrag = Summe der offenen Rechnungen dieser Projekte."
+                explain={
+                  showEur
+                    ? "Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Betrag = Summe der offenen Rechnungen dieser Projekte."
+                    : "Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Rechnungsbeträge werden nur im Cash-Tab angezeigt."
+                }
                 onClick={() => openKpi("delta_accounting")}
               />
               <KpiTile
@@ -441,7 +446,9 @@ export function HeroPipelinePanel({
                     <TableHead className="py-2">Projekt-Nr.</TableHead>
                     <TableHead className="py-2">Titel / Kunde</TableHead>
                     <TableHead className="py-2">Step</TableHead>
-                    <TableHead className="py-2 text-right">Offene RG</TableHead>
+                    {showEur ? (
+                      <TableHead className="py-2 text-right">Offene RG</TableHead>
+                    ) : null}
                     <TableHead className="py-2">Fällig</TableHead>
                     <TableHead className="py-2 w-8" />
                   </TableRow>
@@ -460,6 +467,7 @@ export function HeroPipelinePanel({
                         isExpanded={isExpanded}
                         onToggle={toggle}
                         heroHref={heroHref}
+                        showEur={showEur}
                       />
                     );
                   })}
@@ -602,12 +610,14 @@ function ProjectRow({
   isExpanded,
   onToggle,
   heroHref,
+  showEur,
 }: {
   project: PipelineProjectRow;
   heroProjectLinkTemplate: string | null;
   isExpanded: boolean;
   onToggle: () => void;
   heroHref: string | null;
+  showEur: boolean;
 }) {
   return (
     <>
@@ -717,13 +727,15 @@ function ProjectRow({
             <span className="text-muted-foreground">–</span>
           )}
         </TableCell>
-        <TableCell className="py-1.5 text-right font-mono text-xs tabular-nums whitespace-nowrap">
-          {project.openInvoiceAmount > 0 ? (
-            formatEur(project.openInvoiceAmount)
-          ) : (
-            <span className="text-muted-foreground">–</span>
-          )}
-        </TableCell>
+        {showEur ? (
+          <TableCell className="py-1.5 text-right font-mono text-xs tabular-nums whitespace-nowrap">
+            {project.openInvoiceAmount > 0 ? (
+              formatEur(project.openInvoiceAmount)
+            ) : (
+              <span className="text-muted-foreground">–</span>
+            )}
+          </TableCell>
+        ) : null}
         <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
           {project.maturityDate
             ? new Date(project.maturityDate).toLocaleDateString("de-DE")
@@ -739,7 +751,7 @@ function ProjectRow({
       </TableRow>
       {isExpanded ? (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={6} className="py-3">
+          <TableCell colSpan={showEur ? 6 : 5} className="py-3">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
               <InfoBlock label="Aktueller Step">
                 {project.stepName ?? "–"}
@@ -770,7 +782,7 @@ function ProjectRow({
                   ? new Date(project.createdAtHero).toLocaleDateString("de-DE")
                   : "–"}
               </InfoBlock>
-              {project.openInvoiceCount > 0 ? (
+              {showEur && project.openInvoiceCount > 0 ? (
                 <InfoBlock label="Offene Rechnungen">
                   {formatEur(project.openInvoiceAmount)} ·{" "}
                   {project.openInvoiceCount} Stück
