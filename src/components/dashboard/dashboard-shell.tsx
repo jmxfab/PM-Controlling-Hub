@@ -181,9 +181,15 @@ export function DashboardShell({
               <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
               <TabsTrigger
                 value="7d"
-                title="Letzte abgeschlossene Jumax-Berichtswoche: Fr 00:00 → Do 23:59. Nicht die laufende Woche, damit Bewegungs-Badges (rein/raus/überfällig) immer eine komplette Vergleichswoche haben."
+                title="Rollende letzte 7 Tage: heute-6 → heute. Inklusive heutigem Tag."
               >
                 Letzte Woche
+              </TabsTrigger>
+              <TabsTrigger
+                value="jumax_week"
+                title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
+              >
+                Jumax-Woche
               </TabsTrigger>
               <TabsTrigger value="14d">14 Tage</TabsTrigger>
               <TabsTrigger value="frei">Frei</TabsTrigger>

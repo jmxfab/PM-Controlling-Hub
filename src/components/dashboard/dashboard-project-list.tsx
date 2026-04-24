@@ -200,43 +200,6 @@ export function DashboardProjectList({
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <SummaryBlock
-                        label="Kontext"
-                        primary={contextSummary ?? "Kein Kontext verfügbar"}
-                        secondary={
-                          project.maturityDate
-                            ? `Fällig ${formatDate(project.maturityDate)}`
-                            : null
-                        }
-                        muted={!contextSummary}
-                      />
-                      <SummaryBlock
-                        label="Kunde"
-                        icon={User}
-                        primary={customerSummary ?? "Keine Kundendaten"}
-                        secondary={addressSummary}
-                        muted={!customerSummary && !addressSummary}
-                      />
-                      <SummaryBlock
-                        label="Kontakt"
-                        icon={Phone}
-                        primary={contactSummary ?? "Keine Kontaktdaten"}
-                        secondary={contactSecondary}
-                        muted={!contactSummary && !contactSecondary}
-                      />
-                      <SummaryBlock
-                        label="Dokumente"
-                        icon={FileText}
-                        primary={formatDocumentSummary(project.documents)}
-                        secondary={
-                          openInvoiceDocuments.length > 0
-                            ? formatOpenInvoiceSummary(openInvoiceDocuments)
-                            : getLatestDocumentLabel(project.documents)
-                        }
-                        muted={project.documents.length === 0}
-                      />
-                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 xl:justify-end">

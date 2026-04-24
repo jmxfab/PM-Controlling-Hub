@@ -6,6 +6,7 @@ export const DASHBOARD_TIMEFRAME_MODES = [
   "gestern",
   "3d",
   "7d",
+  "jumax_week",
   "14d",
   "30d",
   "frei",
@@ -116,6 +117,17 @@ export function getDashboardTimeframeRange(
   }
 
   if (timeframe.mode === "7d") {
+    // Rollende letzte 7 Tage: heute-6 → heute. Zeigt die Bewegungen der
+    // vergangenen Woche inklusive des heutigen Tages — unabhängig vom
+    // Jumax-Berichtsrhythmus.
+    const normalizedReference = atLocalNoon(referenceDate);
+    return {
+      from: toIsoDate(addDays(normalizedReference, -6)),
+      to: toIsoDate(normalizedReference),
+    };
+  }
+
+  if (timeframe.mode === "jumax_week") {
     // Jumax-Berichtswoche: Freitag 00:00 → Donnerstag 23:59.
     //
     // Wir zeigen die **letzte abgeschlossene** Jumax-Woche, nicht die
@@ -208,7 +220,11 @@ export function getDashboardTimeframeLabel(
   }
 
   if (timeframe.mode === "7d") {
-    return "Letzte Woche (Fr → Do)";
+    return "Letzte Woche (7 Tage)";
+  }
+
+  if (timeframe.mode === "jumax_week") {
+    return "Jumax-Woche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {
@@ -245,6 +261,10 @@ export function getDashboardSnapshotContextLabel(
 
   if (timeframe.mode === "7d") {
     return "letzten Snapshot der letzten 7 Tage";
+  }
+
+  if (timeframe.mode === "jumax_week") {
+    return "letzten Snapshot der letzten Jumax-Woche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {
