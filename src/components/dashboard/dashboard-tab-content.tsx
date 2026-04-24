@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { DashboardCharts } from "./dashboard-charts";
 import { DashboardInitialLoader } from "./dashboard-initial-loader";
 import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
+import { DashboardPeriodKpiCards } from "./dashboard-period-kpi-cards";
 import { DashboardProjectList } from "./dashboard-project-list";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import { getDashboardTabData } from "@/lib/services/dashboard-data";
@@ -67,11 +68,6 @@ export function DashboardTabContent({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
           timeframe={timeframe}
         />
-        <DashboardPipelineSection
-          department={department}
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-          timeframe={timeframe}
-        />
       </Suspense>
     </div>
   );
@@ -86,7 +82,13 @@ async function DashboardMainSection({
   heroProjectLinkTemplate: string | null;
   timeframe: DashboardTimeframe;
 }) {
-  const tabData = await getDashboardTabData(department, timeframe);
+  const pipelineRange = buildPipelineRange(timeframe);
+  const [tabData, pipeline] = await Promise.all([
+    getDashboardTabData(department, timeframe),
+    loadHeroPipeline(department, pipelineRange, {
+      excludeCashSteps: true,
+    }).catch(() => null),
+  ]);
   const {
     kpiData,
     historicData,
@@ -107,6 +109,8 @@ async function DashboardMainSection({
       ? "Noch keine historischen Daten vorhanden."
       : "Im gewählten Zeitraum liegen noch keine historischen Daten vor.";
   const statusNotice = notice ?? getDashboardStatusNotice(source);
+  const timeframeLabel = getDashboardTimeframeLabel(timeframe);
+  const periodDelta = pipeline?.timeframeDelta ?? null;
 
   return (
     <div className="space-y-4">
@@ -124,6 +128,19 @@ async function DashboardMainSection({
         source={source}
         timeframe={timeframe}
       />
+      {pipelineRange && periodDelta ? (
+        <DashboardPeriodKpiCards
+          department={department}
+          range={pipelineRange}
+          timeframeLabel={timeframeLabel}
+          counts={{
+            newProjects: periodDelta.newProjects,
+            completedTransitions: periodDelta.completedTransitions,
+            reopenedTransitions: periodDelta.reopenedTransitions,
+          }}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      ) : null}
       {historicData.length > 0 ? (
         <DashboardCharts
           historicData={historicData}
@@ -139,32 +156,14 @@ async function DashboardMainSection({
         source={source}
         timeframe={timeframe}
       />
+      {pipeline ? (
+        <HeroPipelinePanel
+          department={department}
+          pipeline={pipeline}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      ) : null}
     </div>
-  );
-}
-
-async function DashboardPipelineSection({
-  department,
-  heroProjectLinkTemplate,
-  timeframe,
-}: {
-  department: Department;
-  heroProjectLinkTemplate: string | null;
-  timeframe: DashboardTimeframe;
-}) {
-  const pipelineRange = buildPipelineRange(timeframe);
-  const pipeline = await loadHeroPipeline(department, pipelineRange, {
-    excludeCashSteps: true,
-  }).catch(() => null);
-
-  if (!pipeline) return null;
-
-  return (
-    <HeroPipelinePanel
-      department={department}
-      pipeline={pipeline}
-      heroProjectLinkTemplate={heroProjectLinkTemplate}
-    />
   );
 }
 
