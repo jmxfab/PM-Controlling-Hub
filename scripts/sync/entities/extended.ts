@@ -178,6 +178,23 @@ export const calendarEventsSync = makePaginatedEntity({
   queryField: "calendar_events",
   pageSize: 200,
   concurrency: 3,
+  // Volle Kalender-Felder: für Controlling-KPIs (Gesamtmontagen, WB/Speicher,
+  // Zählerwechsel) brauchen wir title, description, category, start, end,
+  // project_match_id und is_done.
+  selectionSet: `
+    id
+    created
+    modified
+    title
+    description
+    start
+    end
+    all_day
+    is_done
+    project_match_id
+    category_id
+    category { id name }
+  `,
 });
 
 export const fileUploadsSync = makePaginatedEntity({
