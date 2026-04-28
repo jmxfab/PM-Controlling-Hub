@@ -284,15 +284,15 @@ const loadLongestRunningInner = cache(
     const now = Date.now();
     const withAge = all.map((r) => {
       const wasReopened = r.was_reopened === true;
-      // Startzeitpunkt fürs "offen seit" — beim Reopen der Zeitpunkt
-      // der letzten Abschluss (last_finish_at), nicht der letzte
-      // Nacharbeit-Eintrag. Die "wieder offen"-Uhr startet, wenn der
-      // Abschluss gebrochen wurde. Fallback: last_rework_at, zuletzt
-      // created_at_hero.
-      const reopenStart = wasReopened
-        ? r.last_finish_at ?? r.last_rework_at
-        : null;
-      const effectiveStart = reopenStart ?? r.created_at_hero;
+      // Startzeitpunkt fürs "offen seit": wenn das Projekt jemals einen
+      // Finished-Step (abgeschlossen | archiv | fertig | finished |
+      // abschlussrechnung | bewertungspool) erreicht hatte, ist
+      // last_finish_at gesetzt. Wir starten die Alter-Uhr in dem Fall ab
+      // dort — egal ob klassischer Reopen (Nacharbeit nach Abschluss)
+      // ODER ob das Projekt einfach nach Abschlussrechnung/
+      // Bewertungspool wieder in einen aktiven Step gewandert ist.
+      // Fallback wenn nie finished erreicht: created_at_hero.
+      const effectiveStart = r.last_finish_at ?? r.created_at_hero;
       const ageMs = effectiveStart
         ? now - Date.parse(effectiveStart)
         : 0;
