@@ -812,6 +812,9 @@ interface LogbuchRecentEntry {
   event_type: string | null;
   user_email: string | null;
   description: string | null;
+  custom_title: string | null;
+  custom_text: string | null;
+  author_name: string | null;
 }
 
 function RecentLogbuchEntries({ projectId }: { projectId: string }) {
@@ -884,10 +887,11 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
                   onClick={() => setFullOpen(true)}
                   className="block w-full text-left rounded-md transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-1.5 text-xs italic text-foreground/90">
-                    <div className="flex items-start justify-between gap-3 not-italic">
+                  <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-1.5 text-xs text-foreground/90">
+                    <div className="flex items-start justify-between gap-3">
                       <span className="text-[11px] font-medium text-foreground/80">
-                        {formatLogbuchAuthor(entry.user_email)}
+                        {entry.author_name?.trim() ||
+                          formatLogbuchAuthor(entry.user_email)}
                       </span>
                       <span className="text-[10px] tabular-nums text-muted-foreground whitespace-nowrap">
                         {entry.entry_date
@@ -901,8 +905,15 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
                           : "–"}
                       </span>
                     </div>
-                    <span className="block mt-0.5">
-                      {`„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                    {entry.custom_title ? (
+                      <span className="block mt-0.5 text-[11px] font-medium text-foreground/80">
+                        {entry.custom_title}
+                      </span>
+                    ) : null}
+                    <span className="block mt-0.5 italic line-clamp-2">
+                      {entry.custom_text
+                        ? stripHtml(entry.custom_text)
+                        : `„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
                     </span>
                   </blockquote>
                 </button>
@@ -1233,6 +1244,8 @@ interface ProjectLogbuchEntry extends LogbuchRecentEntry {
   project_match_id: string | null;
 }
 
+// Helpers (stripHtml / sanitizeLogbuchHtml) sind weiter unten definiert.
+
 function ProjectLogbuchDialog({
   projectId,
   open,
@@ -1322,7 +1335,8 @@ function ProjectLogbuchDialog({
                   <blockquote className="border-l-2 border-primary/40 bg-muted/30 pl-3 pr-3 py-2 text-sm">
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-xs font-medium text-foreground/80">
-                        {formatLogbuchAuthor(entry.user_email)}
+                        {entry.author_name?.trim() ||
+                          formatLogbuchAuthor(entry.user_email)}
                       </span>
                       <span className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap">
                         {entry.entry_date
@@ -1336,9 +1350,23 @@ function ProjectLogbuchDialog({
                           : "–"}
                       </span>
                     </div>
-                    <span className="block mt-1 italic text-foreground/90">
-                      {`„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
-                    </span>
+                    {entry.custom_title ? (
+                      <span className="block mt-1 text-xs font-medium text-foreground/80">
+                        {entry.custom_title}
+                      </span>
+                    ) : null}
+                    {entry.custom_text ? (
+                      <div
+                        className="mt-1 text-foreground/90 text-sm leading-relaxed prose prose-sm prose-invert max-w-none [&_*]:!my-0"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeLogbuchHtml(entry.custom_text),
+                        }}
+                      />
+                    ) : (
+                      <span className="block mt-1 italic text-foreground/90">
+                        {`„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                      </span>
+                    )}
                   </blockquote>
                 </li>
               ))}
@@ -1382,4 +1410,53 @@ function formatLogbuchAuthor(email: string | null | undefined): string {
 function capitalize(value: string): string {
   if (!value) return value;
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+/**
+ * Hero schickt custom_text als HTML-String (mit <br>, <i>, <b>). Für die
+ * Vorschau-Karte wollen wir reinen Text ohne Markup.
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/?[a-z][^>]*>/gi, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Sanitizer für custom_text im Vollansicht-Dialog: nur einen kleinen
+ * Whitelist von Hero-üblichen Tags durchlassen, alles andere strippen.
+ * Schützt vor injizierten <script>/<iframe>/onclick etc.
+ */
+function sanitizeLogbuchHtml(html: string): string {
+  const allowedTags = new Set([
+    "br",
+    "b",
+    "strong",
+    "i",
+    "em",
+    "u",
+    "p",
+    "ul",
+    "ol",
+    "li",
+    "a",
+  ]);
+  return html
+    .replace(/<\/?([a-z][a-z0-9]*)([^>]*)>/gi, (full, tag) => {
+      const lower = tag.toLowerCase();
+      if (!allowedTags.has(lower)) return "";
+      // Auch erlaubte Tags ohne Attribute rendern — keine onclick-Listener.
+      if (lower === "br") return "<br>";
+      const isClosing = full.startsWith("</");
+      return isClosing ? `</${lower}>` : `<${lower}>`;
+    })
+    .replace(/javascript:/gi, "");
 }

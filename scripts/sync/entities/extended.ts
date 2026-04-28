@@ -209,15 +209,27 @@ export const historiesSync = makePaginatedEntity({
   pageSize: 500,
   concurrency: 3,
   maxRows: 500_000,
+  // Vollständige History-Felder inkl. der neu identifizierten Logbuch-
+  // Inhalte (custom_title/custom_text/author_name). `type` ist
+  // deprecated → durch `target` ersetzt (gleicher Inhalt). target_job
+  // referenziert verknüpfte Field-Service-Jobs.
   selectionSet: `
     id
     created
     modified
-    type
-    target_project_match_id
+    target
     target_id
+    target_project_match_id
+    target_company_id
+    type_code
     user_id
     user { id email }
+    author_name
+    custom_title
+    custom_text
+    role_visibility
+    is_editable
+    associated_outbox_mail_id
   `,
 });
 

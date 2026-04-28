@@ -20,10 +20,18 @@ export interface LogbuchEntry {
   hero_modified_at: string | null;
   raw: Record<string, unknown> | null;
   /**
-   * Synthetisch aus den nächsten Status-Transitionen abgeleitet, weil
-   * Hero in der histories-Query selber keinen Freitext liefert. Beispiele:
-   *   "Step gewechselt zu: 🧮 Heizlastberechnung"
-   *   "Projekt bearbeitet"
+   * Echter Logbuch-Eintragstext aus Hero (custom_text). Kann HTML-
+   * Markup enthalten (`<br>`, `<i>` etc.). Vor dem nächsten Sync-Lauf
+   * für Altdaten NULL — fällt dann auf description zurück.
+   */
+  custom_text: string | null;
+  custom_title: string | null;
+  author_name: string | null;
+  /**
+   * Synthetisch aus den nächsten Status-Transitionen abgeleitet, falls
+   * Hero keinen custom_text liefert (z.B. reine Status-Wechsel).
+   * Beispiele: "Step gewechselt zu: 🧮 Heizlastberechnung",
+   * "Projekt bearbeitet".
    */
   description: string | null;
 }
@@ -63,7 +71,7 @@ export async function loadLogbuchPage(
   let query = supabase
     .from("hero_histories")
     .select(
-      "id, entry_date, event_type, user_email, project_match_id, target_id, hero_modified_at, raw",
+      "id, entry_date, event_type, user_email, project_match_id, target_id, hero_modified_at, raw, custom_title, custom_text, author_name",
       { count: "exact" }
     )
     .eq("is_deleted", false)
@@ -166,6 +174,9 @@ export async function loadLogbuchPage(
       target_id: e.target_id ?? null,
       hero_modified_at: e.hero_modified_at ?? null,
       raw: (e.raw as Record<string, unknown> | null) ?? null,
+      custom_title: (e as { custom_title?: string | null }).custom_title ?? null,
+      custom_text: (e as { custom_text?: string | null }).custom_text ?? null,
+      author_name: (e as { author_name?: string | null }).author_name ?? null,
       description: deriveDescription(e),
     })),
     total: count ?? 0,
