@@ -16,7 +16,7 @@ export default async function AufgabenPage() {
   ]);
 
   return (
-    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1400px] mx-auto">
+    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-xl font-semibold">Aufgaben</h1>
         <p className="text-sm text-muted-foreground">

@@ -42,7 +42,7 @@ export function MainNav() {
 
   return (
     <header className="relative border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30">
-      <div className="relative max-w-[1400px] mx-auto pl-1 pr-4 h-24 flex items-center gap-6">
+      <div className="relative max-w-[1600px] mx-auto pl-1 pr-4 h-24 flex items-center gap-6">
         <Link
           href="/"
           className="shrink-0 block"

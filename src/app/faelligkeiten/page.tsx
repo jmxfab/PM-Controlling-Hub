@@ -82,7 +82,7 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
+    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
       <UpcomingView
         department={department}
         window={win}

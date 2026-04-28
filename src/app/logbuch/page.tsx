@@ -23,7 +23,7 @@ export default async function LogbuchPage() {
   ]);
 
   return (
-    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1400px] mx-auto">
+    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-xl font-semibold">Logbuch</h1>
         <p className="text-sm text-muted-foreground">

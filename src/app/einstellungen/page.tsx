@@ -31,7 +31,7 @@ export default async function SettingsPage() {
     : "Ohne Hero API Key kann der Sync in GitHub Actions nicht laufen — bitte den Key hinterlegen.";
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1200px] mx-auto min-h-screen">
+    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
       <div className="flex justify-end">
         <SyncButton
           liveHeroAvailable={liveHeroAvailable}
