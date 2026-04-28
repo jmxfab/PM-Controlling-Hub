@@ -11,6 +11,7 @@ export const revalidate = 60;
 
 export default async function HeizlastPage() {
   const projects = await loadHeizlastProjects().catch(() => []);
+  const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
@@ -20,7 +21,7 @@ export default async function HeizlastPage() {
           WP-Projekte in Angebotsprüfung — {projects.length} Projekt{projects.length !== 1 ? "e" : ""}
         </p>
       </div>
-      <HeizlastView projects={projects} />
+      <HeizlastView projects={projects} heroProjectLinkTemplate={heroProjectLinkTemplate} />
     </div>
   );
 }

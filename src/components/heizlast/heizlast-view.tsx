@@ -8,6 +8,18 @@ import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 
 interface Props {
   projects: HeizlastProject[];
+  heroProjectLinkTemplate: string | null;
+}
+
+/** Bereinigt Hero-Projektnamen wie "-7558 | --, --, --" → "-7558" */
+function cleanProjectName(name: string | null): string {
+  if (!name) return "–";
+  // Entferne alle ", --" Segmente, dann trailing " | --" oder " | "
+  return name
+    .replace(/,\s*--/g, "")
+    .replace(/\s*\|\s*--\s*$/, "")
+    .replace(/\s*\|\s*$/, "")
+    .trim() || "–";
 }
 
 const WP_DOC_TYPES = ["auftragsbestätigung", "auftragsbestaetigung", "wp", "wärmepumpe", "waermepumpe"];
@@ -18,7 +30,7 @@ function isWpConfirmation(typeName: string | null): boolean {
   return WP_DOC_TYPES.some((t) => lower.includes(t));
 }
 
-export function HeizlastView({ projects }: Props) {
+export function HeizlastView({ projects, heroProjectLinkTemplate }: Props) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -62,22 +74,36 @@ export function HeizlastView({ projects }: Props) {
             return (
               <div key={project.id}>
                 {idx > 0 && <div className="border-t" />}
-                <button
-                  type="button"
-                  onClick={() => toggle(project.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-                >
-                  {open ? <ChevronDown size={15} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={15} className="shrink-0 text-muted-foreground" />}
-                  <span className="font-mono text-xs text-muted-foreground w-24 shrink-0">{project.project_number ?? "–"}</span>
-                  <span className="text-sm font-medium flex-1 truncate">{project.project_name ?? "–"}</span>
-                  <span className="text-xs text-muted-foreground hidden sm:block truncate max-w-[200px]">{project.customer_name ?? ""}</span>
-                  {project.maturity_date && (
-                    <span className="text-xs text-muted-foreground hidden md:block whitespace-nowrap">
-                      {new Date(project.maturity_date).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                    </span>
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => toggle(project.id)}
+                    className="flex-1 flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                  >
+                    {open ? <ChevronDown size={15} className="shrink-0 text-muted-foreground" /> : <ChevronRight size={15} className="shrink-0 text-muted-foreground" />}
+                    <span className="font-mono text-xs text-muted-foreground w-24 shrink-0">{project.project_number ?? "–"}</span>
+                    <span className="text-sm font-medium flex-1 truncate">{cleanProjectName(project.project_name)}</span>
+                    <span className="text-xs text-muted-foreground hidden sm:block truncate max-w-[200px]">{project.customer_name ?? ""}</span>
+                    {project.maturity_date && (
+                      <span className="text-xs text-muted-foreground hidden md:block whitespace-nowrap">
+                        {new Date(project.maturity_date).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                      </span>
+                    )}
+                    <Badge variant="secondary" className="shrink-0 ml-2">{project.documents.length} Dok.</Badge>
+                  </button>
+                  {heroProjectLinkTemplate && (
+                    <a
+                      href={heroProjectLinkTemplate.replace("{projectId}", project.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title="In Hero öffnen"
+                      className="shrink-0 px-3 py-3 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
                   )}
-                  <Badge variant="secondary" className="shrink-0 ml-2">{project.documents.length} Dok.</Badge>
-                </button>
+                </div>
 
                 {open && (
                   <div className="bg-muted/20 px-4 pb-3 pt-1 border-t space-y-3">
