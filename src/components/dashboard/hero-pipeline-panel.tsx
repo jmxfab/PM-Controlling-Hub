@@ -297,26 +297,23 @@ export function HeroPipelinePanel({
                 explain="Projekte deren allererster Status-Eintrag in Hero im gewählten Zeitraum liegt. Damit ist das Projekt in diesem Fenster neu aufgenommen worden."
                 onClick={() => openKpi("delta_new")}
               />
-              <KpiTile
-                label="In Abrechnung"
-                value={pipeline.timeframeDelta.accountingTransitions}
-                tone="neutral"
-                icon={<Euro className="h-4 w-4" />}
-                hint={
-                  showEur &&
-                  pipeline.timeframeDelta.accountingTransitionsAmount > 0
-                    ? formatEur(
-                        pipeline.timeframeDelta.accountingTransitionsAmount
-                      )
-                    : undefined
-                }
-                explain={
-                  showEur
-                    ? "Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Betrag = Summe der offenen Rechnungen dieser Projekte."
-                    : "Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Rechnungsbeträge werden nur im Cash-Tab angezeigt."
-                }
-                onClick={() => openKpi("delta_accounting")}
-              />
+              {showEur ? (
+                <KpiTile
+                  label="In Abrechnung"
+                  value={pipeline.timeframeDelta.accountingTransitions}
+                  tone="neutral"
+                  icon={<Euro className="h-4 w-4" />}
+                  hint={
+                    pipeline.timeframeDelta.accountingTransitionsAmount > 0
+                      ? formatEur(
+                          pipeline.timeframeDelta.accountingTransitionsAmount
+                        )
+                      : undefined
+                  }
+                  explain="Status-Wechsel in einen Abrechnungs-Step (Abschlussrechnung, Kundenrechnung, Schlussrechnung, Teil-RG, Teilrechnung) im Zeitraum. Betrag = Summe der offenen Rechnungen dieser Projekte."
+                  onClick={() => openKpi("delta_accounting")}
+                />
+              ) : null}
               <KpiTile
                 label="Nacharbeit-Starts"
                 value={pipeline.timeframeDelta.reworkTransitions}
@@ -821,6 +818,7 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fullOpen, setFullOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -876,33 +874,55 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
           Keine Logbuch-Einträge vorhanden.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {entries.map((entry) => (
-            <li key={entry.id}>
-              <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-1.5 text-xs italic text-foreground/90">
-                <div className="flex items-start justify-between gap-3 not-italic">
-                  <span className="text-[11px] font-medium text-foreground/80">
-                    {formatLogbuchAuthor(entry.user_email)}
-                  </span>
-                  <span className="text-[10px] tabular-nums text-muted-foreground whitespace-nowrap">
-                    {entry.entry_date
-                      ? new Date(entry.entry_date).toLocaleString("de-DE", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "–"}
-                  </span>
-                </div>
-                <span className="block mt-0.5">
-                  {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
-                </span>
-              </blockquote>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-2">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => setFullOpen(true)}
+                  className="block w-full text-left rounded-md transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-1.5 text-xs italic text-foreground/90">
+                    <div className="flex items-start justify-between gap-3 not-italic">
+                      <span className="text-[11px] font-medium text-foreground/80">
+                        {formatLogbuchAuthor(entry.user_email)}
+                      </span>
+                      <span className="text-[10px] tabular-nums text-muted-foreground whitespace-nowrap">
+                        {entry.entry_date
+                          ? new Date(entry.entry_date).toLocaleString("de-DE", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "–"}
+                      </span>
+                    </div>
+                    <span className="block mt-0.5">
+                      {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                    </span>
+                  </blockquote>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {total > entries.length ? (
+            <button
+              type="button"
+              onClick={() => setFullOpen(true)}
+              className="text-[11px] text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+            >
+              Alle {total} Einträge ansehen →
+            </button>
+          ) : null}
+          <ProjectLogbuchDialog
+            projectId={projectId}
+            open={fullOpen}
+            onOpenChange={setFullOpen}
+          />
+        </>
       )}
     </div>
   );
@@ -1205,6 +1225,127 @@ function GroupedStepList({
         />
       ))}
     </div>
+  );
+}
+
+interface ProjectLogbuchEntry extends LogbuchRecentEntry {
+  project_match_id: string | null;
+}
+
+function ProjectLogbuchDialog({
+  projectId,
+  open,
+  onOpenChange,
+}: {
+  projectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [entries, setEntries] = useState<ProjectLogbuchEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          project_id: projectId,
+          page: "0",
+          page_size: "200",
+        });
+        const res = await fetch(`/api/logbuch?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          if (!cancelled) setError(`HTTP ${res.status}`);
+          return;
+        }
+        const json = (await res.json()) as {
+          entries?: ProjectLogbuchEntry[];
+          total?: number;
+        };
+        if (!cancelled) {
+          setEntries(json.entries ?? []);
+          setTotal(json.total ?? 0);
+        }
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Logbuch · Projekt</DialogTitle>
+          <DialogDescription>
+            {loading
+              ? "Lade Einträge…"
+              : `${total} Einträge insgesamt${
+                  total > entries.length
+                    ? ` · ${entries.length} angezeigt`
+                    : ""
+                }`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="overflow-y-auto -mx-6 px-6">
+          {loading ? (
+            <p className="py-8 text-sm text-muted-foreground text-center">
+              Lade Einträge…
+            </p>
+          ) : error ? (
+            <p className="py-8 text-sm text-destructive text-center">
+              {error}
+            </p>
+          ) : entries.length === 0 ? (
+            <p className="py-8 text-sm text-muted-foreground text-center italic">
+              Keine Einträge gefunden.
+            </p>
+          ) : (
+            <ul className="space-y-2 pb-2">
+              {entries.map((entry) => (
+                <li key={entry.id}>
+                  <blockquote className="border-l-2 border-primary/40 bg-muted/30 pl-3 pr-3 py-2 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-xs font-medium text-foreground/80">
+                        {formatLogbuchAuthor(entry.user_email)}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap">
+                        {entry.entry_date
+                          ? new Date(entry.entry_date).toLocaleString("de-DE", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "–"}
+                      </span>
+                    </div>
+                    <span className="block mt-1 italic text-foreground/90">
+                      {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                    </span>
+                  </blockquote>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
