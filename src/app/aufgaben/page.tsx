@@ -11,7 +11,7 @@ export const revalidate = 60;
 
 export default async function AufgabenPage() {
   const [pageResult, stats] = await Promise.all([
-    loadAufgabenPage({}, 0, 50).catch(() => ({ entries: [], total: 0 })),
+    loadAufgabenPage({ category: "info" }, 0, 50).catch(() => ({ entries: [], total: 0 })),
     loadAufgabenStats().catch(() => ({ total: 0, unread: 0, aufgaben: 0 })),
   ]);
 

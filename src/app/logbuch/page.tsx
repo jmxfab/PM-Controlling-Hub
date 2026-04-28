@@ -12,10 +12,18 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-export default async function LogbuchPage() {
+export default async function LogbuchPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const params = await searchParams;
+  const projectId = params.project_id ?? undefined;
+  const filters = { projectId };
+
   const [pageResult, aggregations] = await Promise.all([
-    loadLogbuchPage({}, 0, 100).catch(() => ({ entries: [], total: 0 })),
-    loadLogbuchAggregations({}).catch(() => ({
+    loadLogbuchPage(filters, 0, 100).catch(() => ({ entries: [], total: 0 })),
+    loadLogbuchAggregations(filters).catch(() => ({
       byUser: [],
       byProject: [],
       byEventType: [],
@@ -37,6 +45,7 @@ export default async function LogbuchPage() {
           total: pageResult.total,
           aggregations,
         }}
+        initialFilters={projectId ? { projectId } : undefined}
       />
     </div>
   );
