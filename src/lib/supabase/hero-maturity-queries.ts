@@ -23,11 +23,19 @@ export interface UpcomingProject {
   projectNumber: string | null;
   projectName: string | null;
   customerName: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerAddress: string | null;
   stepName: string | null;
+  statusName: string | null;
+  statusCode: number | null;
+  previousStepName: string | null;
   maturityDate: string | null;
+  createdAtHero: string | null;
   department: ProjectDepartment | null;
   isOverdue: boolean;
   daysUntilDue: number;
+  wasReopened: boolean;
 }
 
 /**
@@ -50,7 +58,9 @@ export const loadUpcomingProjects = cache(
 
     let query = supabase
       .from("hero_dashboard_projects")
-      .select("id, project_number, project_name, customer_name, step_name, maturity_date, department_key, is_finished")
+      .select(
+        "id, project_number, project_name, customer_name, customer_email, customer_phone, customer_address, step_name, status_name, status_code, previous_step_name, maturity_date, created_at_hero, was_reopened, department_key, is_finished"
+      )
       .eq("is_finished", false)
       .not("maturity_date", "is", null)
       .gte("maturity_date", fromIso)
@@ -81,8 +91,16 @@ export const loadUpcomingProjects = cache(
       project_number: string | null;
       project_name: string | null;
       customer_name: string | null;
+      customer_email: string | null;
+      customer_phone: string | null;
+      customer_address: string | null;
       step_name: string | null;
+      status_name: string | null;
+      status_code: number | null;
+      previous_step_name: string | null;
       maturity_date: string | null;
+      created_at_hero: string | null;
+      was_reopened: boolean | null;
       department_key: string | null;
     }>).map((r) => {
       const dueTs = r.maturity_date ? Date.parse(r.maturity_date) : null;
@@ -97,11 +115,19 @@ export const loadUpcomingProjects = cache(
           projectNumber: r.project_number,
         }),
         customerName: r.customer_name,
+        customerEmail: r.customer_email,
+        customerPhone: r.customer_phone,
+        customerAddress: r.customer_address,
         stepName: r.step_name,
+        statusName: r.status_name,
+        statusCode: r.status_code,
+        previousStepName: r.previous_step_name,
         maturityDate: r.maturity_date,
+        createdAtHero: r.created_at_hero,
         department: (r.department_key ?? null) as ProjectDepartment | null,
         isOverdue,
         daysUntilDue,
+        wasReopened: r.was_reopened === true,
       };
     });
   }

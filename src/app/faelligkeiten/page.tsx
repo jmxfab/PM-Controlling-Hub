@@ -22,6 +22,7 @@ const VALID_WINDOWS: UpcomingWindow[] = [
   "next3d",
   "next7d",
   "next30d",
+  "frei",
 ];
 
 function parseWindow(raw: string | string[] | undefined): UpcomingWindow {
@@ -30,7 +31,18 @@ function parseWindow(raw: string | string[] | undefined): UpcomingWindow {
   return "next7d";
 }
 
-function buildRange(win: UpcomingWindow): { fromIso: string; toIso: string } {
+function parseIsoDate(raw: string | string[] | undefined): string | null {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof v !== "string") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  return v;
+}
+
+function buildRange(
+  win: UpcomingWindow,
+  fromParam: string | null,
+  toParam: string | null
+): { fromIso: string; toIso: string } {
   const now = new Date();
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -40,8 +52,18 @@ function buildRange(win: UpcomingWindow): { fromIso: string; toIso: string } {
     return c;
   };
 
+  if (win === "frei") {
+    // Frei-Modus: from/to-Parameter aus URL. Default-Fallback = nächste 14 Tage.
+    const from = fromParam
+      ? new Date(`${fromParam}T00:00:00`)
+      : today;
+    const to = toParam
+      ? addDays(new Date(`${toParam}T00:00:00`), 1) // toIso ist exklusiv
+      : addDays(from, 14);
+    return { fromIso: from.toISOString(), toIso: to.toISOString() };
+  }
+
   if (win === "overdue") {
-    // "überfällig" = maturity_date in Vergangenheit, aber nicht älter als 1 Jahr (Sanity-Limit)
     const from = addDays(today, -365);
     return { fromIso: from.toISOString(), toIso: today.toISOString() };
   }
@@ -60,7 +82,6 @@ function buildRange(win: UpcomingWindow): { fromIso: string; toIso: string } {
   if (win === "next7d") {
     return { fromIso: today.toISOString(), toIso: addDays(today, 7).toISOString() };
   }
-  // next30d
   return { fromIso: today.toISOString(), toIso: addDays(today, 30).toISOString() };
 }
 
@@ -70,11 +91,19 @@ interface PageProps {
 
 export default async function FaelligkeitenPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
-  const department: Department = parseDashboardDepartmentParam(
+  // Geplant-View kennt keinen GESAMT-Filter (zu unspezifisch fuer
+  // operative Termin-Planung). Wenn GESAMT angefragt wird, fallen wir
+  // auf PV als sinnvollen Default zurueck.
+  let department: Department = parseDashboardDepartmentParam(
     resolved.department
   );
+  if (department === "GESAMT") {
+    department = "PV";
+  }
   const win = parseWindow(resolved.window);
-  const { fromIso, toIso } = buildRange(win);
+  const fromParam = parseIsoDate(resolved.from);
+  const toParam = parseIsoDate(resolved.to);
+  const { fromIso, toIso } = buildRange(win, fromParam, toParam);
 
   const projects = await loadUpcomingProjects(department, fromIso, toIso).catch(
     () => []
@@ -86,6 +115,8 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
       <UpcomingView
         department={department}
         window={win}
+        from={fromParam}
+        to={toParam}
         projects={projects}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
       />
