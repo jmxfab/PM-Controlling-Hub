@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { loadAufgabenPage, loadAufgabenStats } from "@/lib/supabase/hero-aufgaben-queries";
+import { loadHeizlastProjects } from "@/lib/supabase/hero-heizlast-queries";
 import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 
 export const metadata: Metadata = {
@@ -10,9 +11,11 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function AufgabenPage() {
-  const [pageResult, stats] = await Promise.all([
+  const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
+  const [pageResult, stats, heizlastProjects] = await Promise.all([
     loadAufgabenPage({ category: "info" }, 0, 50).catch(() => ({ entries: [], total: 0 })),
     loadAufgabenStats().catch(() => ({ total: 0, unread: 0, aufgaben: 0 })),
+    loadHeizlastProjects().catch(() => []),
   ]);
 
   return (
@@ -20,10 +23,14 @@ export default async function AufgabenPage() {
       <div>
         <h1 className="text-xl font-semibold">Aufgaben</h1>
         <p className="text-sm text-muted-foreground">
-          Hero ERP Benachrichtigungen — Kommentare, Projektzuweisungen und Aufgaben.
+          Hero ERP Benachrichtigungen — Kommentare, Projektzuweisungen, Aufgaben und Heizlast-Status.
         </p>
       </div>
-      <AufgabenView initial={{ entries: pageResult.entries, total: pageResult.total, stats }} />
+      <AufgabenView
+        initial={{ entries: pageResult.entries, total: pageResult.total, stats }}
+        heizlastProjects={heizlastProjects}
+        heroProjectLinkTemplate={heroProjectLinkTemplate}
+      />
     </div>
   );
 }

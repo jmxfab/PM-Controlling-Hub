@@ -7,11 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronLeft, ChevronRight, X, MessageSquare, FolderOpen, CheckSquare, FileUp, ExternalLink } from "lucide-react";
 import type { AufgabeEntry } from "@/lib/supabase/hero-aufgaben-queries";
+import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
+import { HeizlastView } from "@/components/heizlast/heizlast-view";
 const PAGE_SIZE = 50;
 
 interface Stats { total: number; unread: number; aufgaben: number }
 interface InfosData { entries: AufgabeEntry[]; total: number; stats: Stats }
-interface Props { initial: InfosData }
+interface Props {
+  initial: InfosData;
+  heizlastProjects: HeizlastProject[];
+  heroProjectLinkTemplate: string | null;
+}
 
 function notifIcon(title: string | null) {
   if (!title) return null;
@@ -22,18 +28,32 @@ function notifIcon(title: string | null) {
   return null;
 }
 
-export function AufgabenView({ initial }: Props) {
+export function AufgabenView({ initial, heizlastProjects, heroProjectLinkTemplate }: Props) {
   return (
     <Tabs defaultValue="infos">
       <TabsList>
         <TabsTrigger value="infos">Infos</TabsTrigger>
         <TabsTrigger value="aufgaben">Aufgaben</TabsTrigger>
+        <TabsTrigger value="heizlast">
+          Heizlast
+          {heizlastProjects.length > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
+              ({heizlastProjects.length})
+            </span>
+          ) : null}
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="infos" className="mt-4">
         <InfosTab initial={initial} />
       </TabsContent>
       <TabsContent value="aufgaben" className="mt-4">
         <AufgabenTab />
+      </TabsContent>
+      <TabsContent value="heizlast" className="mt-4">
+        <HeizlastView
+          projects={heizlastProjects}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
       </TabsContent>
     </Tabs>
   );

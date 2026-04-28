@@ -12,7 +12,6 @@ import {
   ListTodo,
   LogOut,
   Settings,
-  Thermometer,
 } from "lucide-react";
 
 /**
@@ -26,7 +25,6 @@ const navItems = [
   // /deckungsbeitrag ausgeblendet bis die Datenbasis (Materialkosten /
   // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
-  { href: "/heizlast", label: "Heizlast", icon: Thermometer },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
   // Controlling bewusst ans Ende — wird gerade weniger genutzt als die
   // Detailansichten Insights/Cash/Geplant/Aufgaben/Logbuch.
