@@ -197,14 +197,20 @@ export async function loadPvControllingKpis(
     });
 
   // ─── Bewegungs-KPIs: Calendar Events ──────────────────────────────────
+  // Filter über `original_event_start`: das ist der eingefrorene Wert
+  // beim ersten Sync. Auch wenn jemand den Termin in Hero später
+  // verschiebt, fällt er weiterhin in den Bericht der ursprünglichen
+  // Woche. Fallback auf event_start für Zeilen ohne Original-Wert
+  // (sollte nach dem Backfill keine geben).
   const { data: eventRows } = await supabase
     .from("hero_calendar_events")
     .select(
-      "id, title, category_name, event_start, event_end, is_done, project_match_id"
+      "id, title, category_name, event_start, event_end, original_event_start, is_done, project_match_id"
     )
     .eq("is_deleted", false)
-    .gte("event_start", fromIso)
-    .lt("event_start", toIso)
+    .or(
+      `and(original_event_start.gte.${fromIso},original_event_start.lt.${toIso}),and(original_event_start.is.null,event_start.gte.${fromIso},event_start.lt.${toIso})`
+    )
     .limit(5000);
 
   const events = (eventRows ?? []) as Array<{
@@ -213,6 +219,7 @@ export async function loadPvControllingKpis(
     category_name: string | null;
     event_start: string | null;
     event_end: string | null;
+    original_event_start: string | null;
     is_done: boolean | null;
     project_match_id: string | null;
   }>;
@@ -225,7 +232,11 @@ export async function loadPvControllingKpis(
       id: e.id,
       title: e.title,
       category: e.category_name,
-      start: e.event_start,
+      // Wir zeigen das eingefrorene Original-Datum — falls Hero den Termin
+      // nachträglich verschoben hat, sieht der User trotzdem den
+      // ursprünglichen Wert. event_end gibt's nicht in der gefrorenen
+      // Variante, deshalb Live-Wert.
+      start: e.original_event_start ?? e.event_start,
       end: e.event_end,
       isDone: e.is_done,
       projectId: e.project_match_id,
