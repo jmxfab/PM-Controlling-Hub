@@ -5,6 +5,11 @@ import { DashboardKpiDialog } from "./dashboard-kpi-dialog";
 import { DashboardPeriodKpiCards } from "./dashboard-period-kpi-cards";
 import { DashboardProjectList } from "./dashboard-project-list";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { PvControllingKpis } from "./pv-controlling-kpis";
+import {
+  loadPvControllingKpis,
+  getJumaxWeekWindow,
+} from "@/lib/supabase/hero-pv-kpis";
 import { getDashboardTabData } from "@/lib/services/dashboard-data";
 import {
   getDashboardTimeframeLabel,
@@ -83,11 +88,16 @@ async function DashboardMainSection({
   timeframe: DashboardTimeframe;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  const [tabData, pipeline] = await Promise.all([
+  const isPv = department === "PV";
+  const jumaxWindow = isPv ? getJumaxWeekWindow() : null;
+  const [tabData, pipeline, pvKpis] = await Promise.all([
     getDashboardTabData(department, timeframe),
     loadHeroPipeline(department, pipelineRange, {
       excludeCashSteps: true,
     }).catch(() => null),
+    isPv && jumaxWindow
+      ? loadPvControllingKpis(jumaxWindow).catch(() => null)
+      : Promise.resolve(null),
   ]);
   const {
     kpiData,
@@ -118,6 +128,25 @@ async function DashboardMainSection({
         <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           {statusNotice}
         </div>
+      ) : null}
+      {isPv && pvKpis && jumaxWindow ? (
+        <>
+          <PvControllingKpis
+            kpis={pvKpis}
+            windowLabel={jumaxWindow.label}
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase tracking-wider">
+              <span className="bg-background px-2 text-muted-foreground">
+                Klassische Übersicht
+              </span>
+            </div>
+          </div>
+        </>
       ) : null}
       <DashboardKpiDialog
         data={kpiData}
