@@ -294,10 +294,19 @@ export async function loadPvControllingKpis(
   // alle storageEvents pro Projekt einmal.
   const storageEventsDeduped = dedupeBy(storageEvents, (e) => e.project_match_id ?? e.id);
 
-  // Zählerwechsel — Titel match
+  // Zählerwechsel — primär per Kategorie "Zählermontage" (das ist
+  // Heros eigener Topf für ZW-Termine, egal ob der Titel "ZW", "Zähler-
+  // einbau" oder anders heißt). Zusätzlich per Titel falls die
+  // Kategorie mal anders gesetzt wird.
   const meterEvents = pvEvents.filter((e) => {
+    const cat = lc(e.category_name);
     const t = lc(e.title);
-    return t.includes("zählerwechsel") || t.includes("zählermontage");
+    return (
+      cat === "zählermontage" ||
+      t.includes("zählerwechsel") ||
+      t.includes("zählermontage") ||
+      /\bzw\b/.test(t)
+    );
   });
   const meterEventsDeduped = dedupeBy(meterEvents, (e) => e.project_match_id ?? e.id);
 
