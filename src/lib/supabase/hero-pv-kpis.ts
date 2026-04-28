@@ -302,12 +302,26 @@ export async function loadPvControllingKpis(
   const meterEventsDeduped = dedupeBy(meterEvents, (e) => e.project_match_id ?? e.id);
 
   // ─── Termin-Aktivität (Gesamtmontage / Kleinauftrag) ──────────────────
-  // Drei zusätzliche KPIs für die Kategorien Gesamtmontage + Kleinauftrag:
-  // wie viele Termine wurden abgeschlossen, bearbeitet (also überhaupt im
-  // Zeitraum stattgefunden) und wie viele kamen neu dazu (created in window).
-  const activityCategories = new Set(["gesamtmontage", "kleinauftrag"]);
+  // Hero-Kategorien laut Schema-Check (28.04.):
+  //   Gesamtmontage, AC Montage, DC Montage, Zählermontage,
+  //   Elektroinstallation, DC-AC Installation, Abschlussgespräch,
+  //   Nacharbeit, Vor-Ort-Termin, Besprechung, Telefontermin, Schulung,
+  //   Blockiert, Subunternehmen, WP | * (Wärmepumpe, eigene Sparte)
+  // Eine separate "Kleinauftrag"-Kategorie existiert nicht — wir nehmen
+  // ersatzweise alle Klein-Montage-Kategorien zusammen (AC, DC, Zähler,
+  // Elektroinstallation) UND zusätzlich Termine deren Titel
+  // "Kleinauftrag" enthält (falls Hero das künftig als Titel verwendet).
+  const activityCategories = new Set([
+    "gesamtmontage",
+    "ac montage",
+    "dc montage",
+    "zählermontage",
+    "elektroinstallation",
+    "dc-ac installation",
+  ]);
   const activityFilter = (e: (typeof events)[number]) =>
-    activityCategories.has(lc(e.category_name)) &&
+    (activityCategories.has(lc(e.category_name)) ||
+      lc(e.title).includes("kleinauftrag")) &&
     e.project_match_id != null &&
     pvIds.has(e.project_match_id);
 
