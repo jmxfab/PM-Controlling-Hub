@@ -251,6 +251,9 @@ const loadLongestRunningInner = cache(
       createdAtHero: string | null;
       ageDays: number;
       wasReopened: boolean;
+      ageResetAt: string | null;
+      ageResetNote: string | null;
+      ageResetReason: "manual" | "auto-finished" | null;
     }>
   > => {
     const supabase = supabaseAdmin();
@@ -264,12 +267,14 @@ const loadLongestRunningInner = cache(
       was_reopened: boolean | null;
       last_finish_at: string | null;
       last_rework_at: string | null;
+      age_reset_at: string | null;
+      age_reset_note: string | null;
     }> = [];
     for (let offset = 0; offset < 10000; offset += 1000) {
       let query = supabase
         .from("hero_dashboard_projects")
         .select(
-          "id, project_number, project_name, step_name, customer_name, created_at_hero, was_reopened, last_finish_at, last_rework_at, department_key"
+          "id, project_number, project_name, step_name, customer_name, created_at_hero, was_reopened, last_finish_at, last_rework_at, age_reset_at, age_reset_note, department_key"
         )
         .eq("is_finished", false)
         .not("created_at_hero", "is", null);
@@ -284,18 +289,21 @@ const loadLongestRunningInner = cache(
     const now = Date.now();
     const withAge = all.map((r) => {
       const wasReopened = r.was_reopened === true;
-      // Startzeitpunkt fürs "offen seit": wenn das Projekt jemals einen
-      // Finished-Step (abgeschlossen | archiv | fertig | finished |
-      // abschlussrechnung | bewertungspool) erreicht hatte, ist
-      // last_finish_at gesetzt. Wir starten die Alter-Uhr in dem Fall ab
-      // dort — egal ob klassischer Reopen (Nacharbeit nach Abschluss)
-      // ODER ob das Projekt einfach nach Abschlussrechnung/
-      // Bewertungspool wieder in einen aktiven Step gewandert ist.
-      // Fallback wenn nie finished erreicht: created_at_hero.
-      const effectiveStart = r.last_finish_at ?? r.created_at_hero;
-      const ageMs = effectiveStart
-        ? now - Date.parse(effectiveStart)
-        : 0;
+      // Priorität für die Alter-Uhr:
+      //   1. age_reset_at (manueller Override aus dem Dashboard)
+      //   2. last_finish_at (Projekt war mal in Abschlussrechnung/
+      //      Bewertungspool/archiviert/abgeschlossen → Auto-Reset)
+      //   3. created_at_hero (Original-Anlagedatum)
+      let effectiveStart = r.created_at_hero;
+      let resetReason: "manual" | "auto-finished" | null = null;
+      if (r.age_reset_at) {
+        effectiveStart = r.age_reset_at;
+        resetReason = "manual";
+      } else if (r.last_finish_at) {
+        effectiveStart = r.last_finish_at;
+        resetReason = "auto-finished";
+      }
+      const ageMs = effectiveStart ? now - Date.parse(effectiveStart) : 0;
       return {
         id: r.id,
         projectNumber: r.project_number,
@@ -308,6 +316,9 @@ const loadLongestRunningInner = cache(
         createdAtHero: r.created_at_hero,
         ageDays: ageMs > 0 ? Math.round(ageMs / 86400000) : 0,
         wasReopened,
+        ageResetAt: r.age_reset_at,
+        ageResetNote: r.age_reset_note,
+        ageResetReason: resetReason,
       };
     });
 

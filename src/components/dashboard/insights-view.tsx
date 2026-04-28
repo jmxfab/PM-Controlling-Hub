@@ -1,6 +1,9 @@
 "use client";
 
-import { Clock, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { Clock, RotateCcw, Save, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Bar,
   BarChart,
@@ -60,6 +63,9 @@ interface InsightsViewProps {
     customerName: string | null;
     ageDays: number;
     wasReopened?: boolean;
+    ageResetAt?: string | null;
+    ageResetNote?: string | null;
+    ageResetReason?: "manual" | "auto-finished" | null;
   }>;
   durationMetrics?: DurationMetric[];
   kwpStats?: KwpStats | null;
@@ -299,59 +305,18 @@ export function InsightsView({
                 <TableHead>Titel / Kunde</TableHead>
                 <TableHead>Aktueller Step</TableHead>
                 <TableHead className="text-right">Alter</TableHead>
+                <TableHead className="text-right w-44">Reset</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {longestRunning.map((p) => {
-                const heroHref = buildHeroHref(p.id);
-                return (
-                <TableRow
+              {longestRunning.map((p) => (
+                <LongestRunningRow
                   key={p.id}
-                  className={heroHref ? "cursor-pointer hover:bg-accent/40" : undefined}
-                  onClick={
-                    heroHref
-                      ? () => window.open(heroHref, "_blank", "noopener,noreferrer")
-                      : undefined
-                  }
-                  title={heroHref ? "Im Hero öffnen" : undefined}
-                >
-                  <TableCell>
-                    <HeroProjectLink
-                      projectId={p.id}
-                      projectNumber={p.projectNumber}
-                      linkTemplate={heroProjectLinkTemplate ?? null}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <span className="block">{p.projectName ?? p.customerName ?? "–"}</span>
-                      {p.customerName && p.projectName ? (
-                        <span className="block text-xs text-muted-foreground">{p.customerName}</span>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">{p.stepName ?? "–"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Badge variant={p.ageDays > 365 ? "destructive" : "outline"} className="gap-1">
-                        <Clock className="h-3 w-3" />
-                        {p.ageDays} Tg
-                      </Badge>
-                      {p.wasReopened ? (
-                        <Badge
-                          variant="outline"
-                          className="gap-1 border-yellow-500 text-yellow-600"
-                          title="Projekt war schon einmal abgeschlossen — Alter ab letztem Reopen"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          seit Reopen
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-                );
-              })}
+                  project={p}
+                  heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+                  buildHeroHref={buildHeroHref}
+                />
+              ))}
             </TableBody>
           </Table>
         </CardContent>
@@ -411,4 +376,224 @@ function buildDailyChartRows(
       }),
     };
   });
+}
+
+interface LongestRunningProject {
+  id: string;
+  projectNumber: string | null;
+  projectName: string | null;
+  stepName: string | null;
+  customerName: string | null;
+  ageDays: number;
+  wasReopened?: boolean;
+  ageResetAt?: string | null;
+  ageResetNote?: string | null;
+  ageResetReason?: "manual" | "auto-finished" | null;
+}
+
+function LongestRunningRow({
+  project,
+  heroProjectLinkTemplate,
+  buildHeroHref,
+}: {
+  project: LongestRunningProject;
+  heroProjectLinkTemplate: string | null;
+  buildHeroHref: (id: string | null) => string | null;
+}) {
+  const heroHref = buildHeroHref(project.id);
+  const initialDate = project.ageResetAt
+    ? project.ageResetAt.slice(0, 10)
+    : "";
+  const [resetDate, setResetDate] = useState(initialDate);
+  const [resetNote, setResetNote] = useState(project.ageResetNote ?? "");
+  const [savedDate, setSavedDate] = useState(initialDate);
+  const [savedNote, setSavedNote] = useState(project.ageResetNote ?? "");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dirty = resetDate !== savedDate || resetNote !== savedNote;
+
+  async function save(opts?: { clear?: boolean }) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/age-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          age_reset_at: opts?.clear ? null : resetDate || null,
+          age_reset_note: opts?.clear ? null : resetNote || null,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(typeof json?.error === "string" ? json.error : `HTTP ${res.status}`);
+        return;
+      }
+      if (opts?.clear) {
+        setResetDate("");
+        setResetNote("");
+        setSavedDate("");
+        setSavedNote("");
+      } else {
+        setSavedDate(resetDate);
+        setSavedNote(resetNote);
+      }
+      setEditing(false);
+      // Soft refresh: reload nach 200ms damit der Server-Render frische
+      // longestRunning-Daten holt (mit korrigiertem Alter).
+      setTimeout(() => {
+        window.location.reload();
+      }, 200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <TableRow>
+      <TableCell>
+        <HeroProjectLink
+          projectId={project.id}
+          projectNumber={project.projectNumber}
+          linkTemplate={heroProjectLinkTemplate}
+        />
+      </TableCell>
+      <TableCell>
+        <div className="space-y-1">
+          <span className="block">
+            {project.projectName ?? project.customerName ?? "–"}
+          </span>
+          {project.customerName && project.projectName ? (
+            <span className="block text-xs text-muted-foreground">
+              {project.customerName}
+            </span>
+          ) : null}
+          {heroHref ? (
+            <a
+              href={heroHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-primary hover:underline"
+            >
+              Im Hero öffnen →
+            </a>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm">{project.stepName ?? "–"}</TableCell>
+      <TableCell className="text-right">
+        <div className="flex flex-col items-end gap-1">
+          <Badge
+            variant={project.ageDays > 365 ? "destructive" : "outline"}
+            className="gap-1"
+          >
+            <Clock className="h-3 w-3" />
+            {project.ageDays} Tg
+          </Badge>
+          {project.ageResetReason === "manual" ? (
+            <Badge
+              variant="outline"
+              className="gap-1 border-blue-500 text-blue-600 text-[10px]"
+              title={project.ageResetNote ?? "manuell zurückgesetzt"}
+            >
+              manuell
+            </Badge>
+          ) : project.ageResetReason === "auto-finished" ? (
+            <Badge
+              variant="outline"
+              className="gap-1 border-yellow-500 text-yellow-600 text-[10px]"
+              title="Alter ab letztem Verlassen von Abschlussrechnung/Bewertungspool/Archiv"
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+              auto
+            </Badge>
+          ) : project.wasReopened ? (
+            <Badge
+              variant="outline"
+              className="gap-1 border-yellow-500 text-yellow-600 text-[10px]"
+              title="Reopen aus Nacharbeit"
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+              reopen
+            </Badge>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        {editing ? (
+          <div className="flex flex-col gap-1 items-end">
+            <Input
+              type="date"
+              value={resetDate}
+              onChange={(e) => setResetDate(e.target.value)}
+              className="h-7 w-[130px] text-xs"
+            />
+            <Input
+              type="text"
+              placeholder="Notiz (optional)"
+              value={resetNote}
+              onChange={(e) => setResetNote(e.target.value)}
+              className="h-7 w-[170px] text-xs"
+              maxLength={500}
+            />
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                disabled={!dirty || saving || !resetDate}
+                onClick={() => save()}
+                title="Speichern"
+              >
+                <Save className="h-3 w-3" />
+              </Button>
+              {savedDate ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 text-destructive"
+                  disabled={saving}
+                  onClick={() => save({ clear: true })}
+                  title="Reset löschen"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px]"
+                disabled={saving}
+                onClick={() => {
+                  setEditing(false);
+                  setResetDate(savedDate);
+                  setResetNote(savedNote);
+                }}
+              >
+                Abbr.
+              </Button>
+            </div>
+            {error ? (
+              <span className="text-[10px] text-destructive">{error}</span>
+            ) : null}
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-[11px]"
+            onClick={() => setEditing(true)}
+          >
+            {savedDate
+              ? `→ ${new Date(savedDate).toLocaleDateString("de-DE")}`
+              : "Datum setzen"}
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
 }
