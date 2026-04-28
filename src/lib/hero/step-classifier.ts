@@ -4,12 +4,22 @@
  * Logik an einer einzigen Stelle lebt.
  */
 
-/** Steps die "finished" bedeuten — Projekt ist durch. */
+/** Steps die "finished" bedeuten — Projekt ist durch.
+ *
+ * Inkludiert auch Abschlussrechnung, Bewertungspool und alle "archiv*"-
+ * Steps: aus operativer Sicht sind diese Projekte fertig, auch wenn die
+ * Buchhaltung noch nachzieht. Damit "An Buchhaltung" / "Im Bewertungspool"
+ * trotzdem nicht auf 0 droppen, sind die entsprechenden KPI-Matcher in
+ * hero-aggregator.ts vom Finished-Check entkoppelt — die zählen weiter
+ * unabhängig.
+ */
 export const FINISHED_STEP_PATTERNS = [
   "abgeschlossen",
-  "archiviert",
+  "archiv", // matched auch "archiviert"
   "fertig",
   "finished",
+  "abschlussrechnung",
+  "bewertungspool",
 ];
 
 /** Abrechnungs-/Cash-Steps — alles rund um Rechnungsstellung. */

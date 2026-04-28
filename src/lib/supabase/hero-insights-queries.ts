@@ -110,6 +110,58 @@ export const loadWeeklyThroughput = (
     { revalidate: CACHE_TTL_S, tags: ["insights"] }
   )();
 
+export interface DailyThroughputPoint {
+  dayStart: string; // ISO date (YYYY-MM-DD, Europe/Berlin)
+  newProjects: number;
+  completed: number;
+  accounting: number;
+  rework: number;
+  reopens: number;
+}
+
+const loadDailyThroughputInner = cache(
+  async (
+    department: Department,
+    range: InsightsRange
+  ): Promise<DailyThroughputPoint[]> => {
+    const supabase = supabaseAdmin();
+    const { data, error } = await supabase.rpc("compute_daily_throughput", {
+      p_department: department,
+      p_from: range.fromIso,
+      p_to: range.toIso,
+    });
+    if (error) throw new Error(`compute_daily_throughput: ${error.message}`);
+
+    const rows = (data ?? []) as Array<{
+      day_start: string;
+      new_projects: number;
+      completed: number;
+      accounting: number;
+      rework: number;
+      reopens: number;
+    }>;
+
+    return rows.map((r) => ({
+      dayStart: r.day_start,
+      newProjects: Number(r.new_projects) || 0,
+      completed: Number(r.completed) || 0,
+      accounting: Number(r.accounting) || 0,
+      rework: Number(r.rework) || 0,
+      reopens: Number(r.reopens) || 0,
+    }));
+  }
+);
+
+export const loadDailyThroughput = (
+  department: Department,
+  range: InsightsRange
+): Promise<DailyThroughputPoint[]> =>
+  unstable_cache(
+    () => loadDailyThroughputInner(department, range),
+    ["loadDailyThroughput", department, range.fromIso, range.toIso],
+    { revalidate: CACHE_TTL_S, tags: ["insights"] }
+  )();
+
 export interface StepDurationRow {
   stepId: string;
   stepName: string;

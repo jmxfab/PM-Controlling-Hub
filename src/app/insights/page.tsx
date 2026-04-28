@@ -6,6 +6,7 @@ import { InsightsView } from "@/components/dashboard/insights-view";
 import { HeroPipelinePanel } from "@/components/dashboard/hero-pipeline-panel";
 import {
   loadWeeklyThroughput,
+  loadDailyThroughput,
   loadStepDurations,
   loadLongestRunning,
   loadDurationMetrics,
@@ -103,11 +104,22 @@ async function InsightsTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const range = buildInsightsRange(timeframe);
-  const [weekly, stepDurations, longestRunning, durationMetrics, kwpStats] =
+  // Tagesgranularität bei kurzen Zeiträumen (≤14 Tage), Wochenaggregation
+  // bei längeren — sonst wäre die X-Achse z.B. bei "Letzte Woche" leer.
+  const useDaily = range
+    ? rangeDurationDays(range) <= 14
+    : false;
+
+  const [weekly, daily, stepDurations, longestRunning, durationMetrics, kwpStats] =
     await Promise.all([
-      loadWeeklyThroughput(department, range ? { range } : undefined).catch(
-        () => []
-      ),
+      useDaily
+        ? Promise.resolve([])
+        : loadWeeklyThroughput(department, range ? { range } : undefined).catch(
+            () => []
+          ),
+      useDaily && range
+        ? loadDailyThroughput(department, range).catch(() => [])
+        : Promise.resolve([]),
       loadStepDurations(department, range ? { range } : undefined).catch(
         () => []
       ),
@@ -122,6 +134,8 @@ async function InsightsTab({
     <InsightsView
       department={department}
       weekly={weekly}
+      daily={daily}
+      throughputRange={range ?? null}
       stepDurations={stepDurations}
       longestRunning={longestRunning}
       durationMetrics={durationMetrics}
@@ -131,6 +145,13 @@ async function InsightsTab({
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
   );
+}
+
+function rangeDurationDays(range: InsightsRange): number {
+  const from = new Date(range.fromIso).getTime();
+  const to = new Date(range.toIso).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.round((to - from) / (24 * 60 * 60 * 1000));
 }
 
 async function PipelineTab({

@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/table";
 import type {
   WeeklyThroughputPoint,
+  DailyThroughputPoint,
+  InsightsRange,
   StepDurationRow,
   DurationMetric,
   KwpStats,
@@ -47,6 +49,8 @@ import {
 interface InsightsViewProps {
   department: Department;
   weekly: WeeklyThroughputPoint[];
+  daily?: DailyThroughputPoint[];
+  throughputRange?: InsightsRange | null;
   stepDurations: StepDurationRow[];
   longestRunning: Array<{
     id: string;
@@ -64,9 +68,20 @@ interface InsightsViewProps {
   heroProjectLinkTemplate?: string | null;
 }
 
+interface ThroughputRow {
+  newProjects: number;
+  completed: number;
+  accounting: number;
+  rework: number;
+  reopens: number;
+  label: string;
+}
+
 export function InsightsView({
   department,
   weekly,
+  daily,
+  throughputRange,
   stepDurations,
   longestRunning,
   durationMetrics,
@@ -77,13 +92,22 @@ export function InsightsView({
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
   const rangeSuffix = timeframeLabel ? ` · ${timeframeLabel}` : "";
-  const chartData = weekly.map((w) => ({
-    ...w,
-    label: new Date(w.weekStart).toLocaleDateString("de-DE", {
-      day: "2-digit",
-      month: "2-digit",
-    }),
-  }));
+
+  const useDaily = (daily?.length ?? 0) > 0 || (throughputRange ? rangeDays(throughputRange) <= 14 : false);
+  const chartData: ThroughputRow[] = useDaily
+    ? buildDailyChartRows(daily ?? [], throughputRange ?? null)
+    : weekly.map((w) => ({
+        newProjects: w.newProjects,
+        completed: w.completed,
+        accounting: w.accounting,
+        rework: w.rework,
+        reopens: w.reopens,
+        label: new Date(w.weekStart).toLocaleDateString("de-DE", {
+          day: "2-digit",
+          month: "2-digit",
+        }),
+      }));
+  const chartTitle = useDaily ? "Täglicher Flow" : "Wöchentlicher Flow";
 
   const top10Durations = stepDurations.slice(0, 10).map((s) => ({
     name: s.stepName.length > 28 ? s.stepName.slice(0, 26) + "…" : s.stepName,
@@ -112,7 +136,7 @@ export function InsightsView({
             <CardTitle>Anlagenleistung — {deptName}</CardTitle>
             <CardDescription>
               kWp-Werte aus Maßnahmenbezeichnungen abgeschlossener Projekte
-              (Regex auf „X kWp"). Projekte ohne kWp-Angabe werden nicht
+              (Regex auf „X kWp&ldquo;). Projekte ohne kWp-Angabe werden nicht
               gezählt.
             </CardDescription>
           </CardHeader>
@@ -186,11 +210,13 @@ export function InsightsView({
 
       <Card>
         <CardHeader>
-          <CardTitle>Wöchentlicher Flow — {deptName}{rangeSuffix}</CardTitle>
+          <CardTitle>{chartTitle} — {deptName}{rangeSuffix}</CardTitle>
           <CardDescription>
             Neu angelegt (blau), Abgeschlossen (grün), In Abrechnung (gelb),
-            Nacharbeit-Starts (rot), Reopens (lila). Bei „Jetzt" werden die
-            letzten 12 Wochen gezeigt.
+            Nacharbeit-Starts (rot), Reopens (lila).
+            {useDaily
+              ? " Tagesweise Auflösung mit allen Tagen im gewählten Zeitraum."
+              : " Bei „Jetzt“ werden die letzten 12 Wochen gezeigt."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -226,7 +252,7 @@ export function InsightsView({
           </CardTitle>
           <CardDescription>
             Ø + Median Tage die ein Projekt im jeweiligen Step verbringt. Top
-            10. Bei „Jetzt" werden die letzten 12 Monate zugrunde gelegt.
+            10. Bei „Jetzt&ldquo; werden die letzten 12 Monate zugrunde gelegt.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -332,4 +358,57 @@ export function InsightsView({
       </Card>
     </div>
   );
+}
+
+function rangeDays(range: InsightsRange): number {
+  const from = new Date(range.fromIso).getTime();
+  const to = new Date(range.toIso).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 0;
+  return Math.round((to - from) / (24 * 60 * 60 * 1000));
+}
+
+/**
+ * Baut eine zusammenhängende Zeitreihe vom from-Tag bis zum to-Tag (exkl.).
+ * Tage ohne Daten werden mit Nullen aufgefüllt, damit die X-Achse alle
+ * Tage des Zeitraums zeigt — sonst würde Recharts nur die Tage anzeigen
+ * an denen tatsächlich etwas passiert ist.
+ */
+function buildDailyChartRows(
+  daily: DailyThroughputPoint[],
+  range: InsightsRange | null
+): ThroughputRow[] {
+  const map = new Map(daily.map((d) => [d.dayStart, d]));
+
+  const dates: string[] = [];
+  if (range) {
+    const fromDay = new Date(range.fromIso);
+    const toDay = new Date(range.toIso);
+    const cursor = new Date(
+      Date.UTC(fromDay.getUTCFullYear(), fromDay.getUTCMonth(), fromDay.getUTCDate())
+    );
+    const end = new Date(
+      Date.UTC(toDay.getUTCFullYear(), toDay.getUTCMonth(), toDay.getUTCDate())
+    );
+    while (cursor.getTime() < end.getTime()) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  } else {
+    dates.push(...daily.map((d) => d.dayStart));
+  }
+
+  return dates.map((iso) => {
+    const point = map.get(iso);
+    return {
+      newProjects: point?.newProjects ?? 0,
+      completed: point?.completed ?? 0,
+      accounting: point?.accounting ?? 0,
+      rework: point?.rework ?? 0,
+      reopens: point?.reopens ?? 0,
+      label: new Date(`${iso}T12:00:00Z`).toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+      }),
+    };
+  });
 }

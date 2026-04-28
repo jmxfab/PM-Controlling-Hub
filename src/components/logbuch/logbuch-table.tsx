@@ -234,9 +234,9 @@ function LogbuchEntryDetails({ entry }: { entry: LogbuchEntry }) {
           <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             Eintrag
           </h4>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {description}
-          </p>
+          <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-2 text-sm italic text-foreground/90 whitespace-pre-wrap leading-relaxed">
+            {`„${description}\u201C`}
+          </blockquote>
         </section>
       ) : null}
 

@@ -17,6 +17,7 @@ interface LogbuchData {
 
 interface LogbuchViewProps {
   initial: LogbuchData;
+  initialFilters?: Partial<LogbuchFilterState>;
 }
 
 const EMPTY_FILTERS: LogbuchFilterState = {
@@ -33,8 +34,11 @@ const EMPTY_AGGREGATIONS: LogbuchAggregations = {
   byEventType: [],
 };
 
-export function LogbuchView({ initial }: LogbuchViewProps) {
-  const [filters, setFilters] = useState<LogbuchFilterState>(EMPTY_FILTERS);
+export function LogbuchView({ initial, initialFilters }: LogbuchViewProps) {
+  const [filters, setFilters] = useState<LogbuchFilterState>(() => ({
+    ...EMPTY_FILTERS,
+    ...(initialFilters ?? {}),
+  }));
   const [page, setPage] = useState(0);
   const [data, setData] = useState<LogbuchData>(initial);
   const [loading, setLoading] = useState(false);

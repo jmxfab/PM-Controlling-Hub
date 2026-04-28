@@ -876,35 +876,30 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
           Keine Logbuch-Einträge vorhanden.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="flex items-start gap-2 rounded-md border bg-background/40 px-2 py-1.5 text-xs"
-            >
-              <span className="tabular-nums text-muted-foreground whitespace-nowrap min-w-[110px]">
-                {entry.entry_date
-                  ? new Date(entry.entry_date).toLocaleString("de-DE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "–"}
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block truncate">
-                  {entry.user_email ?? (
-                    <span className="text-muted-foreground">unbekannt</span>
-                  )}
-                </span>
-                {entry.event_type ? (
-                  <span className="block text-[10px] text-muted-foreground truncate">
-                    {entry.event_type}
+            <li key={entry.id}>
+              <blockquote className="border-l-2 border-primary/40 bg-background/40 pl-3 pr-2 py-1.5 text-xs italic text-foreground/90">
+                <div className="flex items-start justify-between gap-3 not-italic">
+                  <span className="text-[11px] font-medium text-foreground/80">
+                    {formatLogbuchAuthor(entry.user_email)}
                   </span>
-                ) : null}
-              </span>
+                  <span className="text-[10px] tabular-nums text-muted-foreground whitespace-nowrap">
+                    {entry.entry_date
+                      ? new Date(entry.entry_date).toLocaleString("de-DE", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "–"}
+                  </span>
+                </div>
+                <span className="block mt-0.5">
+                  {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                </span>
+              </blockquote>
             </li>
           ))}
         </ul>
@@ -1211,4 +1206,38 @@ function GroupedStepList({
       ))}
     </div>
   );
+}
+
+/**
+ * Macht aus "a.lindt@jumax-elektro.de" → "A. Lindt".
+ * Fallback: nur Local-Part, wenn das Schema nicht passt. Wenn auch das fehlt,
+ * "Unbekannt".
+ */
+function formatLogbuchAuthor(email: string | null | undefined): string {
+  if (!email) return "Unbekannt";
+  const localPart = email.split("@")[0] ?? "";
+  if (!localPart) return email;
+
+  // Pattern "a.lindt" → ["a", "lindt"]
+  const segments = localPart
+    .split(/[._-]+/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  if (segments.length === 0) return localPart;
+  if (segments.length === 1) {
+    return capitalize(segments[0]);
+  }
+
+  // Erstes Segment = Initial, Rest = Nachname(n).
+  const first = segments[0];
+  const rest = segments.slice(1).map(capitalize).join(" ");
+  return first.length === 1
+    ? `${first.toUpperCase()}. ${rest}`
+    : `${capitalize(first)} ${rest}`;
+}
+
+function capitalize(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }

@@ -19,7 +19,6 @@ import {
  * ist bewusst NICHT hier, sondern rechts als Zahnrad.
  */
 const navItems = [
-  { href: "/", label: "Controlling", icon: LayoutDashboard },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/cash", label: "Cash", icon: Euro },
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
@@ -27,6 +26,9 @@ const navItems = [
   // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
+  // Controlling bewusst ans Ende — wird gerade weniger genutzt als die
+  // Detailansichten Insights/Cash/Geplant/Aufgaben/Logbuch.
+  { href: "/", label: "Controlling", icon: LayoutDashboard },
 ];
 
 export function MainNav() {

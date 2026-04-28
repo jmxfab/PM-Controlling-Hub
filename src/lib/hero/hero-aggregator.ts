@@ -73,12 +73,13 @@ const DASHBOARD_KPI_MATCHERS: Record<DashboardKpiKey, DashboardKpiMatcher> = {
     !!project.rework_scheduled_date,
   openCustomerCommitments: (project) =>
     !isFinished(project) && matchesStep(project, COMMITMENT_PATTERNS),
+  // Closings + Bewertungspool gelten auch dann, wenn der Step jetzt
+  // unter FINISHED fällt (z.B. weil "bewertungspool" zur Finished-Liste
+  // gehört). Sonst würde "Im Bewertungspool" auf 0 droppen.
   scheduledClosings: (project) =>
-    !isFinished(project) &&
-    matchesStep(project, CLOSING_PATTERNS) &&
-    !!project.maturity_date,
+    matchesStep(project, CLOSING_PATTERNS) && !!project.maturity_date,
   bewertungspoolCount: (project) =>
-    !isFinished(project) && matchesStep(project, BEWERTUNGSPOOL_PATTERNS),
+    matchesStep(project, BEWERTUNGSPOOL_PATTERNS),
 };
 
 function currentStepText(project: HeroProject): string {
@@ -116,7 +117,9 @@ function isCompletedSince(project: HeroProject, referenceTime: number): boolean 
 }
 
 function hasAccountingTransfer(project: HeroProject): boolean {
-  if (isFinished(project)) return false;
+  // Bewusst kein Finished-Check: "abschlussrechnung" ist sowohl ein
+  // Finished-Pattern als auch ein Accounting-Pattern. Wir wollen die
+  // Projekte hier behalten, damit "An Buchhaltung" nicht auf 0 droppt.
   return (
     matchesStep(project, ACCOUNTING_PATTERNS) ||
     matchesHighLevelStatus(project, ACCOUNTING_PATTERNS) ||
