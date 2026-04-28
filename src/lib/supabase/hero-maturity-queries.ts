@@ -36,6 +36,19 @@ export interface UpcomingProject {
   isOverdue: boolean;
   daysUntilDue: number;
   wasReopened: boolean;
+  confirmation: UpcomingConfirmation | null;
+}
+
+export interface UpcomingConfirmation {
+  id: string;
+  nr: string | null;
+  fileUrl: string | null;
+  documentTypeName: string | null;
+  statusName: string | null;
+  /** True wenn die AB als 'Erstellt (Hochgeladen)' im Hero liegt — das ist
+   *  Heros Konvention für eine vom Kunden zurückgegebene Datei. */
+  isSignedScan: boolean;
+  documentDate: string | null;
 }
 
 /**
@@ -86,7 +99,7 @@ export const loadUpcomingProjects = cache(
     today.setHours(0, 0, 0, 0);
     const todayTs = today.getTime();
 
-    return ((data ?? []) as Array<{
+    const rows = (data ?? []) as Array<{
       id: string;
       project_number: string | null;
       project_name: string | null;
@@ -102,7 +115,16 @@ export const loadUpcomingProjects = cache(
       created_at_hero: string | null;
       was_reopened: boolean | null;
       department_key: string | null;
-    }>).map((r) => {
+    }>;
+
+    // Auftragsbestätigungen pro Projekt batched holen.
+    const projectIds = rows.map((r) => r.id);
+    const confirmationByProject = await loadConfirmationsForProjects(
+      supabase,
+      projectIds
+    );
+
+    return rows.map((r) => {
       const dueTs = r.maturity_date ? Date.parse(r.maturity_date) : null;
       const isOverdue = dueTs != null && dueTs < now;
       const daysUntilDue =
@@ -128,7 +150,98 @@ export const loadUpcomingProjects = cache(
         isOverdue,
         daysUntilDue,
         wasReopened: r.was_reopened === true,
+        confirmation: confirmationByProject.get(r.id) ?? null,
       };
     });
   }
 );
+
+/**
+ * Beste Auftragsbestätigung pro Projekt: priorisiert nach
+ *   1. status_name='Erstellt (Hochgeladen)'  (= signierte/zurückgegebene Datei)
+ *   2. status_name='Versendet'                (an Kunde versendet)
+ *   3. status_name='Erstellt'                 (vom System erstellt, draft)
+ *   4. status_name='Entwurf'                  (Roh-Entwurf)
+ * Bei mehreren Kandidaten gleicher Prio: das mit dem neuesten document_date /
+ * created_at_hero gewinnt.
+ */
+async function loadConfirmationsForProjects(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  projectIds: string[]
+): Promise<Map<string, UpcomingConfirmation>> {
+  const result = new Map<string, UpcomingConfirmation>();
+  if (projectIds.length === 0) return result;
+
+  const { data } = await supabase
+    .from("hero_customer_documents")
+    .select(
+      "id, nr, status_code, status_name, document_type_name, document_date, created_at_hero, project_match_id, raw, type"
+    )
+    .eq("type", "confirmation")
+    .eq("is_deleted", false)
+    .in("status_code", [0, 100, 200])
+    .in("project_match_id", projectIds)
+    .limit(2000);
+
+  type Row = {
+    id: string;
+    nr: string | null;
+    status_code: number | null;
+    status_name: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    project_match_id: string | null;
+    raw: Record<string, unknown> | null;
+    type: string | null;
+  };
+
+  const priorityOf = (statusName: string | null): number => {
+    const s = (statusName ?? "").toLowerCase();
+    if (s.includes("hochgeladen")) return 4;
+    if (s.includes("versendet")) return 3;
+    if (s === "erstellt") return 2;
+    if (s.includes("entwurf")) return 1;
+    return 0;
+  };
+
+  const ts = (row: Row): number => {
+    const d = row.document_date ?? row.created_at_hero;
+    return d ? Date.parse(d) || 0 : 0;
+  };
+
+  const better = (a: Row, b: Row): boolean => {
+    const pa = priorityOf(a.status_name);
+    const pb = priorityOf(b.status_name);
+    if (pa !== pb) return pa > pb;
+    return ts(a) > ts(b);
+  };
+
+  const bestPerProject = new Map<string, Row>();
+  for (const row of (data ?? []) as Row[]) {
+    if (!row.project_match_id) continue;
+    const current = bestPerProject.get(row.project_match_id);
+    if (!current || better(row, current)) {
+      bestPerProject.set(row.project_match_id, row);
+    }
+  }
+
+  for (const [pid, row] of bestPerProject.entries()) {
+    const fileUpload = (row.raw as Record<string, unknown> | null)?.[
+      "file_upload"
+    ] as Record<string, unknown> | undefined;
+    const fileUrl =
+      typeof fileUpload?.["url"] === "string" ? (fileUpload["url"] as string) : null;
+    result.set(pid, {
+      id: row.id,
+      nr: row.nr,
+      fileUrl,
+      documentTypeName: row.document_type_name,
+      statusName: row.status_name,
+      isSignedScan: priorityOf(row.status_name) === 4,
+      documentDate: row.document_date ?? row.created_at_hero,
+    });
+  }
+
+  return result;
+}

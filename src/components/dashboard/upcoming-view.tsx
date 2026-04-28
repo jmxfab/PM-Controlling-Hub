@@ -5,9 +5,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Calendar,
+  CheckCircle2,
   ChevronDown,
   Clock,
   ExternalLink,
+  FileSignature,
   RotateCcw,
   Search,
   X,
@@ -828,8 +830,34 @@ function ProjectDetailExpand({
         )}
       </div>
 
-      {heroHref ? (
-        <div>
+      <div className="flex flex-wrap gap-2">
+        {project.confirmation?.fileUrl ? (
+          <a
+            href={project.confirmation.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors",
+              project.confirmation.isSignedScan
+                ? "border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white"
+                : "border-input text-foreground hover:bg-blue-500 hover:border-blue-500 hover:text-white"
+            )}
+            title={
+              project.confirmation.isSignedScan
+                ? "Vom Kunden zurückgegebene (signierte) Auftragsbestätigung"
+                : `${project.confirmation.statusName ?? ""} — letzte verfügbare AB`
+            }
+          >
+            {project.confirmation.isSignedScan ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : (
+              <FileSignature className="h-3 w-3" />
+            )}
+            AB {project.confirmation.nr ?? "ansehen"}
+            {project.confirmation.isSignedScan ? " (unterschrieben)" : ""} →
+          </a>
+        ) : null}
+        {heroHref ? (
           <a
             href={heroHref}
             target="_blank"
@@ -839,8 +867,8 @@ function ProjectDetailExpand({
             <ExternalLink className="h-3 w-3" />
             Im Hero öffnen →
           </a>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
