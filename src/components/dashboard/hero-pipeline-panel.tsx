@@ -811,6 +811,7 @@ interface LogbuchRecentEntry {
   entry_date: string | null;
   event_type: string | null;
   user_email: string | null;
+  description: string | null;
 }
 
 function RecentLogbuchEntries({ projectId }: { projectId: string }) {
@@ -901,7 +902,7 @@ function RecentLogbuchEntries({ projectId }: { projectId: string }) {
                       </span>
                     </div>
                     <span className="block mt-0.5">
-                      {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                      {`„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
                     </span>
                   </blockquote>
                 </button>
@@ -1336,7 +1337,7 @@ function ProjectLogbuchDialog({
                       </span>
                     </div>
                     <span className="block mt-1 italic text-foreground/90">
-                      {`„${entry.event_type ?? "Kein Eintragstext"}\u201C`}
+                      {`„${entry.description ?? entry.event_type ?? "Kein Eintragstext"}\u201C`}
                     </span>
                   </blockquote>
                 </li>

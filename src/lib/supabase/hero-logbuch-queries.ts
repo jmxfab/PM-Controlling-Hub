@@ -19,6 +19,13 @@ export interface LogbuchEntry {
   target_id: string | null;
   hero_modified_at: string | null;
   raw: Record<string, unknown> | null;
+  /**
+   * Synthetisch aus den nächsten Status-Transitionen abgeleitet, weil
+   * Hero in der histories-Query selber keinen Freitext liefert. Beispiele:
+   *   "Step gewechselt zu: 🧮 Heizlastberechnung"
+   *   "Projekt bearbeitet"
+   */
+  description: string | null;
 }
 
 export interface LogbuchFilters {
@@ -98,6 +105,53 @@ export async function loadLogbuchPage(
     }
   }
 
+  // Status-Transitionen für die betroffenen Projekte laden, damit wir
+  // pro History-Eintrag eine inhaltliche Beschreibung ableiten können
+  // (Hero liefert in `histories` selbst keinen Freitext).
+  type StatusTransition = {
+    project_match_id: string;
+    step_name: string | null;
+    entered_at: string | null;
+  };
+  let transitionsByProject = new Map<string, StatusTransition[]>();
+  if (projectIds.length > 0) {
+    const { data: transitions } = await supabaseAdmin()
+      .from("hero_status_transitions")
+      .select("project_match_id, step_name, entered_at")
+      .in("project_match_id", projectIds)
+      .order("entered_at", { ascending: false, nullsFirst: false });
+    for (const t of (transitions ?? []) as StatusTransition[]) {
+      const list = transitionsByProject.get(t.project_match_id) ?? [];
+      list.push(t);
+      transitionsByProject.set(t.project_match_id, list);
+    }
+  }
+
+  function deriveDescription(
+    entry: { entry_date: string | null; project_match_id: string | null }
+  ): string {
+    if (!entry.entry_date || !entry.project_match_id) return "Projekt bearbeitet";
+    const entryTime = new Date(entry.entry_date).getTime();
+    if (!Number.isFinite(entryTime)) return "Projekt bearbeitet";
+    const transitions = transitionsByProject.get(entry.project_match_id) ?? [];
+    let bestMatch: { step: string; deltaMs: number } | null = null;
+    for (const t of transitions) {
+      if (!t.entered_at || !t.step_name) continue;
+      const tTime = new Date(t.entered_at).getTime();
+      if (!Number.isFinite(tTime)) continue;
+      const delta = Math.abs(tTime - entryTime);
+      // 5-Minuten-Fenster: wenn ein Status-Wechsel zeitlich passt,
+      // gehört der zur History-Zeile.
+      if (delta > 5 * 60 * 1000) continue;
+      if (!bestMatch || delta < bestMatch.deltaMs) {
+        bestMatch = { step: t.step_name, deltaMs: delta };
+      }
+    }
+    return bestMatch
+      ? `Step gewechselt zu: ${bestMatch.step}`
+      : "Projekt bearbeitet";
+  }
+
   return {
     entries: entries.map((e) => ({
       id: e.id,
@@ -112,6 +166,7 @@ export async function loadLogbuchPage(
       target_id: e.target_id ?? null,
       hero_modified_at: e.hero_modified_at ?? null,
       raw: (e.raw as Record<string, unknown> | null) ?? null,
+      description: deriveDescription(e),
     })),
     total: count ?? 0,
   };

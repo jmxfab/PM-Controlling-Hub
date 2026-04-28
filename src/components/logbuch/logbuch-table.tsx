@@ -217,15 +217,22 @@ function LogbuchEntryDetails({ entry }: { entry: LogbuchEntry }) {
       ? String((raw as Record<string, unknown>).modified ?? "")
       : null;
 
-  const description = pickFirstString(raw, [
-    "description",
-    "text",
-    "message",
-    "comment",
-    "note",
-    "body",
-    "content",
-  ]);
+  // Erst die synthetisch abgeleitete Description aus dem Backend
+  // (z.B. "Step gewechselt zu: 🧮 Heizlastberechnung") — Hero liefert
+  // selber keinen Freitext, deshalb stammt die Beschreibung aus dem
+  // zeitlich gematchten Status-Übergang. Falls das Backend doch mal
+  // ein Freitext-Feld in raw mitliefert, nimmt pickFirstString das.
+  const description =
+    entry.description ??
+    pickFirstString(raw, [
+      "description",
+      "text",
+      "message",
+      "comment",
+      "note",
+      "body",
+      "content",
+    ]);
 
   return (
     <div className="space-y-3 p-4">

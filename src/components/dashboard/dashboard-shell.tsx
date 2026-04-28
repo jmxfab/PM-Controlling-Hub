@@ -168,9 +168,16 @@ export function DashboardShell({
           <div className="flex flex-wrap gap-2">
             <TabsList
               className="flex h-auto flex-wrap gap-1 bg-muted p-1"
-              title="Momentaufnahme — kein Zeitfilter: wie viele Projekte JETZT offen / überfällig / in Abrechnung sind."
+              title="Momentaufnahme + Jumax-Berichtswoche."
             >
               <TabsTrigger value="current">Jetzt</TabsTrigger>
+              <TabsTrigger
+                value="jumax_week"
+                title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
+                className="border border-amber-500/60 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 data-[state=active]:bg-amber-500 data-[state=active]:text-amber-50 data-[state=active]:border-amber-500 data-[state=active]:shadow-sm"
+              >
+                Jumax-Woche
+              </TabsTrigger>
             </TabsList>
 
             <TabsList
@@ -184,12 +191,6 @@ export function DashboardShell({
                 title="Rollende letzte 7 Tage: heute-6 → heute. Inklusive heutigem Tag."
               >
                 Letzte Woche
-              </TabsTrigger>
-              <TabsTrigger
-                value="jumax_week"
-                title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
-              >
-                Jumax-Woche
               </TabsTrigger>
               <TabsTrigger value="14d">14 Tage</TabsTrigger>
               <TabsTrigger value="frei">Frei</TabsTrigger>
