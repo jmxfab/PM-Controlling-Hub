@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -789,6 +789,7 @@ function ProjectRow({
                 </InfoBlock>
               ) : null}
             </div>
+            <RecentLogbuchEntries projectId={project.id} />
             {heroHref ? (
               <div className="mt-3">
                 <a
@@ -805,6 +806,110 @@ function ProjectRow({
         </TableRow>
       ) : null}
     </>
+  );
+}
+
+interface LogbuchRecentEntry {
+  id: string;
+  entry_date: string | null;
+  event_type: string | null;
+  user_email: string | null;
+}
+
+function RecentLogbuchEntries({ projectId }: { projectId: string }) {
+  const [entries, setEntries] = useState<LogbuchRecentEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `/api/logbuch/recent?project_id=${encodeURIComponent(projectId)}&limit=3`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) {
+          if (!cancelled) setError(`HTTP ${res.status}`);
+          return;
+        }
+        const json = (await res.json()) as {
+          entries?: LogbuchRecentEntry[];
+          total?: number;
+        };
+        if (!cancelled) {
+          setEntries(json.entries ?? []);
+          setTotal(json.total ?? 0);
+        }
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  return (
+    <div className="mt-4 space-y-1.5">
+      <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
+        Letzte Logbuch-Einträge
+        {!loading && total > 0 ? (
+          <span className="ml-1 normal-case text-[10px] text-muted-foreground/70">
+            (von {total} insgesamt)
+          </span>
+        ) : null}
+      </p>
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Lädt…</p>
+      ) : error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : entries.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">
+          Keine Logbuch-Einträge vorhanden.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {entries.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex items-start gap-2 rounded-md border bg-background/40 px-2 py-1.5 text-xs"
+            >
+              <span className="tabular-nums text-muted-foreground whitespace-nowrap min-w-[110px]">
+                {entry.entry_date
+                  ? new Date(entry.entry_date).toLocaleString("de-DE", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "–"}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block truncate">
+                  {entry.user_email ?? (
+                    <span className="text-muted-foreground">unbekannt</span>
+                  )}
+                </span>
+                {entry.event_type ? (
+                  <span className="block text-[10px] text-muted-foreground truncate">
+                    {entry.event_type}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
