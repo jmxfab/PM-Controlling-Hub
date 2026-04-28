@@ -10,6 +10,7 @@ import {
   Euro,
   LayoutDashboard,
   ListTodo,
+  LogOut,
   Settings,
 } from "lucide-react";
 
@@ -31,6 +32,11 @@ const navItems = [
 export function MainNav() {
   const pathname = usePathname();
   const settingsActive = pathname.startsWith("/einstellungen");
+
+  // Login-Seite läuft außerhalb der App-Schale (kein Header, kein Logo).
+  if (pathname.startsWith("/login")) {
+    return null;
+  }
 
   return (
     <header className="relative border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30">
@@ -72,19 +78,43 @@ export function MainNav() {
           })}
         </nav>
 
-        <Link
-          href="/einstellungen"
-          aria-label="Einstellungen"
-          title="Einstellungen"
-          className={`shrink-0 ml-auto flex items-center justify-center h-9 w-9 rounded-md transition-colors ${
-            settingsActive
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-          }`}
-        >
-          <Settings size={18} />
-        </Link>
+        <div className="shrink-0 ml-auto flex items-center gap-1">
+          <Link
+            href="/einstellungen"
+            aria-label="Einstellungen"
+            title="Einstellungen"
+            className={`flex items-center justify-center h-9 w-9 rounded-md transition-colors ${
+              settingsActive
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            }`}
+          >
+            <Settings size={18} />
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
     </header>
+  );
+}
+
+function LogoutButton() {
+  async function handleClick() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      aria-label="Abmelden"
+      title="Abmelden"
+      className="flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+    >
+      <LogOut size={18} />
+    </button>
   );
 }
