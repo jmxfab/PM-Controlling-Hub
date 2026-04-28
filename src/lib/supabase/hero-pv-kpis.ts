@@ -28,6 +28,9 @@ export interface PvKpiCalendarEvent {
   projectId: string | null;
   projectNumber: string | null;
   projectName: string | null;
+  /** Manuelle Erinnerung (Dashboard-Eingabe, ueberlebt Hero-Sync). */
+  reminderAt: string | null;
+  reminderNote: string | null;
 }
 
 export interface PvControllingKpis {
@@ -62,6 +65,16 @@ export interface PvControllingKpis {
   closingsToPlan: { count: number; projects: PvKpiProject[] };
   /** Projekte im Step "🤝🏼 Abschlussgespräch" mit gesetztem maturity_date. */
   closingsScheduled: { count: number; projects: PvKpiProject[] };
+
+  /** Termin-Aktivität gefiltert auf Kategorie Gesamtmontage / Kleinauftrag. */
+  appointmentActivity: {
+    /** Termine mit is_done=true im Zeitraum. */
+    completed: { count: number; events: PvKpiCalendarEvent[] };
+    /** Termine deren Start im Zeitraum liegt (egal ob abgeschlossen). */
+    worked: { count: number; events: PvKpiCalendarEvent[] };
+    /** Termine die im Zeitraum frisch angelegt wurden (created in window). */
+    added: { count: number; events: PvKpiCalendarEvent[] };
+  };
 }
 
 export interface PvKpiTimeWindow {
@@ -205,7 +218,7 @@ export async function loadPvControllingKpis(
   const { data: eventRows } = await supabase
     .from("hero_calendar_events")
     .select(
-      "id, title, category_name, event_start, event_end, original_event_start, is_done, project_match_id"
+      "id, title, category_name, event_start, event_end, original_event_start, is_done, project_match_id, reminder_at, reminder_note"
     )
     .eq("is_deleted", false)
     .or(
@@ -222,6 +235,8 @@ export async function loadPvControllingKpis(
     original_event_start: string | null;
     is_done: boolean | null;
     project_match_id: string | null;
+    reminder_at: string | null;
+    reminder_note: string | null;
   }>;
 
   const toEvent = (e: (typeof events)[number]): PvKpiCalendarEvent => {
@@ -242,6 +257,8 @@ export async function loadPvControllingKpis(
       projectId: e.project_match_id,
       projectNumber: proj?.project_number ?? null,
       projectName: proj?.project_name ?? null,
+      reminderAt: e.reminder_at,
+      reminderNote: e.reminder_note,
     };
   };
 
@@ -283,6 +300,34 @@ export async function loadPvControllingKpis(
     return t.includes("zählerwechsel") || t.includes("zählermontage");
   });
   const meterEventsDeduped = dedupeBy(meterEvents, (e) => e.project_match_id ?? e.id);
+
+  // ─── Termin-Aktivität (Gesamtmontage / Kleinauftrag) ──────────────────
+  // Drei zusätzliche KPIs für die Kategorien Gesamtmontage + Kleinauftrag:
+  // wie viele Termine wurden abgeschlossen, bearbeitet (also überhaupt im
+  // Zeitraum stattgefunden) und wie viele kamen neu dazu (created in window).
+  const activityCategories = new Set(["gesamtmontage", "kleinauftrag"]);
+  const activityFilter = (e: (typeof events)[number]) =>
+    activityCategories.has(lc(e.category_name)) &&
+    e.project_match_id != null &&
+    pvIds.has(e.project_match_id);
+
+  const completedAppointments = events.filter(
+    (e) => activityFilter(e) && e.is_done === true
+  );
+  const workedAppointments = events.filter(activityFilter);
+
+  // "added" = im Zeitraum NEU angelegt — eigene Query auf created
+  const { data: addedRows } = await supabase
+    .from("hero_calendar_events")
+    .select(
+      "id, title, category_name, event_start, event_end, original_event_start, is_done, project_match_id, reminder_at, reminder_note, created_at"
+    )
+    .eq("is_deleted", false)
+    .gte("created_at", fromIso)
+    .lt("created_at", toIso)
+    .limit(5000);
+  const addedAppointments = ((addedRows ?? []) as Array<typeof events[number] & { created_at: string }>)
+    .filter(activityFilter);
 
   // ─── Nacharbeiten erledigt diese Woche ────────────────────────────────
   // = im Zeitraum gab es eine Status-Transition AUS einem Nacharbeit-Step
@@ -387,6 +432,20 @@ export async function loadPvControllingKpis(
     closingsScheduled: {
       count: closingsScheduledProjects.length,
       projects: closingsScheduledProjects,
+    },
+    appointmentActivity: {
+      completed: {
+        count: completedAppointments.length,
+        events: completedAppointments.map(toEvent),
+      },
+      worked: {
+        count: workedAppointments.length,
+        events: workedAppointments.map(toEvent),
+      },
+      added: {
+        count: addedAppointments.length,
+        events: addedAppointments.map(toEvent),
+      },
     },
   };
 }
