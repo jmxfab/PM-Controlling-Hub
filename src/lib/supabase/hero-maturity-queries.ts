@@ -37,6 +37,7 @@ export interface UpcomingProject {
   daysUntilDue: number;
   wasReopened: boolean;
   confirmation: UpcomingConfirmation | null;
+  documents: UpcomingDocument[];
 }
 
 export interface UpcomingConfirmation {
@@ -49,6 +50,17 @@ export interface UpcomingConfirmation {
    *  Heros Konvention für eine vom Kunden zurückgegebene Datei. */
   isSignedScan: boolean;
   documentDate: string | null;
+}
+
+export interface UpcomingDocument {
+  id: string;
+  nr: string | null;
+  fileUrl: string | null;
+  type: string | null;
+  documentTypeName: string | null;
+  statusName: string | null;
+  documentDate: string | null;
+  value: number | null;
 }
 
 /**
@@ -117,12 +129,12 @@ export const loadUpcomingProjects = cache(
       department_key: string | null;
     }>;
 
-    // Auftragsbestätigungen pro Projekt batched holen.
+    // Auftragsbestätigungen + alle relevanten Dokumente pro Projekt batched holen.
     const projectIds = rows.map((r) => r.id);
-    const confirmationByProject = await loadConfirmationsForProjects(
-      supabase,
-      projectIds
-    );
+    const [confirmationByProject, documentsByProject] = await Promise.all([
+      loadConfirmationsForProjects(supabase, projectIds),
+      loadDocumentsForProjects(supabase, projectIds),
+    ]);
 
     return rows.map((r) => {
       const dueTs = r.maturity_date ? Date.parse(r.maturity_date) : null;
@@ -151,10 +163,99 @@ export const loadUpcomingProjects = cache(
         daysUntilDue,
         wasReopened: r.was_reopened === true,
         confirmation: confirmationByProject.get(r.id) ?? null,
+        documents: documentsByProject.get(r.id) ?? [],
       };
     });
   }
 );
+
+/**
+ * Alle relevanten Dokumente pro Projekt — Rechnungen, ABs, Angebote,
+ * Mahnungen, Storno (status_code != 1000 = nicht gelöscht). Pro Projekt
+ * neueste zuerst, max 10 Stück.
+ */
+async function loadDocumentsForProjects(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  projectIds: string[]
+): Promise<Map<string, UpcomingDocument[]>> {
+  const result = new Map<string, UpcomingDocument[]>();
+  if (projectIds.length === 0) return result;
+
+  const RELEVANT_TYPES = [
+    "invoice",
+    "reversal_invoice",
+    "confirmation",
+    "offer",
+    "dunning",
+    "invoice_notice",
+  ];
+
+  const { data } = await supabase
+    .from("hero_customer_documents")
+    .select(
+      "id, nr, type, status_code, status_name, document_type_name, document_date, created_at_hero, value, project_match_id, raw"
+    )
+    .eq("is_deleted", false)
+    .in("type", RELEVANT_TYPES)
+    .in("project_match_id", projectIds)
+    .neq("status_code", 1000)
+    .limit(5000);
+
+  type Row = {
+    id: string;
+    nr: string | null;
+    type: string | null;
+    status_code: number | null;
+    status_name: string | null;
+    document_type_name: string | null;
+    document_date: string | null;
+    created_at_hero: string | null;
+    value: number | string | null;
+    project_match_id: string | null;
+    raw: Record<string, unknown> | null;
+  };
+
+  for (const row of (data ?? []) as Row[]) {
+    if (!row.project_match_id) continue;
+    const fileUpload = (row.raw as Record<string, unknown> | null)?.[
+      "file_upload"
+    ] as Record<string, unknown> | undefined;
+    const fileUrl =
+      typeof fileUpload?.["url"] === "string"
+        ? (fileUpload["url"] as string)
+        : null;
+    const doc: UpcomingDocument = {
+      id: row.id,
+      nr: row.nr,
+      fileUrl,
+      type: row.type,
+      documentTypeName: row.document_type_name,
+      statusName: row.status_name,
+      documentDate: row.document_date ?? row.created_at_hero,
+      value:
+        row.value === null
+          ? null
+          : typeof row.value === "number"
+            ? row.value
+            : Number(row.value) || null,
+    };
+    const list = result.get(row.project_match_id) ?? [];
+    list.push(doc);
+    result.set(row.project_match_id, list);
+  }
+
+  // Pro Projekt: nach Datum absteigend sortieren, auf 10 limitieren.
+  for (const [pid, list] of result.entries()) {
+    list.sort((a, b) => {
+      const ta = a.documentDate ? Date.parse(a.documentDate) : 0;
+      const tb = b.documentDate ? Date.parse(b.documentDate) : 0;
+      return tb - ta;
+    });
+    result.set(pid, list.slice(0, 10));
+  }
+
+  return result;
+}
 
 /**
  * Beste Auftragsbestätigung pro Projekt: priorisiert nach

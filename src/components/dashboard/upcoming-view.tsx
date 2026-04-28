@@ -830,6 +830,71 @@ function ProjectDetailExpand({
         )}
       </div>
 
+      {project.documents.length > 0 ? (
+        <div className="space-y-1.5 border-t pt-3">
+          <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
+            Dokumente ({project.documents.length})
+          </p>
+          <ul className="space-y-1">
+            {project.documents.map((doc) => {
+              const typeLabel = humanDocType(doc.type, doc.documentTypeName);
+              const isSigned =
+                (doc.statusName ?? "").toLowerCase().includes("hochgeladen");
+              return (
+                <li
+                  key={doc.id}
+                  className="flex items-center justify-between gap-2 rounded-md border bg-background/40 px-2 py-1 text-xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        "shrink-0 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        doc.type === "invoice" || doc.type === "reversal_invoice"
+                          ? "bg-blue-500/10 text-blue-600"
+                          : doc.type === "confirmation"
+                            ? isSigned
+                              ? "bg-emerald-500/10 text-emerald-600"
+                              : "bg-amber-500/10 text-amber-600"
+                            : doc.type === "offer"
+                              ? "bg-purple-500/10 text-purple-600"
+                              : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {typeLabel}
+                    </span>
+                    <span className="font-mono text-[11px] truncate">
+                      {doc.nr ?? doc.id}
+                    </span>
+                    {isSigned ? (
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                    ) : null}
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {doc.statusName ?? ""}
+                    </span>
+                  </div>
+                  <span className="text-[10px] tabular-nums text-muted-foreground whitespace-nowrap">
+                    {doc.documentDate
+                      ? new Date(doc.documentDate).toLocaleDateString("de-DE")
+                      : "–"}
+                  </span>
+                  {doc.fileUrl ? (
+                    <a
+                      href={doc.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline text-[10px] shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      öffnen →
+                    </a>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         {project.confirmation?.fileUrl ? (
           <a
@@ -910,6 +975,33 @@ function formatAuthorFromEmail(email: string | null | undefined): string {
 function capitalize(value: string): string {
   if (!value) return value;
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function humanDocType(
+  type: string | null,
+  typeName: string | null
+): string {
+  if (typeName) {
+    if (typeName.toLowerCase().includes("auftrags")) return "AB";
+    if (typeName.toLowerCase().includes("anschluss")) return "AnZus";
+    return typeName;
+  }
+  switch (type) {
+    case "invoice":
+      return "RG";
+    case "reversal_invoice":
+      return "Storno";
+    case "confirmation":
+      return "AB";
+    case "offer":
+      return "Angebot";
+    case "dunning":
+      return "Mahnung";
+    case "invoice_notice":
+      return "RG-Hinweis";
+    default:
+      return type ?? "Doc";
+  }
 }
 
 function stripHtml(html: string): string {
