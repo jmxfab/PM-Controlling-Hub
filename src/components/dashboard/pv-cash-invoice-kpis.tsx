@@ -125,29 +125,31 @@ function humanizeActiveSteps(patterns: string[]): string {
   return titled.join(" / ");
 }
 
-/** Kompakte Kurz-Bezeichnung pro Hero-document_type_name fuer das KPI-Tile.
- *  "1. Teilrechnung" / "Teilrechnung" → "Teil",
- *  "Abschlussrechnung"/"Schlussrechnung" → "Abschluss",
- *  "Kundenrechnung" → "Kunde".
- *  Unbekannte Typen fallen auf den Original-String zurueck. */
-function shortInvoiceType(typeName: string | null): string {
-  if (!typeName) return "—";
-  const lower = typeName.toLowerCase();
+/** Kompakte Kurz-Bezeichnung des abgeleiteten Rechnungs-Typs fuer das
+ *  KPI-Tile.
+ *  "1. Teilrechnung" → "1. Teil",
+ *  "2. Teilrechnung" → "2. Teil",
+ *  "Abschlussrechnung" → "Abschluss",
+ *  "Kundenrechnung" → "Kunde". */
+function shortInvoiceType(derivedType: string): string {
+  const lower = derivedType.toLowerCase();
+  const teilMatch = lower.match(/^(\d+)\.\s*teil/);
+  if (teilMatch) return `${teilMatch[1]}. Teil`;
   if (lower.includes("teil")) return "Teil";
   if (lower.includes("abschluss") || lower.includes("schluss"))
     return "Abschluss";
   if (lower.includes("kunden")) return "Kunde";
   if (lower.includes("sammel")) return "Sammel";
-  return typeName;
+  return derivedType;
 }
 
 /** Aggregiere Rechnungen nach (gekuerztem) Typ und liefere
- *  "12 Teil · 8 Abschluss · 8 Kunde" zurueck — sortiert absteigend. */
+ *  "5 1. Teil · 3 2. Teil · 3 Abschluss" zurueck — sortiert absteigend. */
 function summarizeTypes(rows: PvCashInvoiceRow[]): string {
   if (rows.length === 0) return "";
   const buckets = new Map<string, number>();
   for (const r of rows) {
-    const short = shortInvoiceType(r.documentTypeName);
+    const short = shortInvoiceType(r.derivedType);
     buckets.set(short, (buckets.get(short) ?? 0) + 1);
   }
   return [...buckets.entries()]
@@ -354,7 +356,7 @@ function InvoicesTable({
               )}
             </TableCell>
             <TableCell className="text-xs whitespace-nowrap">
-              {r.documentTypeName ?? "–"}
+              {r.derivedType}
             </TableCell>
             <TableCell className="text-xs tabular-nums whitespace-nowrap">
               {r.documentDate

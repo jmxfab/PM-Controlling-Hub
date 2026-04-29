@@ -33,6 +33,11 @@ export interface PvCashInvoiceRow {
   value: number | null;
   statusName: string | null;
   documentTypeName: string | null;
+  /** Heuristisch abgeleiteter Typ aus Position der Rechnung im Projekt
+   *  + aktueller Step. Beispiele: "1. Teilrechnung", "2. Teilrechnung",
+   *  "Abschlussrechnung". Fallback auf documentTypeName wenn keine
+   *  Heuristik greift. */
+  derivedType: string;
   fileUrl: string | null;
   projectId: string | null;
   projectNumber: string | null;
@@ -69,6 +74,55 @@ export const WP_INVOICE_STEP_PATTERNS = [
 ];
 
 const PAYMENT_DUE_DAYS = 7;
+
+/** Steps die nach der Abschlussrechnung kommen (PV/WP). Wenn ein
+ *  Projekt aktuell in einem dieser Steps oder im Abschluss-Step selbst
+ *  steht, ist die LETZTE versendete Rechnung typischerweise die
+ *  Abschlussrechnung. Earlier sent invoices waren dann Teilrechnungen. */
+const POST_OR_IN_ABSCHLUSS_STEP_PATTERNS = [
+  "abschlussrechnung",
+  "schlussrechnung",
+  "kundenrechnung",
+  // PV — nach Abschlussrechnung
+  "zählermontage",
+  "nacharbeiten ac",
+  "nacharbeiten dc",
+  "nacharbeiten terminiert",
+  // WP — nach Abschlussrechnung
+  "nacharbeiten nicht terminiert",
+  "nacharbeiten montage",
+  // Allgemein abgeschlossen / Bewertung
+  "abgeschlossen",
+  "archiviert",
+  "fertig",
+  "bewertungspool",
+];
+
+function isInOrPastAbschluss(stepName: string | null): boolean {
+  const lower = (stepName ?? "").toLowerCase();
+  if (!lower) return false;
+  return POST_OR_IN_ABSCHLUSS_STEP_PATTERNS.some((p) => lower.includes(p));
+}
+
+/** Aus Position + Projekt-Step den Rechnungs-Typ ableiten:
+ *  - Wenn dies die LETZTE Rechnung des Projekts ist UND das Projekt im
+ *    oder nach dem Abschluss-Step steht → "Abschlussrechnung"
+ *  - Sonst → "${pos}. Teilrechnung" */
+function deriveInvoiceType(
+  pos1Indexed: number,
+  totalInvoicesOfProject: number,
+  projectStepName: string | null,
+  fallback: string | null
+): string {
+  if (pos1Indexed < 1 || totalInvoicesOfProject < 1) {
+    return fallback ?? "Rechnung";
+  }
+  const isLast = pos1Indexed === totalInvoicesOfProject;
+  if (isLast && isInOrPastAbschluss(projectStepName)) {
+    return "Abschlussrechnung";
+  }
+  return `${pos1Indexed}. Teilrechnung`;
+}
 
 /**
  * Kompatibilitäts-Wrapper für PV. Nutzt intern loadCashInvoiceKpisForDept.
@@ -165,6 +219,48 @@ export async function loadCashInvoiceKpisForDept(
     return emptyKpis();
   }
 
+  // Schritt 3: ALLE Rechnungen dieser Projekte laden (auch ausserhalb des
+  // Zeitraums, status=200 OR 100 OR 600 — also alle ausser Entwurf/Geloescht).
+  // Wir brauchen das um die Position jeder Rechnung im Projekt zu bestimmen
+  // ("ist das die 1. Teilrechnung oder die Abschlussrechnung?").
+  const { data: projectInvoices } = await supabase
+    .from("hero_customer_documents")
+    .select("id, project_match_id, document_date, status_code")
+    .eq("type", "invoice")
+    .eq("is_deleted", false)
+    .in("status_code", [100, 200, 600])
+    .in("project_match_id", [...pvMap.keys()])
+    .limit(20000);
+
+  type ProjectInvoiceRef = {
+    id: string;
+    project_match_id: string | null;
+    document_date: string | null;
+    status_code: number | null;
+  };
+
+  const projectInvoiceMap = new Map<string, ProjectInvoiceRef[]>();
+  for (const pi of (projectInvoices ?? []) as ProjectInvoiceRef[]) {
+    if (!pi.project_match_id) continue;
+    // Stornorechnungen (600) zaehlen nicht als eigene Position — sie
+    // korrigieren eine bestehende Rechnung. Wir nehmen sie nur mit damit
+    // wir spaeter wissen welche Rechnungen "neutralisiert" wurden, aber
+    // fuer die Positions-Zaehlung 1./2./Abschluss zaehlen nur Erstellt+
+    // Versendet.
+    if (pi.status_code !== 100 && pi.status_code !== 200) continue;
+    const arr = projectInvoiceMap.get(pi.project_match_id) ?? [];
+    arr.push(pi);
+    projectInvoiceMap.set(pi.project_match_id, arr);
+  }
+  // Pro Projekt nach document_date aufsteigend sortieren (alteste zuerst).
+  for (const arr of projectInvoiceMap.values()) {
+    arr.sort((a, b) => {
+      const ta = a.document_date ? Date.parse(a.document_date) : 0;
+      const tb = b.document_date ? Date.parse(b.document_date) : 0;
+      return ta - tb;
+    });
+  }
+
   const now = Date.now();
   const allRows: PvCashInvoiceRow[] = [];
 
@@ -190,6 +286,18 @@ export async function loadCashInvoiceKpisForDept(
         ? (fileUpload["url"] as string)
         : null;
 
+    // Position der Rechnung im Projekt bestimmen.
+    const projectInvList = inv.project_match_id
+      ? projectInvoiceMap.get(inv.project_match_id) ?? []
+      : [];
+    const pos1 = projectInvList.findIndex((i) => i.id === inv.id) + 1; // 1-indexed; 0 wenn nicht gefunden
+    const derivedType = deriveInvoiceType(
+      pos1,
+      projectInvList.length,
+      project.step_name,
+      inv.document_type_name
+    );
+
     allRows.push({
       id: inv.id,
       nr: inv.nr,
@@ -202,6 +310,7 @@ export async function loadCashInvoiceKpisForDept(
             : Number(inv.value) || null,
       statusName: inv.status_name,
       documentTypeName: inv.document_type_name,
+      derivedType,
       fileUrl,
       projectId: inv.project_match_id,
       projectNumber: project.project_number,
