@@ -86,15 +86,17 @@ function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
     },
     {
       ...KPIS_BASE[1],
-      description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
+      description:
+        "Aktuell offen (laut Hero unbezahlt), max. 7 Tage seit Rechnungsdatum — egal aus welchem Zeitraum",
     },
     {
       ...KPIS_BASE[2],
-      description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
+      description:
+        "Aktuell offen (laut Hero unbezahlt) und mehr als 7 Tage seit Rechnungsdatum — egal aus welchem Zeitraum",
     },
     {
       ...KPIS_BASE[3],
-      description: `Offenes Brutto-Volumen (status Erstellt + Versendet) aller Projekte aktuell im Step: ${activeStepHumanList}`,
+      description: `Offenes Brutto-Volumen aller Projekte aktuell im Step: ${activeStepHumanList}`,
     },
   ];
 }

@@ -157,25 +157,33 @@ export async function loadCashInvoiceKpisForDept(
 ): Promise<PvCashInvoiceKpis> {
   const supabase = supabaseAdmin();
 
-  // Schritt 1: ALLE versendeten Rechnungen im Zeitraum laden (kleines
-  // Set, gefiltert via type/status/date). Sparten-Filter kommt erst beim
-  // Projekt-Lookup. Wichtig fuer GESAMT — sonst muessten wir 5000+ Projekt-
-  // IDs in der URL-IN-Clause uebergeben, was die PostgREST-URL-Grenze
-  // sprengt.
-  // Booking-Filter: nur Rechnungen die laut Hero noch offen sind. Solange
-  // der Sync noch nicht alle Rechnungen mit Booking-Info versehen hat,
-  // erlauben wir auch booking_is_open IS NULL als Fallback (alte Heuristik
-  // via status_code 200 greift dann implizit).
-  const { data: invoices } = await supabase
+  const INVOICE_SELECT =
+    "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw, booking_is_open, booking_paid_date, booking_due_date, booking_balance";
+
+  // Schritt 1a: Versendete Rechnungen IM ZEITRAUM — fuer Tile "Gesamt im
+  // Zeitraum". KEIN booking-Filter hier, weil die Kachel zeigt was im
+  // Zeitraum gestellt wurde, egal ob inzwischen bezahlt oder noch offen.
+  const { data: periodInvoicesData } = await supabase
     .from("hero_customer_documents")
-    .select(
-      "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw, booking_is_open, booking_paid_date, booking_due_date, booking_balance"
-    )
+    .select(INVOICE_SELECT)
     .eq("type", "invoice")
     .eq("is_deleted", false)
     .eq("status_code", 200)
     .gte("document_date", fromIso)
     .lt("document_date", toIso)
+    .limit(5000);
+
+  // Schritt 1b: AKTUELL OFFENE versendete Rechnungen — KEIN Period-Filter.
+  // Fuer Tiles "Offen & nicht ueberfaellig" + "Offen & ueberfaellig":
+  // egal ob die Rechnung diese Woche oder vor 3 Monaten verschickt wurde —
+  // wenn sie heute noch offen ist, soll sie hier auftauchen.
+  // booking_is_open IS NULL = Fallback fuer noch nicht gesyncte Rechnungen.
+  const { data: openInvoicesData } = await supabase
+    .from("hero_customer_documents")
+    .select(INVOICE_SELECT)
+    .eq("type", "invoice")
+    .eq("is_deleted", false)
+    .eq("status_code", 200)
     .or("booking_is_open.eq.true,booking_is_open.is.null")
     .limit(5000);
 
@@ -195,10 +203,13 @@ export async function loadCashInvoiceKpisForDept(
     booking_balance: number | string | null;
   };
 
-  const invoiceList = (invoices ?? []) as Invoice[];
+  const periodInvoiceList = (periodInvoicesData ?? []) as Invoice[];
+  const openInvoiceList = (openInvoicesData ?? []) as Invoice[];
+
+  // Vereinigte Projekt-IDs aus beiden Sets.
   const projectIds = [
     ...new Set(
-      invoiceList
+      [...periodInvoiceList, ...openInvoiceList]
         .map((i) => i.project_match_id)
         .filter((id): id is string => Boolean(id))
     ),
@@ -281,11 +292,16 @@ export async function loadCashInvoiceKpisForDept(
   }
 
   const now = Date.now();
-  const allRows: PvCashInvoiceRow[] = [];
 
-  for (const inv of invoiceList) {
-    const project = inv.project_match_id ? pvMap.get(inv.project_match_id) : undefined;
-    if (!project) continue;
+  // Helper: Eine Hero-Invoice + zugehoeriges Projekt zu einer
+  // PvCashInvoiceRow umwandeln. Gibt null zurueck wenn das Projekt
+  // (z.B. wegen department-Filter) nicht in pvMap ist.
+  function buildRow(inv: Invoice): PvCashInvoiceRow | null {
+    const project = inv.project_match_id
+      ? pvMap.get(inv.project_match_id)
+      : undefined;
+    if (!project) return null;
+
     const docTs = inv.document_date ? Date.parse(inv.document_date) : NaN;
     const ageMs = Number.isFinite(docTs) ? now - docTs : 0;
     // Volle Tage (abgerundet) seit Rechnungsdatum. Day 0 = heute versendet,
@@ -309,7 +325,7 @@ export async function loadCashInvoiceKpisForDept(
     const projectInvList = inv.project_match_id
       ? projectInvoiceMap.get(inv.project_match_id) ?? []
       : [];
-    const pos1 = projectInvList.findIndex((i) => i.id === inv.id) + 1; // 1-indexed; 0 wenn nicht gefunden
+    const pos1 = projectInvList.findIndex((i) => i.id === inv.id) + 1;
     const derivedType = deriveInvoiceType(
       pos1,
       projectInvList.length,
@@ -329,11 +345,9 @@ export async function loadCashInvoiceKpisForDept(
         : typeof inv.booking_balance === "number"
           ? inv.booking_balance
           : Number(inv.booking_balance) || null;
-    // Open-Betrag = Booking-Balance wenn vorhanden (Hero-truth, beruecksichtigt
-    // Teilzahlungen), sonst Fallback auf den vollen Rechnungsbetrag.
     const openAmount = balance ?? fullValue;
 
-    allRows.push({
+    return {
       id: inv.id,
       nr: inv.nr,
       documentDate: inv.document_date,
@@ -358,11 +372,22 @@ export async function loadCashInvoiceKpisForDept(
       bookingPaidDate: inv.booking_paid_date,
       bookingDueDate: inv.booking_due_date,
       bookingBalance: balance,
-    });
+    };
   }
 
-  const notOverdueRows = allRows.filter((r) => !r.isOverdue);
-  const overdueRows = allRows.filter((r) => r.isOverdue);
+  // Total-Tile: Period-Invoices (alle versendeten im Zeitraum, egal ob
+  // inzwischen bezahlt oder offen).
+  const totalRows = periodInvoiceList
+    .map((inv) => buildRow(inv))
+    .filter((r): r is PvCashInvoiceRow => r !== null);
+
+  // Offen-Tiles: alle aktuell noch offenen versendeten Rechnungen — ohne
+  // Period-Filter, dafuer mit booking_is_open=true (oder NULL fallback).
+  const allOpenRows = openInvoiceList
+    .map((inv) => buildRow(inv))
+    .filter((r): r is PvCashInvoiceRow => r !== null);
+  const notOverdueRows = allOpenRows.filter((r) => !r.isOverdue);
+  const overdueRows = allOpenRows.filter((r) => r.isOverdue);
 
   // ----- "Offen & im aktiven Step" — projekt-zentrisch, NICHT period-
   // bound, NICHT auf "Versendet" beschraenkt. Wir wollen das volle
@@ -510,7 +535,7 @@ export async function loadCashInvoiceKpisForDept(
   }
 
   return {
-    total: { count: allRows.length, rows: allRows },
+    total: { count: totalRows.length, rows: totalRows },
     notOverdue: { count: notOverdueRows.length, rows: notOverdueRows },
     overdue: { count: overdueRows.length, rows: overdueRows },
     inActiveStep: { count: stepRows.length, rows: stepRows },
