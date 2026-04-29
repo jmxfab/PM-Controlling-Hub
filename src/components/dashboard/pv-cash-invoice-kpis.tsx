@@ -257,7 +257,20 @@ function InvoicesTable({
         {sorted.map((r) => (
           <TableRow key={r.id}>
             <TableCell className="font-mono text-xs">
-              {r.nr ?? r.id}
+              {r.fileUrl ? (
+                <a
+                  href={r.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                  title="Rechnungs-PDF öffnen"
+                >
+                  {r.nr ?? r.id}
+                  <span aria-hidden="true">↗</span>
+                </a>
+              ) : (
+                <span>{r.nr ?? r.id}</span>
+              )}
             </TableCell>
             <TableCell className="text-xs tabular-nums whitespace-nowrap">
               {r.documentDate

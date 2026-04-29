@@ -32,6 +32,7 @@ export interface PvCashInvoiceRow {
   documentDate: string | null;
   value: number | null;
   statusName: string | null;
+  fileUrl: string | null;
   projectId: string | null;
   projectNumber: string | null;
   projectName: string | null;
@@ -90,11 +91,12 @@ export async function loadPvCashInvoiceKpis(
     return emptyKpis();
   }
 
-  // Schritt 2: Rechnungen filtern
+  // Schritt 2: Rechnungen filtern. raw nehmen wir mit damit wir an die
+  // file_upload.url für den PDF-Direktlink rankommen.
   const { data: invoices } = await supabase
     .from("hero_customer_documents")
     .select(
-      "id, nr, document_date, value, status_code, status_name, project_match_id"
+      "id, nr, document_date, value, status_code, status_name, project_match_id, raw"
     )
     .eq("type", "invoice")
     .eq("is_deleted", false)
@@ -112,6 +114,7 @@ export async function loadPvCashInvoiceKpis(
     status_code: number | null;
     status_name: string | null;
     project_match_id: string | null;
+    raw: Record<string, unknown> | null;
   };
 
   const now = Date.now();
@@ -130,6 +133,14 @@ export async function loadPvCashInvoiceKpis(
       stepLower.includes(p)
     );
 
+    const fileUpload = (inv.raw as Record<string, unknown> | null)?.[
+      "file_upload"
+    ] as Record<string, unknown> | undefined;
+    const fileUrl =
+      typeof fileUpload?.["url"] === "string"
+        ? (fileUpload["url"] as string)
+        : null;
+
     allRows.push({
       id: inv.id,
       nr: inv.nr,
@@ -141,6 +152,7 @@ export async function loadPvCashInvoiceKpis(
             ? inv.value
             : Number(inv.value) || null,
       statusName: inv.status_name,
+      fileUrl,
       projectId: inv.project_match_id,
       projectNumber: project.project_number,
       projectName: cleanProjectTitle(project.project_name, {
