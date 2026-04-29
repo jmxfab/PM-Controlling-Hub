@@ -395,7 +395,10 @@ export function HeroPipelinePanel({
               showEur={showEur}
             />
             {finishedSteps.length > 0 ? (
-              <details className="group pt-2 border-t">
+              // Im Cash-Tab standardmaessig ausgeklappt (Abschlussrechnungen
+              // sind dort die wichtigste Zeile), sonst eingeklappt damit
+              // die operative Liste oben den Fokus behaelt.
+              <details className="group pt-2 border-t" open={variant === "cash"}>
                 <summary className="flex items-baseline justify-between gap-2 cursor-pointer text-xs uppercase tracking-wide text-muted-foreground/60 hover:text-muted-foreground py-1">
                   <span className="flex items-center gap-1">
                     <span className="transition-transform group-open:rotate-90">▸</span>

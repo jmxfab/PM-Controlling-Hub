@@ -100,13 +100,14 @@ export function CashflowView({
       ) : null}
       {dto ? (
       <>
-      {/* Top-KPIs */}
+      {/* Top-KPIs — alle klickbar, scrollen zum jeweiligen Detail-Panel */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
           label="Offene Forderungen gesamt"
           valueText={formatEur(dto.totalOpenEur)}
           hint={`${dto.totalOpenCount} offene Rechnungen`}
           icon={<Euro className="h-4 w-4" />}
+          scrollTargetId="cash-aging-breakdown"
         />
         <Kpi
           label="Pipeline-Umsatz"
@@ -114,6 +115,7 @@ export function CashflowView({
           hint={`${dto.pipelineRevenueInvoices} Rechnungen in Abschluss-/Montage-Step`}
           icon={<Euro className="h-4 w-4" />}
           tone="good"
+          scrollTargetId="cash-forecast"
         />
         <Kpi
           label="Abrechnungsquote"
@@ -121,6 +123,7 @@ export function CashflowView({
           hint={`${dto.billingRate.billed} von ${dto.billingRate.completed} abgeschlossenen Projekten haben eine Rechnung`}
           icon={<Percent className="h-4 w-4" />}
           tone={dto.billingRate.percent < 80 ? "warning" : "good"}
+          scrollTargetId="cash-status-breakdown"
         />
         <Kpi
           label="Überfällig (>30 Tg)"
@@ -134,38 +137,45 @@ export function CashflowView({
             .reduce((s, b) => s + b.count, 0)} Rechnungen älter als 30 Tage`}
           icon={<AlertTriangle className="h-4 w-4" />}
           tone="warning"
+          scrollTargetId="cash-aging-breakdown"
         />
       </div>
 
       {/* Fälligkeits-Forecast: was kommt wann rein */}
       {dto.forecast && dto.forecast.length > 0 ? (
-        <CashflowForecast
-          department={department}
-          deptName={deptName}
-          buckets={dto.forecast}
-          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
-        />
+        <div id="cash-forecast" className="rounded-lg transition-shadow">
+          <CashflowForecast
+            department={department}
+            deptName={deptName}
+            buckets={dto.forecast}
+            heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          />
+        </div>
       ) : null}
 
       {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
       {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
-        <InvoiceStatusBreakdown
-          department={department}
-          deptName={deptName}
-          buckets={dto.statusBreakdown}
-          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
-        />
+        <div id="cash-status-breakdown" className="rounded-lg transition-shadow">
+          <InvoiceStatusBreakdown
+            department={department}
+            deptName={deptName}
+            buckets={dto.statusBreakdown}
+            heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          />
+        </div>
       ) : null}
 
       {/* Aging Buckets */}
-      <InvoiceAgingBreakdown
-        department={department}
-        deptName={deptName}
-        buckets={dto.aging}
-        totalOpenCount={dto.totalOpenCount}
-        totalOpenEur={dto.totalOpenEur}
-        heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
-      />
+      <div id="cash-aging-breakdown" className="rounded-lg transition-shadow">
+        <InvoiceAgingBreakdown
+          department={department}
+          deptName={deptName}
+          buckets={dto.aging}
+          totalOpenCount={dto.totalOpenCount}
+          totalOpenEur={dto.totalOpenEur}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      </div>
 
       {/* Umsatz nach Sparte + Monat */}
       <Card>
@@ -228,20 +238,58 @@ function Kpi({
   hint,
   icon,
   tone = "neutral",
+  scrollTargetId,
 }: {
   label: string;
   valueText: string;
   hint: string;
   icon: React.ReactNode;
   tone?: "neutral" | "good" | "warning";
+  /** Wenn gesetzt: Tile wird klickbar und scrollt smooth zum Element
+   *  mit dieser id (= das jeweilige Detail-Panel weiter unten auf der
+   *  Seite). */
+  scrollTargetId?: string;
 }) {
   const toneClass = {
     neutral: "",
     good: "text-emerald-600",
     warning: "text-yellow-600",
   }[tone];
+  const clickable = !!scrollTargetId;
+  function handleClick() {
+    if (!scrollTargetId) return;
+    const el = document.getElementById(scrollTargetId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Kurzer Highlight-Pulse damit der User sieht wo er gelandet ist.
+      el.classList.add("ring-2", "ring-primary", "ring-offset-2");
+      window.setTimeout(() => {
+        el.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+      }, 1500);
+    }
+  }
   return (
-    <Card>
+    <Card
+      className={
+        clickable
+          ? "cursor-pointer transition-colors hover:border-ring/40 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          : ""
+      }
+      onClick={clickable ? handleClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleClick();
+              }
+            }
+          : undefined
+      }
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${label} — Details anzeigen` : undefined}
+    >
       <CardContent className="pt-4 pb-4 space-y-1">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{label}</span>
@@ -251,6 +299,11 @@ function Kpi({
           {valueText}
         </div>
         <p className="text-xs text-muted-foreground">{hint}</p>
+        {clickable ? (
+          <p className="text-[10px] text-primary/70 pt-0.5">
+            Klick für Details ↓
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
