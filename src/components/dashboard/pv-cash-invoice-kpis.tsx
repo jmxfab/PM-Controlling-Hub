@@ -94,7 +94,7 @@ function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
     },
     {
       ...KPIS_BASE[3],
-      description: activeStepHumanList,
+      description: `Offenes Brutto-Volumen (status Erstellt + Versendet) aller Projekte aktuell im Step: ${activeStepHumanList}`,
     },
   ];
 }

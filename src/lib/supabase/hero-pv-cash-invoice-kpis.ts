@@ -75,23 +75,18 @@ export const WP_INVOICE_STEP_PATTERNS = [
 
 const PAYMENT_DUE_DAYS = 7;
 
-/** Steps die nach der Abschlussrechnung kommen (PV/WP). Wenn ein
- *  Projekt aktuell in einem dieser Steps oder im Abschluss-Step selbst
- *  steht, ist die LETZTE versendete Rechnung typischerweise die
- *  Abschlussrechnung. Earlier sent invoices waren dann Teilrechnungen. */
+/** Steps in oder NACH der Abschlussrechnung. Wichtig: Steps wie
+ *  "Zaehlermontage" oder "Nacharbeiten AC/DC/terminiert" kommen
+ *  im Hero-PV-Workflow VOR der Abschlussrechnung — eine Rechnung die
+ *  in einem dieser Steps verschickt wurde ist typischerweise eine
+ *  Teilrechnung, NICHT die Abschlussrechnung. Daher tauchen die hier
+ *  bewusst NICHT auf. */
 const POST_OR_IN_ABSCHLUSS_STEP_PATTERNS = [
+  // Im Abschluss-Step
   "abschlussrechnung",
   "schlussrechnung",
   "kundenrechnung",
-  // PV — nach Abschlussrechnung
-  "zählermontage",
-  "nacharbeiten ac",
-  "nacharbeiten dc",
-  "nacharbeiten terminiert",
-  // WP — nach Abschlussrechnung
-  "nacharbeiten nicht terminiert",
-  "nacharbeiten montage",
-  // Allgemein abgeschlossen / Bewertung
+  // Nach dem Abschluss-Step (Projekt ist abgeschlossen / archiviert)
   "abgeschlossen",
   "archiviert",
   "fertig",
@@ -328,7 +323,136 @@ export async function loadCashInvoiceKpisForDept(
 
   const notOverdueRows = allRows.filter((r) => !r.isOverdue);
   const overdueRows = allRows.filter((r) => r.isOverdue);
-  const stepRows = allRows.filter((r) => r.isInActiveStep);
+
+  // ----- "Offen & im aktiven Step" — projekt-zentrisch, NICHT period-
+  // bound, NICHT auf "Versendet" beschraenkt. Wir wollen das volle
+  // offene Brutto-Volumen (status 100 Erstellt + 200 Versendet) aller
+  // Projekte die aktuell in einem aktiven Step stehen.
+  let stepRows: PvCashInvoiceRow[] = [];
+  if (stepPatterns.length > 0) {
+    let activeStepProjectQuery = supabase
+      .from("hero_dashboard_projects")
+      .select("id, step_name, project_number, project_name, customer_name");
+    if (department !== "GESAMT") {
+      activeStepProjectQuery = activeStepProjectQuery.eq(
+        "department_key",
+        department
+      );
+    }
+    // PostgREST .or() mit ilike: jeder pattern-match wird oder-verkettet.
+    // step_name.ilike.*zählermontage* matched case-insensitive.
+    const orFilter = stepPatterns
+      .map((p) => `step_name.ilike.*${p}*`)
+      .join(",");
+    activeStepProjectQuery = activeStepProjectQuery.or(orFilter);
+    const { data: activeStepProjectsData } =
+      await activeStepProjectQuery.limit(5000);
+
+    const activeStepMap = new Map<string, PvProject>();
+    for (const p of (activeStepProjectsData ?? []) as PvProject[]) {
+      activeStepMap.set(p.id, p);
+    }
+
+    if (activeStepMap.size > 0) {
+      const activeIds = [...activeStepMap.keys()];
+      const { data: activeInvoicesData } = await supabase
+        .from("hero_customer_documents")
+        .select(
+          "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw"
+        )
+        .eq("type", "invoice")
+        .eq("is_deleted", false)
+        .in("status_code", [100, 200])
+        .in("project_match_id", activeIds)
+        .limit(10000);
+      const activeInvoiceList = (activeInvoicesData ?? []) as Invoice[];
+
+      // Eigenes Ordinal-Map fuer active-step Projekte (kann mit dem
+      // period-projectInvoiceMap ueberlappen, aber wir bauen es hier neu
+      // damit auch active-step Projekte ohne Period-Rechnung korrekte
+      // Ordinals bekommen).
+      const stepProjectInvMap = new Map<string, ProjectInvoiceRef[]>();
+      for (const inv of activeInvoiceList) {
+        if (!inv.project_match_id) continue;
+        const arr =
+          stepProjectInvMap.get(inv.project_match_id) ?? [];
+        arr.push({
+          id: inv.id,
+          project_match_id: inv.project_match_id,
+          document_date: inv.document_date,
+          status_code: inv.status_code,
+        });
+        stepProjectInvMap.set(inv.project_match_id, arr);
+      }
+      for (const arr of stepProjectInvMap.values()) {
+        arr.sort((a, b) => {
+          const ta = a.document_date ? Date.parse(a.document_date) : 0;
+          const tb = b.document_date ? Date.parse(b.document_date) : 0;
+          return ta - tb;
+        });
+      }
+
+      for (const inv of activeInvoiceList) {
+        const project = inv.project_match_id
+          ? activeStepMap.get(inv.project_match_id)
+          : undefined;
+        if (!project) continue;
+
+        const docTs = inv.document_date ? Date.parse(inv.document_date) : NaN;
+        const ageMs = Number.isFinite(docTs) ? now - docTs : 0;
+        const ageDays = Math.max(0, Math.floor(ageMs / 86400000));
+        const isOverdue =
+          Number.isFinite(docTs) && ageDays > PAYMENT_DUE_DAYS;
+
+        const fileUpload = (inv.raw as Record<string, unknown> | null)?.[
+          "file_upload"
+        ] as Record<string, unknown> | undefined;
+        const fileUrl =
+          typeof fileUpload?.["url"] === "string"
+            ? (fileUpload["url"] as string)
+            : null;
+
+        const projectInvList = inv.project_match_id
+          ? stepProjectInvMap.get(inv.project_match_id) ?? []
+          : [];
+        const pos1 =
+          projectInvList.findIndex((i) => i.id === inv.id) + 1;
+        const derivedType = deriveInvoiceType(
+          pos1,
+          projectInvList.length,
+          project.step_name,
+          inv.document_type_name
+        );
+
+        stepRows.push({
+          id: inv.id,
+          nr: inv.nr,
+          documentDate: inv.document_date,
+          value:
+            inv.value === null
+              ? null
+              : typeof inv.value === "number"
+                ? inv.value
+                : Number(inv.value) || null,
+          statusName: inv.status_name,
+          documentTypeName: inv.document_type_name,
+          derivedType,
+          fileUrl,
+          projectId: inv.project_match_id,
+          projectNumber: project.project_number,
+          projectName: cleanProjectTitle(project.project_name, {
+            customerName: project.customer_name,
+            projectNumber: project.project_number,
+          }),
+          customerName: project.customer_name,
+          stepName: project.step_name,
+          ageDays,
+          isOverdue,
+          isInActiveStep: true,
+        });
+      }
+    }
+  }
 
   return {
     total: { count: allRows.length, rows: allRows },
