@@ -50,14 +50,14 @@ const KPIS: KpiDef[] = [
   {
     key: "notOverdue",
     title: "Offen & nicht überfällig",
-    description: "Versendet im Zeitraum, ≤7 Tage seit Rechnungsdatum",
+    description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
     icon: CheckCircle2,
     toneClass: "text-emerald-600",
   },
   {
     key: "overdue",
     title: "Offen & überfällig",
-    description: "Versendet im Zeitraum, >7 Tage seit Rechnungsdatum",
+    description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
     icon: AlertTriangle,
     toneClass: "text-rose-600",
   },

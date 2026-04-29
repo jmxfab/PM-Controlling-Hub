@@ -118,7 +118,6 @@ export async function loadPvCashInvoiceKpis(
   };
 
   const now = Date.now();
-  const overdueThresholdMs = PAYMENT_DUE_DAYS * 86400000;
   const allRows: PvCashInvoiceRow[] = [];
 
   for (const inv of (invoices ?? []) as Invoice[]) {
@@ -126,8 +125,12 @@ export async function loadPvCashInvoiceKpis(
     if (!project) continue;
     const docTs = inv.document_date ? Date.parse(inv.document_date) : NaN;
     const ageMs = Number.isFinite(docTs) ? now - docTs : 0;
-    const ageDays = Math.max(0, Math.round(ageMs / 86400000));
-    const isOverdue = Number.isFinite(docTs) && ageMs > overdueThresholdMs;
+    // Volle Tage (abgerundet) seit Rechnungsdatum. Day 0 = heute versendet,
+    // Day 7 = genau eine Woche her, Day 8 = mehr als eine Woche her.
+    const ageDays = Math.max(0, Math.floor(ageMs / 86400000));
+    // Strikt größer als die Zahlungsfrist. Day 7 ist NOCH nicht überfällig,
+    // erst ab Day 8.
+    const isOverdue = Number.isFinite(docTs) && ageDays > PAYMENT_DUE_DAYS;
     const stepLower = (project.step_name ?? "").toLowerCase();
     const isInActiveStep = PV_INVOICE_STEP_PATTERNS.some((p) =>
       stepLower.includes(p)
