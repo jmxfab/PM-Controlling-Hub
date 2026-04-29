@@ -96,10 +96,10 @@ async function CashTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  // Invoice-KPIs (4 neue Karten) gibt's für PV (Zaehlermontage / NA AC/DC /
+  // Invoice-KPIs (5 Karten) gibt's für PV (Zaehlermontage / NA AC/DC /
   // NA terminiert), WP (NA nicht terminiert / NA Montage) und GESAMT
-  // (Vereinigung der Pattern-Sets, alle Sparten). Nur laden wenn explizit
-  // ein Zeitraum gewaehlt ist (nicht "Jetzt").
+  // (= Vereinigung der Pattern-Sets, nur PV+WP — andere Sparten kommen
+  // spaeter mit eigener Logik).
   const invoiceKpisDept: "PV" | "WP" | "GESAMT" | null =
     department === "PV" || department === "WP" || department === "GESAMT"
       ? department
@@ -112,16 +112,22 @@ async function CashTab({
         : invoiceKpisDept === "GESAMT"
           ? [...PV_INVOICE_STEP_PATTERNS, ...WP_INVOICE_STEP_PATTERNS]
           : [];
+  // Auch im "Jetzt"-Modus die Invoice-KPIs anzeigen — dafuer brauchen wir
+  // einen Period-Range fuer das "Gesamt im Zeitraum"-Tile. Fallback:
+  // letzte 7 Tage. Die anderen Tiles ("Offen & ueberfaellig" etc.) sind
+  // sowieso period-unabhaengig.
+  const invoiceKpisRange =
+    pipelineRange ?? buildLastNDaysRange(7);
   const [dtoResult, pipelineResult, pvKpisResult] = await Promise.allSettled([
     loadCashflow(department),
     // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
     loadHeroPipeline(department, pipelineRange, { onlyCashSteps: true }),
-    invoiceKpisDept && pipelineRange
+    invoiceKpisDept
       ? loadCashInvoiceKpisForDept(
           invoiceKpisDept,
           stepPatterns,
-          pipelineRange.fromIso,
-          pipelineRange.toIso
+          invoiceKpisRange.fromIso,
+          invoiceKpisRange.toIso
         )
       : Promise.resolve(null),
   ]);
@@ -131,7 +137,7 @@ async function CashTab({
     pipelineResult.status === "fulfilled" ? pipelineResult.value : null;
   const pvKpis =
     pvKpisResult.status === "fulfilled" ? pvKpisResult.value : null;
-  const pvKpisLabel = pipelineRange?.label ?? "";
+  const pvKpisLabel = pipelineRange?.label ?? invoiceKpisRange.label;
 
   // Wenn beide leer sind → klare Fehlermeldung. Wenn mindestens eines da ist,
   // rendern wir die Seite partiell statt den User auf einen toten Screen zu schicken.
@@ -178,6 +184,27 @@ function buildPipelineRange(
     toIso,
     label: `${range.from} → ${range.to}`,
     direction: FUTURE_MODES.has(timeframe.mode) ? "future" : "past",
+  };
+}
+
+/**
+ * Period-Range fuer den Fallback im "Jetzt"-Modus: letzte N Tage bis
+ * heute (inklusiv). Wird nur fuer Invoice-KPIs benutzt — Pipeline laeuft
+ * weiter ohne Range.
+ */
+function buildLastNDaysRange(days: number): TimeframeRangeIso {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - days);
+  const fromDate = from.toISOString().slice(0, 10);
+  const toDate = today.toISOString().slice(0, 10);
+  const fromIso = `${fromDate}T00:00:00+02:00`;
+  const toIso = `${addOneDay(toDate)}T00:00:00+02:00`;
+  return {
+    fromIso,
+    toIso,
+    label: `Letzte ${days} Tage (${fromDate} → ${toDate})`,
+    direction: "past",
   };
 }
 

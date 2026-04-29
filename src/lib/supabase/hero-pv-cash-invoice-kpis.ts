@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { cleanProjectTitle } from "@/lib/hero/project-title";
+import { GESAMT_DEPARTMENT_KEYS } from "@/lib/dashboard/dashboard-types";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -269,7 +270,15 @@ export async function loadCashInvoiceKpisForDept(
     .from("hero_dashboard_projects")
     .select("id, step_name, project_number, project_name, customer_name")
     .in("id", projectIds);
-  if (department !== "GESAMT") {
+  // GESAMT bedeutet "PV + WP" (User-Wunsch — Gewerbe/Klima/Gebaeudetechnik
+  // sind aktuell nicht in der Cash-Logik vorgesehen). Andere Sparten werden
+  // strikt auf department_key gefiltert.
+  if (department === "GESAMT") {
+    projectQuery = projectQuery.in(
+      "department_key",
+      GESAMT_DEPARTMENT_KEYS as unknown as string[]
+    );
+  } else {
     projectQuery = projectQuery.eq("department_key", department);
   }
   const { data: pvProjects } = await projectQuery.limit(5000);
@@ -438,7 +447,12 @@ export async function loadCashInvoiceKpisForDept(
     let activeStepProjectQuery = supabase
       .from("hero_dashboard_projects")
       .select("id, step_name, project_number, project_name, customer_name");
-    if (department !== "GESAMT") {
+    if (department === "GESAMT") {
+      activeStepProjectQuery = activeStepProjectQuery.in(
+        "department_key",
+        GESAMT_DEPARTMENT_KEYS as unknown as string[]
+      );
+    } else {
       activeStepProjectQuery = activeStepProjectQuery.eq(
         "department_key",
         department
