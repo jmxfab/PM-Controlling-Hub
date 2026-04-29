@@ -47,6 +47,12 @@ export interface PvCashInvoiceRow {
   ageDays: number;
   isOverdue: boolean;
   isInActiveStep: boolean;
+  /** Aus Hero CustomerDocumentBooking. NULL wenn der Sync diese Rechnung
+   *  noch nicht mit Booking-Info versehen hat. */
+  bookingIsOpen: boolean | null;
+  bookingPaidDate: string | null;
+  bookingDueDate: string | null;
+  bookingBalance: number | null;
 }
 
 export interface PvCashInvoiceKpis {
@@ -147,16 +153,21 @@ export async function loadCashInvoiceKpisForDept(
   // Projekt-Lookup. Wichtig fuer GESAMT — sonst muessten wir 5000+ Projekt-
   // IDs in der URL-IN-Clause uebergeben, was die PostgREST-URL-Grenze
   // sprengt.
+  // Booking-Filter: nur Rechnungen die laut Hero noch offen sind. Solange
+  // der Sync noch nicht alle Rechnungen mit Booking-Info versehen hat,
+  // erlauben wir auch booking_is_open IS NULL als Fallback (alte Heuristik
+  // via status_code 200 greift dann implizit).
   const { data: invoices } = await supabase
     .from("hero_customer_documents")
     .select(
-      "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw"
+      "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw, booking_is_open, booking_paid_date, booking_due_date, booking_balance"
     )
     .eq("type", "invoice")
     .eq("is_deleted", false)
     .eq("status_code", 200)
     .gte("document_date", fromIso)
     .lt("document_date", toIso)
+    .or("booking_is_open.eq.true,booking_is_open.is.null")
     .limit(5000);
 
   type Invoice = {
@@ -169,6 +180,10 @@ export async function loadCashInvoiceKpisForDept(
     document_type_name: string | null;
     project_match_id: string | null;
     raw: Record<string, unknown> | null;
+    booking_is_open: boolean | null;
+    booking_paid_date: string | null;
+    booking_due_date: string | null;
+    booking_balance: number | string | null;
   };
 
   const invoiceList = (invoices ?? []) as Invoice[];
@@ -318,6 +333,15 @@ export async function loadCashInvoiceKpisForDept(
       ageDays,
       isOverdue,
       isInActiveStep,
+      bookingIsOpen: inv.booking_is_open,
+      bookingPaidDate: inv.booking_paid_date,
+      bookingDueDate: inv.booking_due_date,
+      bookingBalance:
+        inv.booking_balance == null
+          ? null
+          : typeof inv.booking_balance === "number"
+            ? inv.booking_balance
+            : Number(inv.booking_balance) || null,
     });
   }
 
@@ -358,12 +382,13 @@ export async function loadCashInvoiceKpisForDept(
       const { data: activeInvoicesData } = await supabase
         .from("hero_customer_documents")
         .select(
-          "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw"
+          "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw, booking_is_open, booking_paid_date, booking_due_date, booking_balance"
         )
         .eq("type", "invoice")
         .eq("is_deleted", false)
         .in("status_code", [100, 200])
         .in("project_match_id", activeIds)
+        .or("booking_is_open.eq.true,booking_is_open.is.null")
         .limit(10000);
       const activeInvoiceList = (activeInvoicesData ?? []) as Invoice[];
 
@@ -449,6 +474,15 @@ export async function loadCashInvoiceKpisForDept(
           ageDays,
           isOverdue,
           isInActiveStep: true,
+          bookingIsOpen: inv.booking_is_open,
+          bookingPaidDate: inv.booking_paid_date,
+          bookingDueDate: inv.booking_due_date,
+          bookingBalance:
+            inv.booking_balance == null
+              ? null
+              : typeof inv.booking_balance === "number"
+                ? inv.booking_balance
+                : Number(inv.booking_balance) || null,
         });
       }
     }

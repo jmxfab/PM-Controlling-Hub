@@ -347,6 +347,7 @@ function InvoicesTable({
           <TableHead>Projekt</TableHead>
           <TableHead>Kunde</TableHead>
           <TableHead>Aktueller Step</TableHead>
+          <TableHead>Status</TableHead>
           <TableHead className="text-right">Alter</TableHead>
         </TableRow>
       </TableHeader>
@@ -403,6 +404,20 @@ function InvoicesTable({
               >
                 {r.stepName ?? "–"}
               </span>
+            </TableCell>
+            <TableCell className="text-xs whitespace-nowrap">
+              {r.bookingIsOpen === false && r.bookingPaidDate ? (
+                <span className="text-emerald-600 font-medium">
+                  Bezahlt{" "}
+                  {new Date(r.bookingPaidDate).toLocaleDateString("de-DE")}
+                </span>
+              ) : r.bookingIsOpen === true ? (
+                <span className="text-muted-foreground">Offen</span>
+              ) : (
+                <span className="text-muted-foreground italic" title="Booking-Info noch nicht gesynct">
+                  –
+                </span>
+              )}
             </TableCell>
             <TableCell className="text-right text-xs tabular-nums">
               <span
