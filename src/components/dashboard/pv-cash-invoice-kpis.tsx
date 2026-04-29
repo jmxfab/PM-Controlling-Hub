@@ -238,19 +238,26 @@ export function PvCashInvoiceKpisCard({
                     <Icon className={cn("h-4 w-4", k.toneClass)} />
                   </CardHeader>
                   <CardContent>
-                    <div
-                      className={cn(
-                        "text-2xl font-bold tabular-nums",
-                        k.toneClass
-                      )}
-                    >
-                      {count}
+                    <div className="flex items-baseline gap-3 flex-wrap">
+                      <div
+                        className={cn(
+                          "text-2xl font-bold tabular-nums",
+                          k.toneClass
+                        )}
+                      >
+                        {count}
+                      </div>
+                      {eur > 0 ? (
+                        <div
+                          className={cn(
+                            "text-xl font-semibold tabular-nums",
+                            k.toneClass
+                          )}
+                        >
+                          {eurFormatter.format(eur)}
+                        </div>
+                      ) : null}
                     </div>
-                    {eur > 0 ? (
-                      <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
-                        {eurFormatter.format(eur)}
-                      </p>
-                    ) : null}
                     {typeSummary ? (
                       <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
                         {typeSummary}
