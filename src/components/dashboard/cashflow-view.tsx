@@ -552,7 +552,7 @@ function InvoiceAgingBreakdown({
         <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
         <CardDescription>
           Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
-          Tagen seit Erstellung. Originale mit Status „Storniert" und
+          Tagen seit Erstellung. Originale mit Status {`„Storniert“`} und
           gelöschte sind ausgeschlossen; Stornorechnungen (reversal_invoice
           mit negativen Werten) sind in den Summen saldiert enthalten und
           reduzieren den Netto-Betrag entsprechend. Klick auf einen Bucket

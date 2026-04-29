@@ -35,7 +35,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
       (
-        <Suspense fallback={<DashboardInitialLoader />}>
+        <Suspense key={dept} fallback={<DashboardInitialLoader />}>
           <DashboardTabContent
             department={dept}
             heroProjectLinkTemplate={heroProjectLinkTemplate}

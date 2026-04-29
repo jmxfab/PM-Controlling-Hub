@@ -28,7 +28,7 @@ export async function SyncInProgressBanner() {
           Der Hero-Sync konnte noch nie erfolgreich laufen
           {status.lastRunError ? ` (${status.lastRunError})` : ""}. Bitte die
           GitHub-Secrets (HERO_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-          prüfen und den Workflow „Hero → Supabase Sync" manuell starten.
+          prüfen und den Workflow {`„Hero → Supabase Sync“`} manuell starten.
         </AlertDescription>
       </Alert>
     );

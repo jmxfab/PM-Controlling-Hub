@@ -22,7 +22,12 @@ const OPTIONS = [
 export function ThemeToggleCard() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // SSR-Hydration-Guard: theme ist serverseitig nicht bekannt, deshalb
+  // erst nach Mount auf den echten Wert wechseln.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const active = mounted ? theme ?? "system" : "system";
 
@@ -31,7 +36,7 @@ export function ThemeToggleCard() {
       <CardHeader>
         <CardTitle>Darstellung</CardTitle>
         <CardDescription>
-          Farbschema des Dashboards. „System" folgt den Einstellungen deines
+          Farbschema des Dashboards. {`„System“`} folgt den Einstellungen deines
           Betriebssystems.
         </CardDescription>
       </CardHeader>
