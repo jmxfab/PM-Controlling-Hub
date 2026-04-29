@@ -1,8 +1,8 @@
 export const DASHBOARD_DEPARTMENTS = [
   "GESAMT",
   "PV",
-  "PV_GEWERBE",
   "WP",
+  "PV_GEWERBE",
   "KLIMA",
   "GEBAEUDETECHNIK",
 ] as const;
