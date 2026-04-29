@@ -1,8 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  BellOff,
   CheckCircle2,
   ChevronDown,
   FileText,
@@ -507,7 +509,8 @@ function InvoicesTable({
               </TableRow>
               {isOpen ? (
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableCell colSpan={10} className="py-3">
+                  <TableCell colSpan={10} className="py-3 space-y-3">
+                    <SnoozeBox invoiceId={r.id} />
                     <LogbuchInline
                       projectId={r.projectId}
                       mode={state}
@@ -664,6 +667,80 @@ function LogbuchInline({
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * Snooze-Box pro Rechnung — Notiz eintippen + "In 7 Tagen erinnern".
+ * Nach erfolgreichem Submit verschwindet die Rechnung aus den
+ * Offen-Tiles bis snoozed_until vorbei ist (Re-Render via router.refresh).
+ */
+function SnoozeBox({ invoiceId }: { invoiceId: string }) {
+  const router = useRouter();
+  const [note, setNote] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/invoice-snooze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoice_id: invoiceId,
+          days: 7,
+          note: note.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      // Rechnung verschwindet beim naechsten Refresh aus dem Tile.
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-2 flex-wrap rounded border border-border/60 bg-background/60 p-2">
+      <BellOff className="h-4 w-4 text-muted-foreground mt-1.5 shrink-0" />
+      <div className="flex-1 min-w-[220px] space-y-1">
+        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          In 7 Tagen erinnern
+        </label>
+        <input
+          type="text"
+          placeholder="Notiz (optional) — z.B. 'Mahnung gestern raus'"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+          maxLength={500}
+          className="w-full text-xs rounded border border-border bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        {error ? (
+          <p className="text-[11px] text-rose-600">{error}</p>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-60 inline-flex items-center gap-1.5"
+      >
+        {busy ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <BellOff className="h-3 w-3" />
+        )}
+        In 7 Tagen wiedervorlegen
+      </button>
     </div>
   );
 }

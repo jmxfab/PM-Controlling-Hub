@@ -62,6 +62,10 @@ export interface PvCashInvoiceRow {
   bookingPaidDate: string | null;
   bookingDueDate: string | null;
   bookingBalance: number | null;
+  /** Falls die Rechnung "geschlummert" hat: Note-Text aus invoice_snoozes
+   *  fuer Anzeige im UI. NULL = kein aktiver Snooze. */
+  snoozeNote: string | null;
+  snoozeUntil: string | null;
 }
 
 export interface PvCashInvoiceKpis {
@@ -205,6 +209,30 @@ export async function loadCashInvoiceKpisForDept(
 
   const periodInvoiceList = (periodInvoicesData ?? []) as Invoice[];
   const openInvoiceList = (openInvoicesData ?? []) as Invoice[];
+
+  // Aktive Snoozes laden — Rechnungen die der User per "in 7 Tagen erinnern"
+  // ausgeblendet hat. Erst wenn snoozed_until <= heute taucht die Rechnung
+  // wieder auf.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const { data: activeSnoozesData } = await supabase
+    .from("invoice_snoozes")
+    .select("invoice_id, snoozed_until, note")
+    .gt("snoozed_until", todayIso)
+    .limit(5000);
+  const snoozeMap = new Map<
+    string,
+    { snoozedUntil: string | null; note: string | null }
+  >();
+  for (const s of (activeSnoozesData ?? []) as {
+    invoice_id: string;
+    snoozed_until: string | null;
+    note: string | null;
+  }[]) {
+    snoozeMap.set(s.invoice_id, {
+      snoozedUntil: s.snoozed_until,
+      note: s.note,
+    });
+  }
 
   // Vereinigte Projekt-IDs aus beiden Sets.
   const projectIds = [
@@ -372,18 +400,24 @@ export async function loadCashInvoiceKpisForDept(
       bookingPaidDate: inv.booking_paid_date,
       bookingDueDate: inv.booking_due_date,
       bookingBalance: balance,
+      snoozeUntil: snoozeMap.get(inv.id)?.snoozedUntil ?? null,
+      snoozeNote: snoozeMap.get(inv.id)?.note ?? null,
     };
   }
 
   // Total-Tile: Period-Invoices (alle versendeten im Zeitraum, egal ob
-  // inzwischen bezahlt oder offen).
+  // inzwischen bezahlt oder offen). Snoozed-Filter greift hier NICHT —
+  // Gesamt-im-Zeitraum soll vollstaendige Bilanz zeigen.
   const totalRows = periodInvoiceList
     .map((inv) => buildRow(inv))
     .filter((r): r is PvCashInvoiceRow => r !== null);
 
   // Offen-Tiles: alle aktuell noch offenen versendeten Rechnungen — ohne
   // Period-Filter, dafuer mit booking_is_open=true (oder NULL fallback).
+  // Snoozed-Filter: Rechnungen mit aktivem Snooze (snoozed_until > today)
+  // werden hier komplett ausgeblendet, bis der Snooze ablaeuft.
   const allOpenRows = openInvoiceList
+    .filter((inv) => !snoozeMap.has(inv.id))
     .map((inv) => buildRow(inv))
     .filter((r): r is PvCashInvoiceRow => r !== null);
   const notOverdueRows = allOpenRows.filter((r) => !r.isOverdue);
@@ -459,6 +493,9 @@ export async function loadCashInvoiceKpisForDept(
       }
 
       for (const inv of activeInvoiceList) {
+        // Geschlummerte Rechnungen ueberspringen — User hat sie aktiv
+        // ausgeblendet bis snoozed_until.
+        if (snoozeMap.has(inv.id)) continue;
         const project = inv.project_match_id
           ? activeStepMap.get(inv.project_match_id)
           : undefined;
@@ -529,6 +566,8 @@ export async function loadCashInvoiceKpisForDept(
           bookingPaidDate: inv.booking_paid_date,
           bookingDueDate: inv.booking_due_date,
           bookingBalance: balance,
+          snoozeUntil: null,
+          snoozeNote: null,
         });
       }
     }
