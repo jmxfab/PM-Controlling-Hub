@@ -35,7 +35,9 @@ import type {
   InvoiceDetailRow,
 } from "@/lib/supabase/hero-insights-queries";
 import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
+import type { PvCashInvoiceKpis } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { PvCashInvoiceKpisCard } from "./pv-cash-invoice-kpis";
 import { HeroProjectLink } from "./hero-project-link";
 import {
   DASHBOARD_DEPARTMENT_NAMES,
@@ -54,23 +56,37 @@ export function CashflowView({
   department,
   dto,
   pipeline,
+  pvInvoiceKpis,
+  pvInvoiceKpisLabel,
   heroProjectLinkTemplate,
 }: {
   department: Department;
   dto: CashflowDto | null;
   pipeline?: HeroPipelineDto | null;
+  pvInvoiceKpis?: PvCashInvoiceKpis | null;
+  pvInvoiceKpisLabel?: string;
   heroProjectLinkTemplate?: string | null;
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
+  const isPv = department === "PV";
+  const showPvKpis = isPv && !!pvInvoiceKpis;
 
   return (
     <div className="space-y-6">
+      {showPvKpis && pvInvoiceKpis ? (
+        <PvCashInvoiceKpisCard
+          kpis={pvInvoiceKpis}
+          windowLabel={pvInvoiceKpisLabel ?? ""}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      ) : null}
       {pipeline ? (
         <HeroPipelinePanel
           department={department}
           pipeline={pipeline}
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
           variant="cash"
+          hideTimeframeDelta={isPv}
         />
       ) : null}
       {!dto ? (

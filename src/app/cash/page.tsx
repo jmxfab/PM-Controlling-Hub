@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { CashflowView } from "@/components/dashboard/cashflow-view";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
+import { loadPvCashInvoiceKpis } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
 import {
   loadHeroPipeline,
   type TimeframeRangeIso,
@@ -84,15 +85,25 @@ async function CashTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  const [dtoResult, pipelineResult] = await Promise.allSettled([
+  // PV-spezifische Invoice-KPIs (3 neue Karten) nur laden wenn:
+  // - Sparte = PV
+  // - explizit ein Zeitraum gewaehlt (nicht "Jetzt")
+  const loadPvKpis = department === "PV" && pipelineRange != null;
+  const [dtoResult, pipelineResult, pvKpisResult] = await Promise.allSettled([
     loadCashflow(department),
     // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
     loadHeroPipeline(department, pipelineRange, { onlyCashSteps: true }),
+    loadPvKpis && pipelineRange
+      ? loadPvCashInvoiceKpis(pipelineRange.fromIso, pipelineRange.toIso)
+      : Promise.resolve(null),
   ]);
 
   const dto = dtoResult.status === "fulfilled" ? dtoResult.value : null;
   const pipeline =
     pipelineResult.status === "fulfilled" ? pipelineResult.value : null;
+  const pvKpis =
+    pvKpisResult.status === "fulfilled" ? pvKpisResult.value : null;
+  const pvKpisLabel = pipelineRange?.label ?? "";
 
   // Wenn beide leer sind → klare Fehlermeldung. Wenn mindestens eines da ist,
   // rendern wir die Seite partiell statt den User auf einen toten Screen zu schicken.
@@ -108,6 +119,8 @@ async function CashTab({
       department={department}
       dto={dto}
       pipeline={pipeline}
+      pvInvoiceKpis={pvKpis}
+      pvInvoiceKpisLabel={pvKpisLabel}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
   );

@@ -71,6 +71,12 @@ interface HeroPipelinePanelProps {
    * die Buchhaltung-offen-Kachel ist prominent.
    */
   variant?: "operational" | "cash";
+  /**
+   * Wenn true, wird die "Änderungen im Zeitraum"-Card komplett ausgeblendet.
+   * Wird im Cash-Tab unter Sparte PV genutzt, weil dort die invoice-zentrische
+   * <PvCashInvoiceKpisCard> die Rolle der Bewegungs-Übersicht übernimmt.
+   */
+  hideTimeframeDelta?: boolean;
 }
 
 const KPI_LABELS: Record<PipelineKpi, string> = {
@@ -93,6 +99,7 @@ export function HeroPipelinePanel({
   pipeline,
   heroProjectLinkTemplate,
   variant = "operational",
+  hideTimeframeDelta = false,
 }: HeroPipelinePanelProps) {
   const showEur = variant === "cash";
   const buildHeroHref = (projectId: string | null): string | null => {
@@ -271,7 +278,7 @@ export function HeroPipelinePanel({
         />
       </div>
 
-      {pipeline.timeframeDelta ? (
+      {pipeline.timeframeDelta && !hideTimeframeDelta ? (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Änderungen im Zeitraum</CardTitle>
