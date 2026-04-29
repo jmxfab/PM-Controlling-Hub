@@ -143,19 +143,23 @@ function shortInvoiceType(derivedType: string): string {
   return derivedType;
 }
 
-/** Aggregiere Rechnungen nach (gekuerztem) Typ und liefere
- *  "5 1. Teil · 3 2. Teil · 3 Abschluss" zurueck — sortiert absteigend. */
-function summarizeTypes(rows: PvCashInvoiceRow[]): string {
-  if (rows.length === 0) return "";
-  const buckets = new Map<string, number>();
+/** Aggregiere Rechnungen nach (gekuerztem) Typ. Liefert pro Typ Anzahl
+ *  und EUR-Summe — sortiert absteigend nach Anzahl. */
+function summarizeTypes(
+  rows: PvCashInvoiceRow[]
+): { label: string; count: number; eur: number }[] {
+  if (rows.length === 0) return [];
+  const buckets = new Map<string, { count: number; eur: number }>();
   for (const r of rows) {
     const short = shortInvoiceType(r.derivedType);
-    buckets.set(short, (buckets.get(short) ?? 0) + 1);
+    const cur = buckets.get(short) ?? { count: 0, eur: 0 };
+    cur.count += 1;
+    cur.eur += r.value ?? 0;
+    buckets.set(short, cur);
   }
   return [...buckets.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([k, v]) => `${v} ${k}`)
-    .join(" · ");
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([label, { count, eur }]) => ({ label, count, eur }));
 }
 
 export function PvCashInvoiceKpisCard({
@@ -260,10 +264,20 @@ export function PvCashInvoiceKpisCard({
                         </div>
                       ) : null}
                     </div>
-                    {typeSummary ? (
-                      <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                        {typeSummary}
-                      </p>
+                    {typeSummary.length > 0 ? (
+                      <ul className="mt-1 space-y-0.5">
+                        {typeSummary.map((t) => (
+                          <li
+                            key={t.label}
+                            className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground tabular-nums"
+                          >
+                            <span>
+                              {t.count} × {t.label}
+                            </span>
+                            <span>{eurFormatter.format(t.eur)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {k.description}
