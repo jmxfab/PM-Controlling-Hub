@@ -86,43 +86,18 @@ export async function loadPvCashInvoiceKpis(
 }
 
 export async function loadCashInvoiceKpisForDept(
-  department: "PV" | "WP",
+  department: "PV" | "WP" | "GESAMT",
   stepPatterns: string[],
   fromIso: string,
   toIso: string
 ): Promise<PvCashInvoiceKpis> {
   const supabase = supabaseAdmin();
 
-  // Schritt 1: Projekte der Sparte laden (id + step_name + customer/projekt-info)
-  const { data: pvProjects } = await supabase
-    .from("hero_dashboard_projects")
-    .select(
-      "id, step_name, project_number, project_name, customer_name"
-    )
-    .eq("department_key", department)
-    .limit(5000);
-
-  type PvProject = {
-    id: string;
-    step_name: string | null;
-    project_number: string | null;
-    project_name: string | null;
-    customer_name: string | null;
-  };
-
-  const pvMap = new Map<string, PvProject>();
-  for (const p of (pvProjects ?? []) as PvProject[]) {
-    pvMap.set(p.id, p);
-  }
-
-  if (pvMap.size === 0) {
-    return emptyKpis();
-  }
-
-  // Schritt 2: Rechnungen filtern. raw nehmen wir mit damit wir an die
-  // file_upload.url für den PDF-Direktlink rankommen. document_type_name
-  // enthält die fachliche Klassifikation (Teilrechnung / Abschlussrechnung
-  // / Kundenrechnung).
+  // Schritt 1: ALLE versendeten Rechnungen im Zeitraum laden (kleines
+  // Set, gefiltert via type/status/date). Sparten-Filter kommt erst beim
+  // Projekt-Lookup. Wichtig fuer GESAMT — sonst muessten wir 5000+ Projekt-
+  // IDs in der URL-IN-Clause uebergeben, was die PostgREST-URL-Grenze
+  // sprengt.
   const { data: invoices } = await supabase
     .from("hero_customer_documents")
     .select(
@@ -133,7 +108,6 @@ export async function loadCashInvoiceKpisForDept(
     .eq("status_code", 200)
     .gte("document_date", fromIso)
     .lt("document_date", toIso)
-    .in("project_match_id", [...pvMap.keys()])
     .limit(5000);
 
   type Invoice = {
@@ -148,10 +122,53 @@ export async function loadCashInvoiceKpisForDept(
     raw: Record<string, unknown> | null;
   };
 
+  const invoiceList = (invoices ?? []) as Invoice[];
+  const projectIds = [
+    ...new Set(
+      invoiceList
+        .map((i) => i.project_match_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (projectIds.length === 0) {
+    return emptyKpis();
+  }
+
+  // Schritt 2: Projekt-Info zu den Rechnungs-IDs laden. Bei PV/WP wird
+  // zusaetzlich nach department_key gefiltert — Rechnungen anderer Sparten
+  // landen dann nicht im pvMap und werden ignoriert. Bei GESAMT keine
+  // Sparten-Einschraenkung.
+  type PvProject = {
+    id: string;
+    step_name: string | null;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+  };
+
+  let projectQuery = supabase
+    .from("hero_dashboard_projects")
+    .select("id, step_name, project_number, project_name, customer_name")
+    .in("id", projectIds);
+  if (department !== "GESAMT") {
+    projectQuery = projectQuery.eq("department_key", department);
+  }
+  const { data: pvProjects } = await projectQuery.limit(5000);
+
+  const pvMap = new Map<string, PvProject>();
+  for (const p of (pvProjects ?? []) as PvProject[]) {
+    pvMap.set(p.id, p);
+  }
+
+  if (pvMap.size === 0) {
+    return emptyKpis();
+  }
+
   const now = Date.now();
   const allRows: PvCashInvoiceRow[] = [];
 
-  for (const inv of (invoices ?? []) as Invoice[]) {
+  for (const inv of invoiceList) {
     const project = inv.project_match_id ? pvMap.get(inv.project_match_id) : undefined;
     if (!project) continue;
     const docTs = inv.document_date ? Date.parse(inv.document_date) : NaN;

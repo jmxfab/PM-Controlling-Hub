@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  FileText,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -40,7 +41,7 @@ import type {
   PvCashInvoiceRow,
 } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
 
-type KpiKey = "notOverdue" | "overdue" | "inActiveStep";
+type KpiKey = "total" | "notOverdue" | "overdue" | "inActiveStep";
 
 interface KpiDef {
   key: KpiKey;
@@ -51,6 +52,12 @@ interface KpiDef {
 }
 
 const KPIS_BASE: Omit<KpiDef, "description">[] = [
+  {
+    key: "total",
+    title: "Gesamt im Zeitraum",
+    icon: FileText,
+    toneClass: "text-foreground",
+  },
   {
     key: "notOverdue",
     title: "Offen & nicht überfällig",
@@ -75,14 +82,18 @@ function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
   return [
     {
       ...KPIS_BASE[0],
-      description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
+      description: "Alle versendeten Rechnungen im gewählten Zeitraum",
     },
     {
       ...KPIS_BASE[1],
-      description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
+      description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
     },
     {
       ...KPIS_BASE[2],
+      description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
+    },
+    {
+      ...KPIS_BASE[3],
       description: activeStepHumanList,
     },
   ];
@@ -114,6 +125,37 @@ function humanizeActiveSteps(patterns: string[]): string {
   return titled.join(" / ");
 }
 
+/** Kompakte Kurz-Bezeichnung pro Hero-document_type_name fuer das KPI-Tile.
+ *  "1. Teilrechnung" / "Teilrechnung" → "Teil",
+ *  "Abschlussrechnung"/"Schlussrechnung" → "Abschluss",
+ *  "Kundenrechnung" → "Kunde".
+ *  Unbekannte Typen fallen auf den Original-String zurueck. */
+function shortInvoiceType(typeName: string | null): string {
+  if (!typeName) return "—";
+  const lower = typeName.toLowerCase();
+  if (lower.includes("teil")) return "Teil";
+  if (lower.includes("abschluss") || lower.includes("schluss"))
+    return "Abschluss";
+  if (lower.includes("kunden")) return "Kunde";
+  if (lower.includes("sammel")) return "Sammel";
+  return typeName;
+}
+
+/** Aggregiere Rechnungen nach (gekuerztem) Typ und liefere
+ *  "12 Teil · 8 Abschluss · 8 Kunde" zurueck — sortiert absteigend. */
+function summarizeTypes(rows: PvCashInvoiceRow[]): string {
+  if (rows.length === 0) return "";
+  const buckets = new Map<string, number>();
+  for (const r of rows) {
+    const short = shortInvoiceType(r.documentTypeName);
+    buckets.set(short, (buckets.get(short) ?? 0) + 1);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${v} ${k}`)
+    .join(" · ");
+}
+
 export function PvCashInvoiceKpisCard({
   kpis,
   windowLabel,
@@ -127,6 +169,8 @@ export function PvCashInvoiceKpisCard({
 
   function valueFor(key: KpiKey): number {
     switch (key) {
+      case "total":
+        return kpis.total.count;
       case "notOverdue":
         return kpis.notOverdue.count;
       case "overdue":
@@ -137,17 +181,14 @@ export function PvCashInvoiceKpisCard({
   }
 
   function eurFor(key: KpiKey): number {
-    const rows =
-      key === "notOverdue"
-        ? kpis.notOverdue.rows
-        : key === "overdue"
-          ? kpis.overdue.rows
-          : kpis.inActiveStep.rows;
+    const rows = rowsFor(key);
     return rows.reduce((sum, r) => sum + (r.value ?? 0), 0);
   }
 
   function rowsFor(key: KpiKey): PvCashInvoiceRow[] {
     switch (key) {
+      case "total":
+        return kpis.total.rows;
       case "notOverdue":
         return kpis.notOverdue.rows;
       case "overdue":
@@ -168,24 +209,15 @@ export function PvCashInvoiceKpisCard({
         <p className="text-xs text-muted-foreground">
           Gefiltert auf type=invoice, status=200 (Versendet),
           document_date im Zeitraum {windowLabel}.
-          {kpis.total.count > 0 ? (
-            <>
-              {" "}
-              · {kpis.total.count} Rechnung
-              {kpis.total.count === 1 ? "" : "en"} insgesamt mit Gesamtsumme{" "}
-              {eurFormatter.format(
-                kpis.total.rows.reduce((s, r) => s + (r.value ?? 0), 0)
-              )}
-            </>
-          ) : null}
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {KPIS.map((k) => {
             const Icon = k.icon;
             const count = valueFor(k.key);
             const eur = eurFor(k.key);
+            const typeSummary = summarizeTypes(rowsFor(k.key));
             return (
               <button
                 key={k.key}
@@ -217,6 +249,11 @@ export function PvCashInvoiceKpisCard({
                     {eur > 0 ? (
                       <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
                         {eurFormatter.format(eur)}
+                      </p>
+                    ) : null}
+                    {typeSummary ? (
+                      <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                        {typeSummary}
                       </p>
                     ) : null}
                     <p className="text-xs text-muted-foreground mt-0.5">

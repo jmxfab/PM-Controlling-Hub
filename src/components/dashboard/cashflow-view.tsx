@@ -68,8 +68,9 @@ export function CashflowView({
   heroProjectLinkTemplate?: string | null;
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
-  const isPvOrWp = department === "PV" || department === "WP";
-  const showInvoiceKpis = isPvOrWp && !!pvInvoiceKpis;
+  const hasInvoiceKpis =
+    department === "PV" || department === "WP" || department === "GESAMT";
+  const showInvoiceKpis = hasInvoiceKpis && !!pvInvoiceKpis;
 
   return (
     <div className="space-y-6">
@@ -87,8 +88,8 @@ export function CashflowView({
           pipeline={pipeline}
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
           variant="cash"
-          hideTimeframeDelta={isPvOrWp}
-          hideTopKpis={isPvOrWp}
+          hideTimeframeDelta={hasInvoiceKpis}
+          hideTopKpis={hasInvoiceKpis}
         />
       ) : null}
       {!dto ? (

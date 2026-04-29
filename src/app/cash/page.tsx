@@ -96,17 +96,22 @@ async function CashTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  // Invoice-KPIs (3 neue Karten) gibt's für PV (Zaehlermontage / NA AC/DC /
-  // NA terminiert) und WP (NA nicht terminiert / NA Montage). Nur laden
-  // wenn explizit ein Zeitraum gewaehlt ist (nicht "Jetzt").
-  const invoiceKpisDept: "PV" | "WP" | null =
-    department === "PV" || department === "WP" ? department : null;
+  // Invoice-KPIs (4 neue Karten) gibt's für PV (Zaehlermontage / NA AC/DC /
+  // NA terminiert), WP (NA nicht terminiert / NA Montage) und GESAMT
+  // (Vereinigung der Pattern-Sets, alle Sparten). Nur laden wenn explizit
+  // ein Zeitraum gewaehlt ist (nicht "Jetzt").
+  const invoiceKpisDept: "PV" | "WP" | "GESAMT" | null =
+    department === "PV" || department === "WP" || department === "GESAMT"
+      ? department
+      : null;
   const stepPatterns =
     invoiceKpisDept === "PV"
       ? PV_INVOICE_STEP_PATTERNS
       : invoiceKpisDept === "WP"
         ? WP_INVOICE_STEP_PATTERNS
-        : [];
+        : invoiceKpisDept === "GESAMT"
+          ? [...PV_INVOICE_STEP_PATTERNS, ...WP_INVOICE_STEP_PATTERNS]
+          : [];
   const [dtoResult, pipelineResult, pvKpisResult] = await Promise.allSettled([
     loadCashflow(department),
     // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
