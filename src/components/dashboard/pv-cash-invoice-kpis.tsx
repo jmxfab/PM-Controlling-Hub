@@ -45,7 +45,12 @@ import type {
   PvCashInvoiceRow,
 } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
 
-type KpiKey = "total" | "notOverdue" | "overdue" | "inActiveStep";
+type KpiKey =
+  | "total"
+  | "notOverdue"
+  | "overdue"
+  | "inActiveStep"
+  | "overdueInActiveStep";
 
 interface KpiDef {
   key: KpiKey;
@@ -80,6 +85,12 @@ const KPIS_BASE: Omit<KpiDef, "description">[] = [
     icon: Wrench,
     toneClass: "text-amber-600",
   },
+  {
+    key: "overdueInActiveStep",
+    title: "Überfällig & im aktiven Step",
+    icon: AlertTriangle,
+    toneClass: "text-orange-600",
+  },
 ];
 
 function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
@@ -101,6 +112,10 @@ function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
     {
       ...KPIS_BASE[3],
       description: `Offenes Brutto-Volumen aller Projekte aktuell im Step: ${activeStepHumanList}`,
+    },
+    {
+      ...KPIS_BASE[4],
+      description: `Schnittmenge: überfällige Rechnungen deren Projekt aktuell im Step ${activeStepHumanList} steht`,
     },
   ];
 }
@@ -191,6 +206,8 @@ export function PvCashInvoiceKpisCard({
         return kpis.overdue.count;
       case "inActiveStep":
         return kpis.inActiveStep.count;
+      case "overdueInActiveStep":
+        return kpis.overdueInActiveStep.count;
     }
   }
 
@@ -213,6 +230,8 @@ export function PvCashInvoiceKpisCard({
         return kpis.overdue.rows;
       case "inActiveStep":
         return kpis.inActiveStep.rows;
+      case "overdueInActiveStep":
+        return kpis.overdueInActiveStep.rows;
     }
   }
 
@@ -230,7 +249,7 @@ export function PvCashInvoiceKpisCard({
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {KPIS.map((k) => {
             const Icon = k.icon;
             const count = valueFor(k.key);

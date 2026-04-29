@@ -73,6 +73,12 @@ export interface PvCashInvoiceKpis {
   notOverdue: { count: number; rows: PvCashInvoiceRow[] };
   overdue: { count: number; rows: PvCashInvoiceRow[] };
   inActiveStep: { count: number; rows: PvCashInvoiceRow[] };
+  /** Schnittmenge "Offen & ueberfaellig" UND "Im aktiven Step" — Rechnungen
+   *  die offen + ueberfaellig sind UND deren Projekt aktuell in einem
+   *  aktiven Step (Zaehlermontage / Nacharbeiten ...) steht. Wichtig fuer
+   *  Mahnwesen: hier liegt das Geld an dem die operative Mannschaft
+   *  arbeitet aber das noch nicht reingekommen ist. */
+  overdueInActiveStep: { count: number; rows: PvCashInvoiceRow[] };
   /** Liste der Step-Patterns (kleingeschrieben, includes-Match) — fuer
    *  die UI-Beschreibung. */
   activeStepLabels: string[];
@@ -573,11 +579,21 @@ export async function loadCashInvoiceKpisForDept(
     }
   }
 
+  // Schnittmenge: aus den ueberfaelligen Rechnungen (status=200, kein Period-
+  // Filter) jene wo das Projekt aktuell in einem aktiven Step steht.
+  // isInActiveStep wird in buildRow auf jeder Row korrekt gesetzt — egal aus
+  // welcher Query die Invoice kam.
+  const overdueInActiveStepRows = overdueRows.filter((r) => r.isInActiveStep);
+
   return {
     total: { count: totalRows.length, rows: totalRows },
     notOverdue: { count: notOverdueRows.length, rows: notOverdueRows },
     overdue: { count: overdueRows.length, rows: overdueRows },
     inActiveStep: { count: stepRows.length, rows: stepRows },
+    overdueInActiveStep: {
+      count: overdueInActiveStepRows.length,
+      rows: overdueInActiveStepRows,
+    },
     activeStepLabels: stepPatterns.slice(),
   };
 }
@@ -588,6 +604,7 @@ function emptyKpis(): PvCashInvoiceKpis {
     notOverdue: { count: 0, rows: [] },
     overdue: { count: 0, rows: [] },
     inActiveStep: { count: 0, rows: [] },
+    overdueInActiveStep: { count: 0, rows: [] },
     activeStepLabels: [],
   };
 }
