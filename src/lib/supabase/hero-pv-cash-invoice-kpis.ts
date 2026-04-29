@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectTitle } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -142,7 +143,10 @@ export async function loadPvCashInvoiceKpis(
       statusName: inv.status_name,
       projectId: inv.project_match_id,
       projectNumber: project.project_number,
-      projectName: project.project_name,
+      projectName: cleanProjectTitle(project.project_name, {
+        customerName: project.customer_name,
+        projectNumber: project.project_number,
+      }),
       customerName: project.customer_name,
       stepName: project.step_name,
       ageDays,

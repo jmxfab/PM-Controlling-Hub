@@ -273,7 +273,7 @@ function InvoicesTable({
                 projectNumber={r.projectNumber}
                 linkTemplate={heroProjectLinkTemplate}
               />
-              {r.projectName ? (
+              {r.projectName && r.projectName !== r.customerName ? (
                 <span className="block text-[10px] text-muted-foreground truncate max-w-[180px]">
                   {r.projectName}
                 </span>
