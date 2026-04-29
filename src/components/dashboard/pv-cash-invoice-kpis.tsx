@@ -144,7 +144,9 @@ function shortInvoiceType(derivedType: string): string {
 }
 
 /** Aggregiere Rechnungen nach (gekuerztem) Typ. Liefert pro Typ Anzahl
- *  und EUR-Summe — sortiert absteigend nach Anzahl. */
+ *  und Open-Amount-Summe — sortiert absteigend nach Anzahl. EUR ist hier
+ *  immer der NOCH OFFENE Betrag (booking_balance falls Teilzahlung,
+ *  sonst voller Rechnungswert), nicht der Brutto-Gesamtwert. */
 function summarizeTypes(
   rows: PvCashInvoiceRow[]
 ): { label: string; count: number; eur: number }[] {
@@ -154,7 +156,7 @@ function summarizeTypes(
     const short = shortInvoiceType(r.derivedType);
     const cur = buckets.get(short) ?? { count: 0, eur: 0 };
     cur.count += 1;
-    cur.eur += r.value ?? 0;
+    cur.eur += r.openAmount ?? 0;
     buckets.set(short, cur);
   }
   return [...buckets.entries()]
@@ -188,7 +190,11 @@ export function PvCashInvoiceKpisCard({
 
   function eurFor(key: KpiKey): number {
     const rows = rowsFor(key);
-    return rows.reduce((sum, r) => sum + (r.value ?? 0), 0);
+    // Wir summieren openAmount (= booking_balance falls vorhanden, sonst
+    // value). Bei Teilzahlung ist openAmount kleiner als value — wir
+    // zeigen also den TATSAECHLICH offenen Betrag, nicht den vollen
+    // Rechnungswert.
+    return rows.reduce((sum, r) => sum + (r.openAmount ?? 0), 0);
   }
 
   function rowsFor(key: KpiKey): PvCashInvoiceRow[] {
@@ -412,7 +418,15 @@ function InvoicesTable({
                   {new Date(r.bookingPaidDate).toLocaleDateString("de-DE")}
                 </span>
               ) : r.bookingIsOpen === true ? (
-                <span className="text-muted-foreground">Offen</span>
+                r.bookingBalance != null &&
+                r.value != null &&
+                r.bookingBalance < r.value ? (
+                  <span className="text-amber-600 font-medium">
+                    Teilzahlung · {eurFormatter.format(r.bookingBalance)} offen
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Offen</span>
+                )
               ) : (
                 <span className="text-muted-foreground italic" title="Booking-Info noch nicht gesynct">
                   –

@@ -30,7 +30,16 @@ export interface PvCashInvoiceRow {
   id: string;
   nr: string | null;
   documentDate: string | null;
+  /** Voller Rechnungsbetrag (Brutto) — fuer die "Betrag"-Spalte in der
+   *  Detail-Tabelle. */
   value: number | null;
+  /** Tatsaechlich noch offener Betrag dieser Rechnung. Bei Teilzahlung
+   *  ist booking_balance < value (Rest), bei vollem Offen-Status sind
+   *  beide gleich. Wird fuer alle KPI-EUR-Summen verwendet, damit das
+   *  Tile "wieviel Geld liegt noch raus" zeigt — NICHT den Brutto-
+   *  Gesamtwert. Fallback auf value wenn booking_balance null ist
+   *  (z.B. wenn Booking-Subentity nicht gesynct). */
+  openAmount: number | null;
   statusName: string | null;
   documentTypeName: string | null;
   /** Heuristisch abgeleiteter Typ aus Position der Rechnung im Projekt
@@ -308,16 +317,28 @@ export async function loadCashInvoiceKpisForDept(
       inv.document_type_name
     );
 
+    const fullValue =
+      inv.value === null
+        ? null
+        : typeof inv.value === "number"
+          ? inv.value
+          : Number(inv.value) || null;
+    const balance =
+      inv.booking_balance == null
+        ? null
+        : typeof inv.booking_balance === "number"
+          ? inv.booking_balance
+          : Number(inv.booking_balance) || null;
+    // Open-Betrag = Booking-Balance wenn vorhanden (Hero-truth, beruecksichtigt
+    // Teilzahlungen), sonst Fallback auf den vollen Rechnungsbetrag.
+    const openAmount = balance ?? fullValue;
+
     allRows.push({
       id: inv.id,
       nr: inv.nr,
       documentDate: inv.document_date,
-      value:
-        inv.value === null
-          ? null
-          : typeof inv.value === "number"
-            ? inv.value
-            : Number(inv.value) || null,
+      value: fullValue,
+      openAmount,
       statusName: inv.status_name,
       documentTypeName: inv.document_type_name,
       derivedType,
@@ -336,12 +357,7 @@ export async function loadCashInvoiceKpisForDept(
       bookingIsOpen: inv.booking_is_open,
       bookingPaidDate: inv.booking_paid_date,
       bookingDueDate: inv.booking_due_date,
-      bookingBalance:
-        inv.booking_balance == null
-          ? null
-          : typeof inv.booking_balance === "number"
-            ? inv.booking_balance
-            : Number(inv.booking_balance) || null,
+      bookingBalance: balance,
     });
   }
 
@@ -449,16 +465,26 @@ export async function loadCashInvoiceKpisForDept(
           inv.document_type_name
         );
 
+        const fullValue =
+          inv.value === null
+            ? null
+            : typeof inv.value === "number"
+              ? inv.value
+              : Number(inv.value) || null;
+        const balance =
+          inv.booking_balance == null
+            ? null
+            : typeof inv.booking_balance === "number"
+              ? inv.booking_balance
+              : Number(inv.booking_balance) || null;
+        const openAmount = balance ?? fullValue;
+
         stepRows.push({
           id: inv.id,
           nr: inv.nr,
           documentDate: inv.document_date,
-          value:
-            inv.value === null
-              ? null
-              : typeof inv.value === "number"
-                ? inv.value
-                : Number(inv.value) || null,
+          value: fullValue,
+          openAmount,
           statusName: inv.status_name,
           documentTypeName: inv.document_type_name,
           derivedType,
@@ -477,12 +503,7 @@ export async function loadCashInvoiceKpisForDept(
           bookingIsOpen: inv.booking_is_open,
           bookingPaidDate: inv.booking_paid_date,
           bookingDueDate: inv.booking_due_date,
-          bookingBalance:
-            inv.booking_balance == null
-              ? null
-              : typeof inv.booking_balance === "number"
-                ? inv.booking_balance
-                : Number(inv.booking_balance) || null,
+          bookingBalance: balance,
         });
       }
     }
