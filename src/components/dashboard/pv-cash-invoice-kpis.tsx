@@ -625,13 +625,17 @@ function LogbuchInline({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted-foreground">
         <span>
           {mode === "preview"
             ? `Letzte ${entries.length} Logbuch-Einträge`
             : `Alle ${entries.length} Logbuch-Einträge`}
-          {total > entries.length ? ` von ${total}` : ""}
+          {total > entries.length ? (
+            <span className="normal-case ml-1">
+              (von {total} insgesamt)
+            </span>
+          ) : null}
         </span>
         {mode === "preview" && total > entries.length ? (
           <button
@@ -639,54 +643,189 @@ function LogbuchInline({
             onClick={onShowAll}
             className="text-primary hover:underline normal-case"
           >
-            Alle {total} anzeigen
+            Alle {total} anzeigen →
           </button>
         ) : null}
       </div>
-      <ol className="space-y-1.5 border-l border-border ml-1 pl-4">
+      <ol className="space-y-2">
         {entries.map((e) => (
-          <li key={e.id} className="text-xs">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-muted-foreground tabular-nums">
-                {e.entry_date
-                  ? new Date(e.entry_date).toLocaleString("de-DE", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "–"}
-              </span>
-              {e.author_name || e.user_email ? (
-                <span className="font-medium">
-                  {e.author_name ?? e.user_email}
-                </span>
-              ) : null}
-              {e.event_type ? (
-                <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">
-                  {e.event_type}
-                </span>
-              ) : null}
-            </div>
-            {e.custom_title ? (
-              <p className="font-medium mt-0.5">{e.custom_title}</p>
-            ) : null}
-            {e.custom_text ? (
-              <p
-                className="text-muted-foreground mt-0.5"
-                // custom_text kann <br>, <i> etc. enthalten — wir vertrauen
-                // Hero-Daten (kein User-Input direkt sondern Workflow-
-                // generiert).
-                dangerouslySetInnerHTML={{ __html: e.custom_text }}
-              />
-            ) : e.description ? (
-              <p className="text-muted-foreground mt-0.5">{e.description}</p>
-            ) : null}
-          </li>
+          <LogbuchEntryCard key={e.id} entry={e} />
         ))}
       </ol>
     </div>
+  );
+}
+
+/** Klassifiziert einen Logbuch-Eintrag in eine visuelle Kategorie
+ *  (Farbcode + Icon). */
+function classifyLogEntry(entry: LogbuchPreviewEntry): {
+  tone:
+    | "comment"
+    | "status"
+    | "file"
+    | "create"
+    | "edit"
+    | "default";
+  badgeLabel: string;
+} {
+  const t = `${entry.event_type ?? ""} ${entry.custom_title ?? ""}`.toLowerCase();
+  if (t.includes("kommentar") || t.includes("comment"))
+    return { tone: "comment", badgeLabel: "Kommentar" };
+  if (
+    t.includes("status") ||
+    t.includes("step") ||
+    t.includes("verschoben") ||
+    t.includes("nacharbeit") ||
+    t.includes("abgeschlossen")
+  )
+    return { tone: "status", badgeLabel: "Status" };
+  if (
+    t.includes("bild") ||
+    t.includes("foto") ||
+    t.includes("datei") ||
+    t.includes("upload") ||
+    t.includes("hochgeladen")
+  )
+    return { tone: "file", badgeLabel: "Datei" };
+  if (t.includes("erstellt") || t.includes("angelegt") || t.includes("created"))
+    return { tone: "create", badgeLabel: "Erstellt" };
+  if (t.includes("bearbeitet") || t.includes("edit") || t.includes("aktualisiert"))
+    return { tone: "edit", badgeLabel: "Bearbeitet" };
+  return { tone: "default", badgeLabel: entry.event_type ?? "Eintrag" };
+}
+
+const TONE_STYLES: Record<
+  "comment" | "status" | "file" | "create" | "edit" | "default",
+  {
+    border: string;
+    badgeBg: string;
+    badgeText: string;
+    avatarBg: string;
+    avatarText: string;
+  }
+> = {
+  comment: {
+    border: "border-l-emerald-500",
+    badgeBg: "bg-emerald-500/10",
+    badgeText: "text-emerald-700 dark:text-emerald-400",
+    avatarBg: "bg-emerald-500/15",
+    avatarText: "text-emerald-700 dark:text-emerald-400",
+  },
+  status: {
+    border: "border-l-blue-500",
+    badgeBg: "bg-blue-500/10",
+    badgeText: "text-blue-700 dark:text-blue-400",
+    avatarBg: "bg-blue-500/15",
+    avatarText: "text-blue-700 dark:text-blue-400",
+  },
+  file: {
+    border: "border-l-amber-500",
+    badgeBg: "bg-amber-500/10",
+    badgeText: "text-amber-700 dark:text-amber-400",
+    avatarBg: "bg-amber-500/15",
+    avatarText: "text-amber-700 dark:text-amber-400",
+  },
+  create: {
+    border: "border-l-violet-500",
+    badgeBg: "bg-violet-500/10",
+    badgeText: "text-violet-700 dark:text-violet-400",
+    avatarBg: "bg-violet-500/15",
+    avatarText: "text-violet-700 dark:text-violet-400",
+  },
+  edit: {
+    border: "border-l-sky-500",
+    badgeBg: "bg-sky-500/10",
+    badgeText: "text-sky-700 dark:text-sky-400",
+    avatarBg: "bg-sky-500/15",
+    avatarText: "text-sky-700 dark:text-sky-400",
+  },
+  default: {
+    border: "border-l-muted-foreground/40",
+    badgeBg: "bg-muted",
+    badgeText: "text-muted-foreground",
+    avatarBg: "bg-muted",
+    avatarText: "text-muted-foreground",
+  },
+};
+
+function getInitials(name: string | null | undefined): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function LogbuchEntryCard({ entry }: { entry: LogbuchPreviewEntry }) {
+  const { tone, badgeLabel } = classifyLogEntry(entry);
+  const styles = TONE_STYLES[tone];
+  const author = entry.author_name ?? entry.user_email ?? null;
+  const initials = getInitials(author);
+  const dateLabel = entry.entry_date
+    ? new Date(entry.entry_date).toLocaleString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "–";
+
+  return (
+    <li
+      className={cn(
+        "flex gap-3 rounded-md border bg-card px-3 py-2.5 border-l-4",
+        styles.border
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+          styles.avatarBg,
+          styles.avatarText
+        )}
+        title={author ?? undefined}
+      >
+        {initials}
+      </div>
+      <div className="flex-1 min-w-0 space-y-0.5">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          {author ? (
+            <span className="text-xs font-semibold text-foreground">
+              {author}
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              "text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 font-medium",
+              styles.badgeBg,
+              styles.badgeText
+            )}
+          >
+            {badgeLabel}
+          </span>
+          <span className="text-[10px] text-muted-foreground tabular-nums ml-auto">
+            {dateLabel}
+          </span>
+        </div>
+        {entry.custom_title ? (
+          <p className="text-xs font-medium text-foreground">
+            {entry.custom_title}
+          </p>
+        ) : null}
+        {entry.custom_text ? (
+          <p
+            className="text-xs text-muted-foreground leading-relaxed [&_br]:block"
+            // custom_text kann <br>, <i> etc. enthalten — Hero-internes
+            // Workflow-HTML, kein User-Input-Pfad.
+            dangerouslySetInnerHTML={{ __html: entry.custom_text }}
+          />
+        ) : entry.description ? (
+          <p className="text-xs text-muted-foreground">{entry.description}</p>
+        ) : null}
+      </div>
+    </li>
   );
 }
 

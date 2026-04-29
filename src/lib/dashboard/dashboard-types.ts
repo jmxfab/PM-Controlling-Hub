@@ -1,16 +1,59 @@
+/**
+ * Sichtbare Tabs im Dashboard. PV_GEWERBE + KLIMA sind temporaer
+ * ausgeblendet (User-Wunsch — folgen spaeter mit eigener Logik).
+ * GEBAEUDETECHNIK bleibt sichtbar als eigener Tab.
+ */
 export const DASHBOARD_DEPARTMENTS = [
   "GESAMT",
   "PV",
   "WP",
+  "GEBAEUDETECHNIK",
+] as const;
+
+/**
+ * Vollstaendige Liste aller Hero-Sparten — wird intern fuer Mappings,
+ * Charts und Sync-Klassifikation gebraucht. Hidden-Tabs (PV_GEWERBE,
+ * KLIMA) sind hier weiterhin enthalten, damit Daten korrekt
+ * klassifiziert werden, sie tauchen aber nicht im Tab-UI auf.
+ */
+export const ALL_PROJECT_DEPARTMENTS = [
+  "PV",
   "PV_GEWERBE",
+  "WP",
   "KLIMA",
   "GEBAEUDETECHNIK",
 ] as const;
 
-export type Department = (typeof DASHBOARD_DEPARTMENTS)[number];
-export type ProjectDepartment = Exclude<Department, "GESAMT">;
+/**
+ * Departments die in GESAMT zaehlen. User-Wunsch: GESAMT mappt nur auf
+ * PV + WP, nicht auf Gewerbe/Klima/Gebaeudetechnik. Aenderbar wenn
+ * Gewerbe/Klima/Gebaeudetechnik nachgezogen werden.
+ */
+export const GESAMT_DEPARTMENT_KEYS: readonly ProjectDepartment[] = [
+  "PV",
+  "WP",
+];
 
-export const DASHBOARD_DEPARTMENT_SHORT_LABELS: Record<Department, string> = {
+/** Sichtbare Tabs / URL-Param. PV_GEWERBE + KLIMA sind temporaer
+ *  ausgeblendet (folgen spaeter), tauchen daher nicht in Department auf. */
+export type Department = (typeof DASHBOARD_DEPARTMENTS)[number];
+
+/** Vollstaendige Sparten-Klassifikation auf Daten-Ebene (Hero-Mapping,
+ *  Charts, Sync). Enthaelt auch die aktuell hidden Tabs. */
+export type ProjectDepartment =
+  | "PV"
+  | "PV_GEWERBE"
+  | "WP"
+  | "KLIMA"
+  | "GEBAEUDETECHNIK";
+
+/** Labels fuer alle Sparten — auch fuer aktuell ausgeblendete Tabs.
+ *  Datenflaechen die einen Project-Department anzeigen muessen
+ *  (Project-Listen, Charts) brauchen die Mapping-Eintraege weiterhin. */
+export const DASHBOARD_DEPARTMENT_SHORT_LABELS: Record<
+  Department | ProjectDepartment,
+  string
+> = {
   GESAMT: "Gesamt",
   PV: "PV",
   PV_GEWERBE: "PV Gewerbe",
@@ -19,7 +62,10 @@ export const DASHBOARD_DEPARTMENT_SHORT_LABELS: Record<Department, string> = {
   GEBAEUDETECHNIK: "Gebäudetechnik",
 };
 
-export const DASHBOARD_DEPARTMENT_NAMES: Record<Department, string> = {
+export const DASHBOARD_DEPARTMENT_NAMES: Record<
+  Department | ProjectDepartment,
+  string
+> = {
   GESAMT: "Gesamtunternehmen",
   PV: "Photovoltaik",
   PV_GEWERBE: "PV Gewerbe",
