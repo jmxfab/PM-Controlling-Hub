@@ -240,7 +240,7 @@ export function PvCashInvoiceKpisCard({
                     <Icon className={cn("h-4 w-4", k.toneClass)} />
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-baseline gap-3 flex-wrap">
+                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
                       <div
                         className={cn(
                           "text-2xl font-bold tabular-nums",
