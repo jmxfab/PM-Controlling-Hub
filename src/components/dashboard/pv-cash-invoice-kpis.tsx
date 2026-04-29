@@ -30,6 +30,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import {
+  DASHBOARD_DEPARTMENT_NAMES,
+  type Department,
+} from "@/lib/dashboard/dashboard-types";
 import { HeroProjectLink } from "./hero-project-link";
 import type {
   PvCashInvoiceKpis,
@@ -46,29 +50,43 @@ interface KpiDef {
   toneClass?: string;
 }
 
-const KPIS: KpiDef[] = [
+const KPIS_BASE: Omit<KpiDef, "description">[] = [
   {
     key: "notOverdue",
     title: "Offen & nicht überfällig",
-    description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
     icon: CheckCircle2,
     toneClass: "text-emerald-600",
   },
   {
     key: "overdue",
     title: "Offen & überfällig",
-    description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
     icon: AlertTriangle,
     toneClass: "text-rose-600",
   },
   {
     key: "inActiveStep",
     title: "Offen & im aktiven Step",
-    description: "Zählermontage / Nacharbeiten AC / DC / terminiert",
     icon: Wrench,
     toneClass: "text-amber-600",
   },
 ];
+
+function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
+  return [
+    {
+      ...KPIS_BASE[0],
+      description: "Versendet im Zeitraum, max. 7 Tage seit Rechnungsdatum",
+    },
+    {
+      ...KPIS_BASE[1],
+      description: "Versendet im Zeitraum, mehr als 7 Tage seit Rechnungsdatum",
+    },
+    {
+      ...KPIS_BASE[2],
+      description: activeStepHumanList,
+    },
+  ];
+}
 
 const eurFormatter = new Intl.NumberFormat("de-DE", {
   style: "currency",
@@ -80,14 +98,32 @@ interface PvCashInvoiceKpisProps {
   kpis: PvCashInvoiceKpis;
   windowLabel: string;
   heroProjectLinkTemplate: string | null;
+  department: Department;
+}
+
+/** Aus den lowercase-Patterns aus dem Loader eine menschen-lesbare
+ *  Liste bauen ("zählermontage" → "Zählermontage", join mit " / "). */
+function humanizeActiveSteps(patterns: string[]): string {
+  if (patterns.length === 0) return "Offen & im aktiven Step";
+  const titled = patterns.map((p) =>
+    p
+      .split(" ")
+      .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+      .join(" ")
+  );
+  return titled.join(" / ");
 }
 
 export function PvCashInvoiceKpisCard({
   kpis,
   windowLabel,
   heroProjectLinkTemplate,
+  department,
 }: PvCashInvoiceKpisProps) {
   const [selected, setSelected] = useState<KpiKey | null>(null);
+
+  const activeStepHumanList = humanizeActiveSteps(kpis.activeStepLabels);
+  const KPIS = buildKpiDefs(activeStepHumanList);
 
   function valueFor(key: KpiKey): number {
     switch (key) {
@@ -127,7 +163,7 @@ export function PvCashInvoiceKpisCard({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">
-          PV · Versendete Rechnungen im Zeitraum
+          {DASHBOARD_DEPARTMENT_NAMES[department]} · Versendete Rechnungen im Zeitraum
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           Gefiltert auf type=invoice, status=200 (Versendet),
@@ -245,6 +281,7 @@ function InvoicesTable({
       <TableHeader>
         <TableRow>
           <TableHead>RG-Nr.</TableHead>
+          <TableHead>Typ</TableHead>
           <TableHead>Datum</TableHead>
           <TableHead className="text-right">Betrag</TableHead>
           <TableHead>Projekt</TableHead>
@@ -271,6 +308,9 @@ function InvoicesTable({
               ) : (
                 <span>{r.nr ?? r.id}</span>
               )}
+            </TableCell>
+            <TableCell className="text-xs whitespace-nowrap">
+              {r.documentTypeName ?? "–"}
             </TableCell>
             <TableCell className="text-xs tabular-nums whitespace-nowrap">
               {r.documentDate

@@ -68,16 +68,17 @@ export function CashflowView({
   heroProjectLinkTemplate?: string | null;
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
-  const isPv = department === "PV";
-  const showPvKpis = isPv && !!pvInvoiceKpis;
+  const isPvOrWp = department === "PV" || department === "WP";
+  const showInvoiceKpis = isPvOrWp && !!pvInvoiceKpis;
 
   return (
     <div className="space-y-6">
-      {showPvKpis && pvInvoiceKpis ? (
+      {showInvoiceKpis && pvInvoiceKpis ? (
         <PvCashInvoiceKpisCard
           kpis={pvInvoiceKpis}
           windowLabel={pvInvoiceKpisLabel ?? ""}
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          department={department}
         />
       ) : null}
       {pipeline ? (
@@ -86,7 +87,8 @@ export function CashflowView({
           pipeline={pipeline}
           heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
           variant="cash"
-          hideTimeframeDelta={isPv}
+          hideTimeframeDelta={isPvOrWp}
+          hideTopKpis={isPvOrWp}
         />
       ) : null}
       {!dto ? (

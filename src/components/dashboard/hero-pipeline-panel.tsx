@@ -77,6 +77,13 @@ interface HeroPipelinePanelProps {
    * <PvCashInvoiceKpisCard> die Rolle der Bewegungs-Übersicht übernimmt.
    */
   hideTimeframeDelta?: boolean;
+  /**
+   * Wenn true, werden die 6 oberen KPI-Tiles (Alle Offenen, Überfällig,
+   * Buchhaltung offen, Letzte Woche abgeschlossen, Neu diese Woche, Reopens)
+   * ausgeblendet. Wird im Cash-Tab unter PV genutzt — die Information
+   * dort liefern die invoice-zentrischen Karten oberhalb des Panels.
+   */
+  hideTopKpis?: boolean;
 }
 
 const KPI_LABELS: Record<PipelineKpi, string> = {
@@ -100,6 +107,7 @@ export function HeroPipelinePanel({
   heroProjectLinkTemplate,
   variant = "operational",
   hideTimeframeDelta = false,
+  hideTopKpis = false,
 }: HeroPipelinePanelProps) {
   const showEur = variant === "cash";
   const buildHeroHref = (projectId: string | null): string | null => {
@@ -211,6 +219,7 @@ export function HeroPipelinePanel({
 
   return (
     <div className="space-y-4">
+      {!hideTopKpis ? (
       <div
         className={`grid gap-3 sm:grid-cols-2 ${
           showEur ? "lg:grid-cols-6" : "lg:grid-cols-5"
@@ -277,6 +286,7 @@ export function HeroPipelinePanel({
           onClick={() => openKpi("reopens")}
         />
       </div>
+      ) : null}
 
       {pipeline.timeframeDelta && !hideTimeframeDelta ? (
         <Card>

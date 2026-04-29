@@ -32,6 +32,7 @@ export interface PvCashInvoiceRow {
   documentDate: string | null;
   value: number | null;
   statusName: string | null;
+  documentTypeName: string | null;
   fileUrl: string | null;
   projectId: string | null;
   projectNumber: string | null;
@@ -48,30 +49,57 @@ export interface PvCashInvoiceKpis {
   notOverdue: { count: number; rows: PvCashInvoiceRow[] };
   overdue: { count: number; rows: PvCashInvoiceRow[] };
   inActiveStep: { count: number; rows: PvCashInvoiceRow[] };
+  /** Liste der Step-Patterns (kleingeschrieben, includes-Match) — fuer
+   *  die UI-Beschreibung. */
+  activeStepLabels: string[];
 }
 
-const PV_INVOICE_STEP_PATTERNS = [
+/** Kleingeschriebene Substring-Patterns gegen step_name.toLowerCase() */
+export const PV_INVOICE_STEP_PATTERNS = [
   "zählermontage",
   "nacharbeiten ac",
   "nacharbeiten dc",
   "nacharbeiten terminiert",
 ];
 
+/** Kleingeschriebene Substring-Patterns gegen step_name.toLowerCase() */
+export const WP_INVOICE_STEP_PATTERNS = [
+  "nacharbeiten nicht terminiert",
+  "nacharbeiten montage",
+];
+
 const PAYMENT_DUE_DAYS = 7;
 
+/**
+ * Kompatibilitäts-Wrapper für PV. Nutzt intern loadCashInvoiceKpisForDept.
+ */
 export async function loadPvCashInvoiceKpis(
+  fromIso: string,
+  toIso: string
+): Promise<PvCashInvoiceKpis> {
+  return loadCashInvoiceKpisForDept(
+    "PV",
+    PV_INVOICE_STEP_PATTERNS,
+    fromIso,
+    toIso
+  );
+}
+
+export async function loadCashInvoiceKpisForDept(
+  department: "PV" | "WP",
+  stepPatterns: string[],
   fromIso: string,
   toIso: string
 ): Promise<PvCashInvoiceKpis> {
   const supabase = supabaseAdmin();
 
-  // Schritt 1: PV-Projekte laden (id + step_name + customer/projekt-info)
+  // Schritt 1: Projekte der Sparte laden (id + step_name + customer/projekt-info)
   const { data: pvProjects } = await supabase
     .from("hero_dashboard_projects")
     .select(
       "id, step_name, project_number, project_name, customer_name"
     )
-    .eq("department_key", "PV")
+    .eq("department_key", department)
     .limit(5000);
 
   type PvProject = {
@@ -92,11 +120,13 @@ export async function loadPvCashInvoiceKpis(
   }
 
   // Schritt 2: Rechnungen filtern. raw nehmen wir mit damit wir an die
-  // file_upload.url für den PDF-Direktlink rankommen.
+  // file_upload.url für den PDF-Direktlink rankommen. document_type_name
+  // enthält die fachliche Klassifikation (Teilrechnung / Abschlussrechnung
+  // / Kundenrechnung).
   const { data: invoices } = await supabase
     .from("hero_customer_documents")
     .select(
-      "id, nr, document_date, value, status_code, status_name, project_match_id, raw"
+      "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw"
     )
     .eq("type", "invoice")
     .eq("is_deleted", false)
@@ -113,6 +143,7 @@ export async function loadPvCashInvoiceKpis(
     value: number | string | null;
     status_code: number | null;
     status_name: string | null;
+    document_type_name: string | null;
     project_match_id: string | null;
     raw: Record<string, unknown> | null;
   };
@@ -132,9 +163,7 @@ export async function loadPvCashInvoiceKpis(
     // erst ab Day 8.
     const isOverdue = Number.isFinite(docTs) && ageDays > PAYMENT_DUE_DAYS;
     const stepLower = (project.step_name ?? "").toLowerCase();
-    const isInActiveStep = PV_INVOICE_STEP_PATTERNS.some((p) =>
-      stepLower.includes(p)
-    );
+    const isInActiveStep = stepPatterns.some((p) => stepLower.includes(p));
 
     const fileUpload = (inv.raw as Record<string, unknown> | null)?.[
       "file_upload"
@@ -155,6 +184,7 @@ export async function loadPvCashInvoiceKpis(
             ? inv.value
             : Number(inv.value) || null,
       statusName: inv.status_name,
+      documentTypeName: inv.document_type_name,
       fileUrl,
       projectId: inv.project_match_id,
       projectNumber: project.project_number,
@@ -179,6 +209,7 @@ export async function loadPvCashInvoiceKpis(
     notOverdue: { count: notOverdueRows.length, rows: notOverdueRows },
     overdue: { count: overdueRows.length, rows: overdueRows },
     inActiveStep: { count: stepRows.length, rows: stepRows },
+    activeStepLabels: stepPatterns.slice(),
   };
 }
 
@@ -188,5 +219,6 @@ function emptyKpis(): PvCashInvoiceKpis {
     notOverdue: { count: 0, rows: [] },
     overdue: { count: 0, rows: [] },
     inActiveStep: { count: 0, rows: [] },
+    activeStepLabels: [],
   };
 }

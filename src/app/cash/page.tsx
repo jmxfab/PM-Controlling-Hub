@@ -4,7 +4,11 @@ import type { Metadata } from "next";
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { CashflowView } from "@/components/dashboard/cashflow-view";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
-import { loadPvCashInvoiceKpis } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
+import {
+  loadCashInvoiceKpisForDept,
+  PV_INVOICE_STEP_PATTERNS,
+  WP_INVOICE_STEP_PATTERNS,
+} from "@/lib/supabase/hero-pv-cash-invoice-kpis";
 import {
   loadHeroPipeline,
   type TimeframeRangeIso,
@@ -38,7 +42,14 @@ interface PageProps {
 export default async function CashPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
   const department = parseDashboardDepartmentParam(resolved.department);
-  const timeframe = parseDashboardTimeframe(resolved);
+  // Cash-Tab: ohne explizites ?timeframe= im URL ist Jumax-Woche der
+  // sinnvolle Default (Reporting-Zeitraum). User-Wahl per Tab überschreibt.
+  const hasExplicitTimeframe = resolved.timeframe !== undefined;
+  const timeframe = hasExplicitTimeframe
+    ? parseDashboardTimeframe(resolved)
+    : ({ mode: "jumax_week", from: null, to: null } as ReturnType<
+        typeof parseDashboardTimeframe
+      >);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   const tabContents = Object.fromEntries(
@@ -85,16 +96,28 @@ async function CashTab({
   heroProjectLinkTemplate: string | null;
 }) {
   const pipelineRange = buildPipelineRange(timeframe);
-  // PV-spezifische Invoice-KPIs (3 neue Karten) nur laden wenn:
-  // - Sparte = PV
-  // - explizit ein Zeitraum gewaehlt (nicht "Jetzt")
-  const loadPvKpis = department === "PV" && pipelineRange != null;
+  // Invoice-KPIs (3 neue Karten) gibt's für PV (Zaehlermontage / NA AC/DC /
+  // NA terminiert) und WP (NA nicht terminiert / NA Montage). Nur laden
+  // wenn explizit ein Zeitraum gewaehlt ist (nicht "Jetzt").
+  const invoiceKpisDept: "PV" | "WP" | null =
+    department === "PV" || department === "WP" ? department : null;
+  const stepPatterns =
+    invoiceKpisDept === "PV"
+      ? PV_INVOICE_STEP_PATTERNS
+      : invoiceKpisDept === "WP"
+        ? WP_INVOICE_STEP_PATTERNS
+        : [];
   const [dtoResult, pipelineResult, pvKpisResult] = await Promise.allSettled([
     loadCashflow(department),
     // Cash-Pipeline-Panel: NUR Abrechnungs-Steps (Abschluss-/Teil-/Kundenrechnung).
     loadHeroPipeline(department, pipelineRange, { onlyCashSteps: true }),
-    loadPvKpis && pipelineRange
-      ? loadPvCashInvoiceKpis(pipelineRange.fromIso, pipelineRange.toIso)
+    invoiceKpisDept && pipelineRange
+      ? loadCashInvoiceKpisForDept(
+          invoiceKpisDept,
+          stepPatterns,
+          pipelineRange.fromIso,
+          pipelineRange.toIso
+        )
       : Promise.resolve(null),
   ]);
 
