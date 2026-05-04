@@ -4,7 +4,7 @@ import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 import {
-  HERO_TYPE_ID_TO_DEPARTMENT,
+  GESAMT_DEPARTMENT_KEYS_ARR,
   type Department,
   type ProjectDepartment,
 } from "@/lib/dashboard/dashboard-types";
@@ -74,12 +74,6 @@ export const loadUpcomingProjects = cache(
     toIso: string
   ): Promise<UpcomingProject[]> => {
     const supabase = supabaseAdmin();
-    const typeIds =
-      department === "GESAMT"
-        ? Object.keys(HERO_TYPE_ID_TO_DEPARTMENT)
-        : Object.entries(HERO_TYPE_ID_TO_DEPARTMENT)
-            .filter(([, d]) => d === department)
-            .map(([id]) => id);
 
     let query = supabase
       .from("hero_dashboard_projects")
@@ -91,10 +85,16 @@ export const loadUpcomingProjects = cache(
       .gte("maturity_date", fromIso)
       .lt("maturity_date", toIso);
 
+    // GESAMT = nur PV+WP. Bug-Fix: vorher hat dieser Block fuer GESAMT
+    // .in("department_key", typeIds) gemacht — typeIds waren aber die
+    // numerischen Hero-Type-IDs ("36933","36934",...), nicht die
+    // String-Department-Keys ("PV","WP"). Ergebnis: GESAMT lieferte 0
+    // Projekte zurueck weil department_key niemals zu einer numerischen
+    // type_id matched. Jetzt korrekt mit GESAMT_DEPARTMENT_KEYS_ARR.
     if (department !== "GESAMT") {
       query = query.eq("department_key", department);
-    } else if (typeIds.length > 0) {
-      query = query.in("department_key", typeIds);
+    } else {
+      query = query.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
     }
 
     const { data, error } = await query

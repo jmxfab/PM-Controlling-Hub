@@ -4,9 +4,11 @@ import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 import {
-  HERO_TYPE_ID_TO_DEPARTMENT,
+  GESAMT_DEPARTMENT_KEYS,
+  GESAMT_DEPARTMENT_KEYS_ARR,
   type Department,
   type ProjectDepartment,
+  typeIdsForDepartment,
 } from "@/lib/dashboard/dashboard-types";
 import {
   fetchDashboardProjectRows,
@@ -42,13 +44,9 @@ function supabaseAdmin() {
  * "Nacharbeiten nicht terminiert") stay separate.
  */
 
+// GESAMT = PV + WP only — delegiert an shared Helper.
 function typeIdsFor(department: Department): string[] {
-  if (department === "GESAMT") {
-    return Object.keys(HERO_TYPE_ID_TO_DEPARTMENT);
-  }
-  return Object.entries(HERO_TYPE_ID_TO_DEPARTMENT)
-    .filter(([, dept]) => dept === department)
-    .map(([typeId]) => typeId);
+  return typeIdsForDepartment(department);
 }
 
 export interface HeroPipelineStep {
@@ -182,7 +180,13 @@ function rowsFor(
   department: Department
 ): DashboardProjectRow[] {
   if (department === "GESAMT") {
-    return rows.filter((row) => row.department_key != null);
+    return rows.filter(
+      (row) =>
+        row.department_key != null &&
+        GESAMT_DEPARTMENT_KEYS.includes(
+          row.department_key as ProjectDepartment
+        )
+    );
   }
   return rows.filter((row) => row.department_key === department);
 }
@@ -693,7 +697,7 @@ export async function loadKpiProjects(
       .lt("maturity_date", range.toIso)
       .eq("is_finished", false);
     if (department !== "GESAMT") q = q.eq("department_key", department);
-    else q = q.not("department_key", "is", null);
+    else q = q.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
     const ids = new Set<string>();
     const OVERDUE_MAX_OFFSET = 10000;
     let reachedOverdueMax = true;
@@ -733,7 +737,7 @@ export async function loadKpiProjects(
     .lt("entered_at", range.toIso)
     .not("step_name", "is", null);
   if (department !== "GESAMT") tq = tq.eq("department_key", department);
-  else tq = tq.not("department_key", "is", null);
+  else tq = tq.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
 
   const transitions: Array<{
     project_match_id: string;

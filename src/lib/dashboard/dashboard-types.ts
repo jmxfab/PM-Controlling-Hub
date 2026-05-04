@@ -28,11 +28,21 @@ export const ALL_PROJECT_DEPARTMENTS = [
  * Departments die in GESAMT zaehlen. User-Wunsch: GESAMT mappt nur auf
  * PV + WP, nicht auf Gewerbe/Klima/Gebaeudetechnik. Aenderbar wenn
  * Gewerbe/Klima/Gebaeudetechnik nachgezogen werden.
+ *
+ * → Wichtig: ueberall im Code wo eine GESAMT-Sparten-Auswahl gebraucht
+ *   wird, muss diese Liste verwendet werden — NICHT
+ *   "department_key IS NOT NULL" oder Object.keys(HERO_TYPE_ID_TO_DEPARTMENT).
  */
 export const GESAMT_DEPARTMENT_KEYS: readonly ProjectDepartment[] = [
   "PV",
   "WP",
 ];
+
+/**
+ * Mutable string[]-Form von GESAMT_DEPARTMENT_KEYS — fuer Supabase-
+ * .in("department_key", ...)-Calls die ein mutables Array brauchen.
+ */
+export const GESAMT_DEPARTMENT_KEYS_ARR: string[] = [...GESAMT_DEPARTMENT_KEYS];
 
 /** Sichtbare Tabs / URL-Param. PV_GEWERBE + KLIMA sind temporaer
  *  ausgeblendet (folgen spaeter), tauchen daher nicht in Department auf. */
@@ -93,6 +103,22 @@ export function mapHeroTypeIdToDepartment(
 ): ProjectDepartment | null {
   if (typeId == null) return null;
   return HERO_TYPE_ID_TO_DEPARTMENT[String(typeId)] ?? null;
+}
+
+/**
+ * Hero type_ids die in einer Department zaehlen. Bei GESAMT nur PV+WP-
+ * type_ids. Bei den anderen Sparten genau die zu der jeweiligen Sparte
+ * gehoerenden type_ids (1-N pro dept — manche Sparten haben mehrere
+ * Hero-Type-IDs).
+ */
+export function typeIdsForDepartment(department: Department): string[] {
+  const allowed: ProjectDepartment[] =
+    department === "GESAMT"
+      ? [...GESAMT_DEPARTMENT_KEYS]
+      : [department as ProjectDepartment];
+  return Object.entries(HERO_TYPE_ID_TO_DEPARTMENT)
+    .filter(([, d]) => allowed.includes(d))
+    .map(([id]) => id);
 }
 
 export interface DashboardProjectDocument {

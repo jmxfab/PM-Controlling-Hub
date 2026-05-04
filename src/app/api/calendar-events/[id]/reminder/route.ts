@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { berlinIsoNoon } from "@/lib/dashboard/berlin-iso";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -44,7 +45,7 @@ export async function POST(
     // YYYY-MM-DD → noon Europe/Berlin als sinnvoller Default.
     const raw = parsed.data.reminder_at;
     const isoDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-      ? `${raw}T12:00:00+02:00`
+      ? berlinIsoNoon(raw)
       : raw;
     const parsedDate = new Date(isoDate);
     if (Number.isNaN(parsedDate.getTime())) {

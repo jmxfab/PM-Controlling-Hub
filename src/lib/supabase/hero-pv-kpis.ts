@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -503,9 +504,8 @@ export function getJumaxWeekWindow(reference: Date = new Date()): PvKpiTimeWindo
   const lastFriday = new Date(currentFriday);
   lastFriday.setDate(currentFriday.getDate() - 7);
 
-  const fromIso =
-    `${dateToIsoLocal(lastFriday)}T00:00:00+02:00`;
-  const toIso = `${dateToIsoLocal(currentFriday)}T00:00:00+02:00`;
+  const fromIso = berlinIsoStartOfDay(dateToIsoLocal(lastFriday));
+  const toIso = berlinIsoStartOfDay(dateToIsoLocal(currentFriday));
   return {
     fromIso,
     toIso,

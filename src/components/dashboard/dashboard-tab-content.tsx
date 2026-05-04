@@ -25,6 +25,7 @@ import {
   loadHeroPipeline,
   type TimeframeRangeIso,
 } from "@/lib/supabase/hero-pipeline-queries";
+import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
 
 const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([
   "morgen",
@@ -40,8 +41,8 @@ function buildPipelineRange(
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
   return {
-    fromIso: `${range.from}T00:00:00+02:00`,
-    toIso: `${addOneDay(range.to)}T00:00:00+02:00`,
+    fromIso: berlinIsoStartOfDay(range.from),
+    toIso: berlinIsoStartOfDay(addOneDay(range.to)),
     label: `${range.from} → ${range.to}`,
     direction: FUTURE_MODES.has(timeframe.mode) ? "future" : "past",
   };

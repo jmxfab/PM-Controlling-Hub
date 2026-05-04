@@ -30,6 +30,7 @@ import {
   getDashboardTimeframeRange,
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
+import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
 
 export const metadata: Metadata = {
   title: "Insights",
@@ -186,8 +187,8 @@ function buildInsightsRange(
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
   return {
-    fromIso: `${range.from}T00:00:00+02:00`,
-    toIso: `${addOneDay(range.to)}T00:00:00+02:00`,
+    fromIso: berlinIsoStartOfDay(range.from),
+    toIso: berlinIsoStartOfDay(addOneDay(range.to)),
   };
 }
 
@@ -204,8 +205,8 @@ function buildPipelineRange(
   if (timeframe.mode === "current") return undefined;
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
-  const fromIso = `${range.from}T00:00:00+02:00`;
-  const toIso = `${addOneDay(range.to)}T00:00:00+02:00`;
+  const fromIso = berlinIsoStartOfDay(range.from);
+  const toIso = berlinIsoStartOfDay(addOneDay(range.to));
   return {
     fromIso,
     toIso,

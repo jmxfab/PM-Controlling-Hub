@@ -3,7 +3,10 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-import { type Department } from "@/lib/dashboard/dashboard-types";
+import {
+  GESAMT_DEPARTMENT_KEYS_ARR,
+  type Department,
+} from "@/lib/dashboard/dashboard-types";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,7 +49,7 @@ export const loadDeckungsbeitrag = cache(
       .eq("is_finished", true);
 
     if (department !== "GESAMT") projQuery = projQuery.eq("department_key", department);
-    else projQuery = projQuery.not("department_key", "is", null);
+    else projQuery = projQuery.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
 
     const projRows: Array<{
       id: string;

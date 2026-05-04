@@ -26,6 +26,7 @@ import {
   getDashboardTimeframeRange,
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
+import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
 
 export const metadata: Metadata = {
   title: "Cash",
@@ -177,8 +178,8 @@ function buildPipelineRange(
   if (timeframe.mode === "current") return undefined;
   const range = getDashboardTimeframeRange(timeframe);
   if (!range) return undefined;
-  const fromIso = `${range.from}T00:00:00+02:00`;
-  const toIso = `${addOneDay(range.to)}T00:00:00+02:00`;
+  const fromIso = berlinIsoStartOfDay(range.from);
+  const toIso = berlinIsoStartOfDay(addOneDay(range.to));
   return {
     fromIso,
     toIso,
@@ -198,8 +199,8 @@ function buildLastNDaysRange(days: number): TimeframeRangeIso {
   from.setDate(today.getDate() - days);
   const fromDate = from.toISOString().slice(0, 10);
   const toDate = today.toISOString().slice(0, 10);
-  const fromIso = `${fromDate}T00:00:00+02:00`;
-  const toIso = `${addOneDay(toDate)}T00:00:00+02:00`;
+  const fromIso = berlinIsoStartOfDay(fromDate);
+  const toIso = berlinIsoStartOfDay(addOneDay(toDate));
   return {
     fromIso,
     toIso,

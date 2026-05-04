@@ -7,8 +7,9 @@ import { createClient } from "@supabase/supabase-js";
 const CACHE_TTL_S = 300;
 
 import {
-  HERO_TYPE_ID_TO_DEPARTMENT,
+  GESAMT_DEPARTMENT_KEYS_ARR,
   type Department,
+  typeIdsForDepartment,
 } from "@/lib/dashboard/dashboard-types";
 import { cleanProjectTitle } from "@/lib/hero/project-title";
 
@@ -27,10 +28,10 @@ function supabaseAdmin() {
 }
 
 function typeIdsFor(department: Department): string[] {
-  if (department === "GESAMT") return Object.keys(HERO_TYPE_ID_TO_DEPARTMENT);
-  return Object.entries(HERO_TYPE_ID_TO_DEPARTMENT)
-    .filter(([, d]) => d === department)
-    .map(([id]) => id);
+  // GESAMT = PV + WP only (User-Wunsch — Gewerbe/Klima/Gebaeudetechnik
+  // kommen spaeter mit eigener Logik). Wir delegieren an den shared
+  // Helper damit die Definition zentral bleibt.
+  return typeIdsForDepartment(department);
 }
 
 export interface WeeklyThroughputPoint {
@@ -279,7 +280,7 @@ const loadLongestRunningInner = cache(
         .eq("is_finished", false)
         .not("created_at_hero", "is", null);
       if (department !== "GESAMT") query = query.eq("department_key", department);
-      else query = query.not("department_key", "is", null);
+      else query = query.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
       const { data } = await query.range(offset, offset + 999);
       const rows = (data ?? []) as typeof all;
       all.push(...rows);
