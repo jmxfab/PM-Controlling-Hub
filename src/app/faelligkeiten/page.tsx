@@ -6,6 +6,7 @@ import {
   type Department,
   parseDashboardDepartmentParam,
 } from "@/lib/dashboard/dashboard-types";
+import type { DataErrorEntry } from "@/components/dashboard/data-error-banner";
 
 export const metadata: Metadata = {
   title: "Geplant",
@@ -91,23 +92,33 @@ interface PageProps {
 
 export default async function FaelligkeitenPage({ searchParams }: PageProps) {
   const resolved = (await searchParams) ?? {};
-  // Geplant-View kennt keinen GESAMT-Filter (zu unspezifisch fuer
-  // operative Termin-Planung). Wenn GESAMT angefragt wird, fallen wir
-  // auf PV als sinnvollen Default zurueck.
-  let department: Department = parseDashboardDepartmentParam(
+  // GESAMT in Geplant unterstuetzt — der Loader filtert auf
+  // GESAMT_DEPARTMENT_KEYS_ARR (= PV+WP) ab. Nutzer kann ueber den
+  // Sparten-Tab auf eine einzelne Sparte einschraenken.
+  const department: Department = parseDashboardDepartmentParam(
     resolved.department
   );
-  if (department === "GESAMT") {
-    department = "PV";
-  }
   const win = parseWindow(resolved.window);
   const fromParam = parseIsoDate(resolved.from);
   const toParam = parseIsoDate(resolved.to);
   const { fromIso, toIso } = buildRange(win, fromParam, toParam);
 
-  const projects = await loadUpcomingProjects(department, fromIso, toIso).catch(
-    () => []
+  const result = await loadUpcomingProjects(department, fromIso, toIso).then(
+    (v) => ({ ok: true as const, projects: v }),
+    (err: unknown) => ({
+      ok: false as const,
+      reason: err instanceof Error ? err.message : String(err),
+    })
   );
+  const projects = result.ok ? result.projects : [];
+  const loadErrors: DataErrorEntry[] = result.ok
+    ? []
+    : [
+        {
+          source: "Geplant — Faelligkeitsdaten",
+          detail: result.reason,
+        },
+      ];
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   return (
@@ -119,6 +130,7 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
         to={toParam}
         projects={projects}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
+        loadErrors={loadErrors}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import {
 } from "@/lib/dashboard/dashboard-types";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { parseDashboardTimeframe } from "@/lib/dashboard/dashboard-timeframe";
+import { DataErrorBanner } from "@/components/dashboard/data-error-banner";
 
 export const metadata: Metadata = {
   title: "Deckungsbeitrag",
@@ -68,18 +69,30 @@ async function DeckungsbeitragTab({
   department: Department;
   heroProjectLinkTemplate: string | null;
 }) {
-  const dto = await loadDeckungsbeitrag(department).catch(() => null);
-  if (!dto) {
+  const result = await loadDeckungsbeitrag(department).then(
+    (v) => ({ ok: true as const, dto: v }),
+    (err: unknown) => ({
+      ok: false as const,
+      reason: err instanceof Error ? err.message : String(err),
+    })
+  );
+  if (!result.ok) {
     return (
-      <div className="text-sm text-destructive py-8 text-center">
-        Fehler beim Laden der Deckungsbeitrag-Daten.
-      </div>
+      <DataErrorBanner
+        errors={[
+          {
+            source: "Deckungsbeitrag-Daten",
+            detail: result.reason,
+          },
+        ]}
+        hint="Wenn das nach 1-2 Minuten und einem Reload immer noch erscheint, bitte Admin informieren."
+      />
     );
   }
   return (
     <DeckungsbeitragView
       department={department}
-      dto={dto}
+      dto={result.dto}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
     />
   );

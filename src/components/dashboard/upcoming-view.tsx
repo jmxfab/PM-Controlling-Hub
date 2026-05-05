@@ -43,12 +43,17 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
+  DASHBOARD_DEPARTMENTS,
   DASHBOARD_DEPARTMENT_NAMES,
   DASHBOARD_DEPARTMENT_SHORT_LABELS,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
 import type { UpcomingProject } from "@/lib/supabase/hero-maturity-queries";
 import { HeroProjectLink } from "./hero-project-link";
+import {
+  DataErrorBanner,
+  type DataErrorEntry,
+} from "./data-error-banner";
 
 export type UpcomingWindow =
   | "overdue"
@@ -66,6 +71,7 @@ interface UpcomingViewProps {
   to: string | null;
   projects: UpcomingProject[];
   heroProjectLinkTemplate?: string | null;
+  loadErrors?: DataErrorEntry[];
 }
 
 const WINDOW_LABELS: Record<UpcomingWindow, string> = {
@@ -85,6 +91,7 @@ export function UpcomingView({
   to: toParam,
   projects,
   heroProjectLinkTemplate,
+  loadErrors,
 }: UpcomingViewProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -244,6 +251,12 @@ export function UpcomingView({
 
   return (
     <div className="space-y-4">
+      {loadErrors && loadErrors.length > 0 ? (
+        <DataErrorBanner
+          errors={loadErrors}
+          hint="Wenn das nach 1-2 Minuten und einem Reload immer noch erscheint, bitte Admin informieren."
+        />
+      ) : null}
       <Card>
         <CardContent className="pt-4 pb-4 space-y-3">
           <div className="space-y-2">
@@ -302,9 +315,10 @@ export function UpcomingView({
               onValueChange={(v) => updateParams({ department: v })}
             >
               <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-                {(
-                  ["PV", "PV_GEWERBE", "WP", "KLIMA", "GEBAEUDETECHNIK"] as Department[]
-                ).map((d) => (
+                {/* Sparten-Tabs aus DASHBOARD_DEPARTMENTS — sichtbare Tabs
+                    inkl. GESAMT (= PV+WP). PV_GEWERBE + KLIMA sind aktuell
+                    ausgeblendet, kommen spaeter. */}
+                {DASHBOARD_DEPARTMENTS.map((d) => (
                   <TabsTrigger key={d} value={d}>
                     {DASHBOARD_DEPARTMENT_SHORT_LABELS[d]}
                   </TabsTrigger>

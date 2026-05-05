@@ -27,6 +27,7 @@ import {
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
 import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
+import type { DataErrorEntry } from "@/components/dashboard/data-error-banner";
 
 export const metadata: Metadata = {
   title: "Cash",
@@ -140,15 +141,36 @@ async function CashTab({
     pvKpisResult.status === "fulfilled" ? pvKpisResult.value : null;
   const pvKpisLabel = pipelineRange?.label ?? invoiceKpisRange.label;
 
-  // Wenn beide leer sind → klare Fehlermeldung. Wenn mindestens eines da ist,
-  // rendern wir die Seite partiell statt den User auf einen toten Screen zu schicken.
-  if (!dto && !pipeline) {
-    return (
-      <div className="text-sm text-destructive py-8 text-center">
-        Fehler beim Laden der Cash-Daten. Bitte Admin prüfen lassen.
-      </div>
-    );
+  // Sammle Loader-Errors fuer den DataErrorBanner.
+  const loadErrors: DataErrorEntry[] = [];
+  if (dtoResult.status === "rejected" || (dtoResult.status === "fulfilled" && !dto)) {
+    loadErrors.push({
+      source: "Cashflow-Summary (Aging, Forderungen, Pipeline-Umsatz)",
+      detail:
+        dtoResult.status === "rejected"
+          ? errMsg(dtoResult.reason)
+          : "Antwort leer",
+    });
   }
+  if (
+    pipelineResult.status === "rejected" ||
+    (pipelineResult.status === "fulfilled" && !pipeline)
+  ) {
+    loadErrors.push({
+      source: "Pipeline (Cash-Steps)",
+      detail:
+        pipelineResult.status === "rejected"
+          ? errMsg(pipelineResult.reason)
+          : "Antwort leer",
+    });
+  }
+  if (invoiceKpisDept && pvKpisResult.status === "rejected") {
+    loadErrors.push({
+      source: "Invoice-KPIs (5 Tiles oben)",
+      detail: errMsg(pvKpisResult.reason),
+    });
+  }
+
   return (
     <CashflowView
       department={department}
@@ -157,8 +179,13 @@ async function CashTab({
       pvInvoiceKpis={pvKpis}
       pvInvoiceKpisLabel={pvKpisLabel}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
+      loadErrors={loadErrors}
     />
   );
+}
+
+function errMsg(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 const FUTURE_MODES = new Set<DashboardTimeframe["mode"]>([

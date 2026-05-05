@@ -31,6 +31,7 @@ import {
   type DashboardTimeframe,
 } from "@/lib/dashboard/dashboard-timeframe";
 import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
+import type { DataErrorEntry } from "@/components/dashboard/data-error-banner";
 
 export const metadata: Metadata = {
   title: "Insights",
@@ -112,38 +113,55 @@ async function InsightsTab({
     : false;
 
   const [weekly, daily, stepDurations, longestRunning, durationMetrics, kwpStats] =
-    await Promise.all([
+    await Promise.allSettled([
       useDaily
-        ? Promise.resolve([])
-        : loadWeeklyThroughput(department, range ? { range } : undefined).catch(
-            () => []
-          ),
+        ? Promise.resolve([] as Awaited<ReturnType<typeof loadWeeklyThroughput>>)
+        : loadWeeklyThroughput(department, range ? { range } : undefined),
       useDaily && range
-        ? loadDailyThroughput(department, range).catch(() => [])
-        : Promise.resolve([]),
-      loadStepDurations(department, range ? { range } : undefined).catch(
-        () => []
-      ),
-      loadLongestRunning(department).catch(() => []),
-      loadDurationMetrics(department, range ? { range } : undefined).catch(
-        () => []
-      ),
-      loadKwpStats(department).catch(() => null),
+        ? loadDailyThroughput(department, range)
+        : Promise.resolve([] as Awaited<ReturnType<typeof loadDailyThroughput>>),
+      loadStepDurations(department, range ? { range } : undefined),
+      loadLongestRunning(department),
+      loadDurationMetrics(department, range ? { range } : undefined),
+      loadKwpStats(department),
     ]);
+
+  // Loader-Errors fuer DataErrorBanner sammeln + sichere Fallback-Werte.
+  const loadErrors: DataErrorEntry[] = [];
+  function take<T>(
+    res: PromiseSettledResult<T>,
+    label: string,
+    fallback: T
+  ): T {
+    if (res.status === "fulfilled") return res.value;
+    loadErrors.push({
+      source: label,
+      detail:
+        res.reason instanceof Error ? res.reason.message : String(res.reason),
+    });
+    return fallback;
+  }
+  const weeklyData = take(weekly, "Wöchentlicher Throughput", []);
+  const dailyData = take(daily, "Täglicher Throughput", []);
+  const stepDurationsData = take(stepDurations, "Step-Durchlaufzeiten", []);
+  const longestRunningData = take(longestRunning, "Älteste offene Projekte", []);
+  const durationMetricsData = take(durationMetrics, "Durchlaufzeit-Metriken", []);
+  const kwpStatsData = take(kwpStats, "kWp-Statistik", null);
 
   return (
     <InsightsView
       department={department}
-      weekly={weekly}
-      daily={daily}
+      weekly={weeklyData}
+      daily={dailyData}
       throughputRange={range ?? null}
-      stepDurations={stepDurations}
-      longestRunning={longestRunning}
-      durationMetrics={durationMetrics}
-      kwpStats={kwpStats}
+      stepDurations={stepDurationsData}
+      longestRunning={longestRunningData}
+      durationMetrics={durationMetricsData}
+      kwpStats={kwpStatsData}
       timeframeLabel={getDashboardTimeframeLabel(timeframe)}
       pipeline={null}
       heroProjectLinkTemplate={heroProjectLinkTemplate}
+      loadErrors={loadErrors}
     />
   );
 }

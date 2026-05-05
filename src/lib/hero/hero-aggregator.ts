@@ -141,13 +141,20 @@ export function groupProjectsByDepartment(projects: HeroProject[]): ProjectsByDe
     WP: [],
     KLIMA: [],
     GEBAEUDETECHNIK: [],
-    GESAMT: projects,
+    // GESAMT wird aktiv nur mit PV+WP befuellt (User-Wunsch — siehe
+    // GESAMT_DEPARTMENT_KEYS in dashboard-types). Vorher hier `projects`
+    // = alle Sparten, was zu inkonsistenten Zahlen zwischen Controlling-
+    // Tab und Insights/Cash gefuehrt hat.
+    GESAMT: [],
   };
 
   for (const project of projects) {
     const dept = project.department ?? getDepartmentFromHeroTypeId(project.type_id);
     if (dept) {
       result[dept].push(project);
+      if (dept === "PV" || dept === "WP") {
+        result.GESAMT.push(project);
+      }
     }
   }
 

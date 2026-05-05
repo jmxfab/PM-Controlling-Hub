@@ -45,6 +45,10 @@ import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
 import { HeroPipelinePanel } from "./hero-pipeline-panel";
 import { HeroProjectLink } from "./hero-project-link";
 import {
+  DataErrorBanner,
+  type DataErrorEntry,
+} from "./data-error-banner";
+import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
@@ -72,6 +76,7 @@ interface InsightsViewProps {
   timeframeLabel?: string;
   pipeline?: HeroPipelineDto | null;
   heroProjectLinkTemplate?: string | null;
+  loadErrors?: DataErrorEntry[];
 }
 
 interface ThroughputRow {
@@ -95,6 +100,7 @@ export function InsightsView({
   timeframeLabel,
   pipeline,
   heroProjectLinkTemplate,
+  loadErrors,
 }: InsightsViewProps) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
   const rangeSuffix = timeframeLabel ? ` · ${timeframeLabel}` : "";
@@ -129,6 +135,9 @@ export function InsightsView({
 
   return (
     <div className="space-y-6">
+      {loadErrors && loadErrors.length > 0 ? (
+        <DataErrorBanner errors={loadErrors} />
+      ) : null}
       {pipeline ? (
         <HeroPipelinePanel
           department={department}

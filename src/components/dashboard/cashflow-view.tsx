@@ -43,6 +43,10 @@ import {
   DASHBOARD_DEPARTMENT_NAMES,
   type Department,
 } from "@/lib/dashboard/dashboard-types";
+import {
+  DataErrorBanner,
+  type DataErrorEntry,
+} from "./data-error-banner";
 
 function formatEur(v: number): string {
   return new Intl.NumberFormat("de-DE", {
@@ -59,6 +63,7 @@ export function CashflowView({
   pvInvoiceKpis,
   pvInvoiceKpisLabel,
   heroProjectLinkTemplate,
+  loadErrors,
 }: {
   department: Department;
   dto: CashflowDto | null;
@@ -66,6 +71,7 @@ export function CashflowView({
   pvInvoiceKpis?: PvCashInvoiceKpis | null;
   pvInvoiceKpisLabel?: string;
   heroProjectLinkTemplate?: string | null;
+  loadErrors?: DataErrorEntry[];
 }) {
   const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
   const hasInvoiceKpis =
@@ -74,6 +80,12 @@ export function CashflowView({
 
   return (
     <div className="space-y-6">
+      {loadErrors && loadErrors.length > 0 ? (
+        <DataErrorBanner
+          errors={loadErrors}
+          hint="Wenn das nach 1-2 Minuten und einem Reload immer noch erscheint, bitte Admin informieren."
+        />
+      ) : null}
       {showInvoiceKpis && pvInvoiceKpis ? (
         <PvCashInvoiceKpisCard
           kpis={pvInvoiceKpis}
