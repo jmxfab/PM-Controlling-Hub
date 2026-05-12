@@ -207,23 +207,47 @@ function Kpi({
   icon: React.ReactNode;
   tone?: "neutral" | "good" | "warning";
 }) {
-  const toneClass = {
-    neutral: "",
-    good: "text-emerald-600",
-    warning: "text-yellow-600",
+  const toneConfig = {
+    neutral: {
+      value: "text-foreground",
+      iconBg: "bg-slate-100 dark:bg-slate-800",
+      iconFg: "text-slate-600 dark:text-slate-300",
+      accent: "hover:border-slate-300/50",
+    },
+    good: {
+      value: "text-emerald-700 dark:text-emerald-400",
+      iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+      iconFg: "text-emerald-600 dark:text-emerald-400",
+      accent: "hover:border-emerald-300/50",
+    },
+    warning: {
+      value: "text-amber-700 dark:text-amber-400",
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconFg: "text-amber-600 dark:text-amber-400",
+      accent: "hover:border-amber-300/50",
+    },
   }[tone];
+
   return (
-    <Card>
-      <CardContent className="pt-4 pb-4 space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{label}</span>
-          <span className={toneClass}>{icon}</span>
+    <div
+      className={`relative h-full overflow-hidden rounded-xl border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${toneConfig.accent}`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {label}
+        </p>
+        <div
+          className={`shrink-0 grid place-items-center w-10 h-10 rounded-xl ${toneConfig.iconBg} ${toneConfig.iconFg}`}
+        >
+          {icon}
         </div>
-        <div className={`text-2xl font-semibold tabular-nums ${toneClass}`}>
-          {valueText}
-        </div>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+      </div>
+      <div
+        className={`text-3xl font-bold tabular-nums tracking-tight leading-none mb-1.5 ${toneConfig.value}`}
+      >
+        {valueText}
+      </div>
+      <p className="text-xs text-muted-foreground leading-snug">{hint}</p>
+    </div>
   );
 }
