@@ -804,28 +804,28 @@ function ActionButtons({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {desktopLink ? (
+      {task.source_email_web_link ? (
         <>
           <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
-            <a
-              href={desktopLink}
-              onClick={(e) => e.stopPropagation()}
-              title="Öffnet die Original-Mail im Outlook Desktop"
-            >
-              <Reply size={13} />
-              Antworten
-            </a>
-          </Button>
-          {task.source_email_web_link && (
             <a
               href={task.source_email_web_link}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
-              title="Fallback: Outlook Web"
+              title="Öffnet die Original-Mail direkt im Browser (Outlook Web)"
             >
-              Web öffnen ↗
+              <Reply size={13} />
+              Mail öffnen
+            </a>
+          </Button>
+          {desktopLink && (
+            <a
+              href={desktopLink}
+              onClick={(e) => e.stopPropagation()}
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
+              title="Versucht die Mail im Outlook Desktop zu oeffnen"
+            >
+              Desktop ↗
             </a>
           )}
         </>
