@@ -8,7 +8,6 @@ import {
   BookOpen,
   CalendarClock,
   Euro,
-  LayoutDashboard,
   ListTodo,
   LogOut,
   Settings,
@@ -17,18 +16,17 @@ import {
 /**
  * Primäre Tabs — links im Header, in Lese-Reihenfolge. Einstellungen
  * ist bewusst NICHT hier, sondern rechts als Zahnrad.
+ *
+ * /  (Controlling) ist aus dem Nav ausgeblendet — wird gerade nicht genutzt.
+ * Seite ist via Logo-Klick + direkter URL noch erreichbar.
+ * /deckungsbeitrag ebenfalls ausgeblendet bis Materialkosten-Datenbasis steht.
  */
 const navItems = [
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/cash", label: "Cash", icon: Euro },
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
-  // /deckungsbeitrag ausgeblendet bis die Datenbasis (Materialkosten /
-  // Stundenerfassung) Deckungsbeitrags-Berechnungen trägt.
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
-  // Controlling bewusst ans Ende — wird gerade weniger genutzt als die
-  // Detailansichten Insights/Cash/Geplant/Aufgaben/Logbuch.
-  { href: "/", label: "Controlling", icon: LayoutDashboard },
 ];
 
 export function MainNav() {
