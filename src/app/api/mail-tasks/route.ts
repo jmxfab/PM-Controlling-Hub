@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 function parseTab(v: string | null): MailTabFilter {
-  if (v === "kritisch" || v === "infos" || v === "inbox") return v;
+  if (v === "kritisch" || v === "infos" || v === "inbox" || v === "rechnungen") return v;
   return "aufgaben";
 }
 

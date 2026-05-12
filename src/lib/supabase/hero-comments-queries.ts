@@ -21,17 +21,24 @@ export interface HeroCommentItem {
 }
 
 /**
- * Bestimmt ob eine Hero-Notification fuer Domenic relevant ist
- * (Erwaehnung / Zuweisung).
+ * Bestimmt ob eine Hero-Notification fuer Domenic eine AUFGABE ist
+ * (echte Erwaehnung mit Handlungserwartung).
+ *
+ * NICHT als Aufgabe zaehlen:
+ * - "Ihnen wurde das Projekt zugewiesen" -> reine Status-Info, kein To-Do
+ *   (Hero-Zuweisungen sind Buchhalter-Workflow, keine Arbeitsaufforderung)
  */
 function isForDomenic(title: string | null, body: string | null): boolean {
   const txt = `${title ?? ""} ${body ?? ""}`.toLowerCase();
+  // Mention-Trigger: nur direkte Nennung im Kommentar
   return (
-    txt.includes("domenic") ||
-    txt.includes("wagenleitner") ||
-    // "Projekt zugewiesen" zaehlt fuer ihn (Hero weist meist nur einer Person zu)
-    txt.includes("zugewiesen") ||
-    txt.includes("@d.wagenleitner")
+    txt.includes("@d.wagenleitner") ||
+    txt.includes("@domenic") ||
+    // Frei stehender Name (Vor- oder Nachname) zaehlt als Erwaehnung,
+    // aber nur ausserhalb der Zuweisungs-Phrase
+    ((txt.includes("domenic") || txt.includes("wagenleitner")) &&
+      !txt.includes("zugewiesen") &&
+      !txt.includes("zuweisung"))
   );
 }
 

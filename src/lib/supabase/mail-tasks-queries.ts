@@ -8,7 +8,7 @@ function supabaseAdmin() {
 
 export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
-export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox";
+export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung";
 export type ItemSource = "mail" | "hero";
 
 export interface MailTask {
@@ -22,6 +22,8 @@ export interface MailTask {
   created_at: string;
   /** Microsoft Graph Email-ID — null bei alten Tasks vor dem Reply-Feature */
   source_email_id: string | null;
+  /** Microsoft Graph restImmutableEntryId — stabile ID fuer ms-outlook:// Desktop Deep-Link */
+  source_email_entry_id: string | null;
   /** Microsoft Graph webLink — oeffnet die Original-Mail in Outlook (Desktop oder Web) */
   source_email_web_link: string | null;
   /** Claude-Klassifikation: aufgabe / dringend = "Aufgaben"-Tab, info = "Infos"-Tab, inbox = unklar */
@@ -49,13 +51,14 @@ function parseSenderAndBody(description: string | null): { sender: string | null
   return { sender: null, body: description };
 }
 
-export type MailTabFilter = "kritisch" | "aufgaben" | "infos" | "inbox";
+export type MailTabFilter = "kritisch" | "aufgaben" | "infos" | "inbox" | "rechnungen";
 
 const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   kritisch: ["kritisch"],
   aufgaben: ["aufgabe", "dringend"],
   infos: ["info"],
   inbox: ["inbox"],
+  rechnungen: ["rechnung"],
 };
 
 export interface MailTaskCounts {
@@ -63,6 +66,7 @@ export interface MailTaskCounts {
   aufgaben: number;
   infos: number;
   inbox: number;
+  rechnungen: number;
 }
 
 export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
@@ -79,11 +83,12 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   }
   // Hero-Comments mit Domenic-Bezug -> Aufgaben, Rest -> Infos
   const { countHeroComments } = await import("./hero-comments-queries");
-  const [kritisch, aufgabenMail, infosMail, inbox, aufgabenHero, infosHero] = await Promise.all([
+  const [kritisch, aufgabenMail, infosMail, inbox, rechnungen, aufgabenHero, infosHero] = await Promise.all([
     countMail(CATEGORIES_PER_TAB.kritisch),
     countMail(CATEGORIES_PER_TAB.aufgaben),
     countMail(CATEGORIES_PER_TAB.infos),
     countMail(CATEGORIES_PER_TAB.inbox),
+    countMail(CATEGORIES_PER_TAB.rechnungen),
     countHeroComments("aufgaben", true).catch(() => 0),
     countHeroComments("infos", true).catch(() => 0),
   ]);
@@ -92,6 +97,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     aufgaben: aufgabenMail + aufgabenHero,
     infos: infosMail + infosHero,
     inbox,
+    rechnungen,
   };
 }
 
@@ -114,7 +120,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_web_link, mail_category", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category", { count: "exact" })
     .eq("is_automated", true)
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
@@ -141,6 +147,7 @@ export async function loadMailTasksPage(
       due_date: row.due_date,
       created_at: row.created_at,
       source_email_id: row.source_email_id ?? null,
+      source_email_entry_id: row.source_email_entry_id ?? null,
       source_email_web_link: row.source_email_web_link ?? null,
       mail_category: (row.mail_category as MailCategory | null) ?? null,
       sender,
@@ -171,6 +178,7 @@ export function heroToMailItem(
     due_date: null,
     created_at: hero.notification_date ?? new Date().toISOString(),
     source_email_id: null,
+    source_email_entry_id: null,
     source_email_web_link: null,
     mail_category: category,
     sender: null,
