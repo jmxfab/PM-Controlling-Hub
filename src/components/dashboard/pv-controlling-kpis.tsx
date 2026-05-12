@@ -22,12 +22,6 @@ import {
 } from "lucide-react";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -156,6 +150,64 @@ const ACTIVITY_KPIS: KpiDef[] = [
   },
 ];
 
+/** Farb-Themen pro KPI fuer die Icon-Bubble + Hover-Akzent */
+const KPI_THEMES: Record<KpiKey, { iconBg: string; iconFg: string; accent: string }> = {
+  pipelineActive:      { iconBg: "bg-blue-100 dark:bg-blue-950/50",       iconFg: "text-blue-600 dark:text-blue-400",       accent: "group-hover:border-blue-300/50" },
+  invoicesSent:        { iconBg: "bg-teal-100 dark:bg-teal-950/50",       iconFg: "text-teal-600 dark:text-teal-400",       accent: "group-hover:border-teal-300/50" },
+  installations:       { iconBg: "bg-amber-100 dark:bg-amber-950/50",     iconFg: "text-amber-600 dark:text-amber-400",     accent: "group-hover:border-amber-300/50" },
+  storageWallbox:      { iconBg: "bg-indigo-100 dark:bg-indigo-950/50",   iconFg: "text-indigo-600 dark:text-indigo-400",   accent: "group-hover:border-indigo-300/50" },
+  reworkResolved:      { iconBg: "bg-emerald-100 dark:bg-emerald-950/50", iconFg: "text-emerald-600 dark:text-emerald-400", accent: "group-hover:border-emerald-300/50" },
+  meterChange:         { iconBg: "bg-yellow-100 dark:bg-yellow-950/50",   iconFg: "text-yellow-600 dark:text-yellow-400",   accent: "group-hover:border-yellow-300/50" },
+  reworkScheduled:     { iconBg: "bg-orange-100 dark:bg-orange-950/50",   iconFg: "text-orange-600 dark:text-orange-400",   accent: "group-hover:border-orange-300/50" },
+  reworkUnscheduled:   { iconBg: "bg-rose-100 dark:bg-rose-950/50",       iconFg: "text-rose-600 dark:text-rose-400",       accent: "group-hover:border-rose-300/50" },
+  closingsToPlan:      { iconBg: "bg-fuchsia-100 dark:bg-fuchsia-950/50", iconFg: "text-fuchsia-600 dark:text-fuchsia-400", accent: "group-hover:border-fuchsia-300/50" },
+  closingsScheduled:   { iconBg: "bg-sky-100 dark:bg-sky-950/50",         iconFg: "text-sky-600 dark:text-sky-400",         accent: "group-hover:border-sky-300/50" },
+  appointmentsCompleted:{ iconBg: "bg-emerald-100 dark:bg-emerald-950/50",iconFg: "text-emerald-600 dark:text-emerald-400", accent: "group-hover:border-emerald-300/50" },
+  appointmentsWorked:  { iconBg: "bg-sky-100 dark:bg-sky-950/50",         iconFg: "text-sky-600 dark:text-sky-400",         accent: "group-hover:border-sky-300/50" },
+  appointmentsAdded:   { iconBg: "bg-violet-100 dark:bg-violet-950/50",   iconFg: "text-violet-600 dark:text-violet-400",   accent: "group-hover:border-violet-300/50" },
+};
+
+function PvKpiCard({
+  def,
+  value,
+  onClick,
+}: {
+  def: KpiDef;
+  value: number;
+  onClick: () => void;
+}) {
+  const Icon = def.icon;
+  const theme = KPI_THEMES[def.key];
+  return (
+    <button
+      type="button"
+      aria-haspopup="dialog"
+      onClick={onClick}
+      className={cn(
+        "group relative h-full overflow-hidden rounded-xl border bg-card text-left p-4",
+        "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        theme.accent,
+      )}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {def.title}
+        </p>
+        <div className={cn("shrink-0 grid place-items-center w-8 h-8 rounded-lg transition-transform group-hover:scale-110", theme.iconBg)}>
+          <Icon className={cn("h-4 w-4", theme.iconFg)} />
+        </div>
+      </div>
+      <div className="text-3xl font-bold tabular-nums tracking-tight leading-none mb-1.5">
+        {value.toLocaleString("de-DE")}
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
+        {def.description}
+      </p>
+    </button>
+  );
+}
+
 interface PvControllingKpisProps {
   kpis: PvControllingKpis;
   windowLabel: string;
@@ -202,84 +254,45 @@ export function PvControllingKpis({
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
-            PV-Controlling · {windowLabel}
-          </p>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-            {KPIS.map((def) => {
-              const Icon = def.icon;
-              const value = valueFor(def.key);
-              return (
-                <button
-                  key={def.key}
-                  type="button"
-                  aria-haspopup="dialog"
-                  onClick={() => setSelected(def.key)}
-                  className="group h-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Card className={cn("h-full transition-colors group-hover:border-ring/40 group-hover:bg-accent/20")}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {def.title}
-                      </CardTitle>
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold tabular-nums">
-                        {value}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {def.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </button>
-              );
-            })}
+      <div className="space-y-5">
+        <div className="space-y-3">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              PV-Controlling · {windowLabel}
+            </h3>
+            <div className="flex-1 h-px bg-border/60" />
+          </div>
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {KPIS.map((def) => (
+              <PvKpiCard
+                key={def.key}
+                def={def}
+                value={valueFor(def.key)}
+                onClick={() => setSelected(def.key)}
+              />
+            ))}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide font-medium text-muted-foreground">
-            Termin-Aktivität · Gesamtmontage / Kleinauftrag
-          </p>
-          <div className="grid gap-3 md:grid-cols-3">
-            {ACTIVITY_KPIS.map((def) => {
-              const Icon = def.icon;
-              const value = valueFor(def.key);
-              return (
-                <button
-                  key={def.key}
-                  type="button"
-                  aria-haspopup="dialog"
-                  onClick={() => setSelected(def.key)}
-                  className="group h-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Card className={cn("h-full transition-colors group-hover:border-ring/40 group-hover:bg-accent/20")}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {def.title}
-                      </CardTitle>
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold tabular-nums">
-                        {value}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {def.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </button>
-              );
-            })}
+        <div className="space-y-3">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Termin-Aktivität · Gesamtmontage / Kleinauftrag
+            </h3>
+            <div className="flex-1 h-px bg-border/60" />
+          </div>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+            {ACTIVITY_KPIS.map((def) => (
+              <PvKpiCard
+                key={def.key}
+                def={def}
+                value={valueFor(def.key)}
+                onClick={() => setSelected(def.key)}
+              />
+            ))}
           </div>
         </div>
       </div>
-
       <PvKpiDetailDialog
         selected={selected}
         onClose={() => setSelected(null)}
