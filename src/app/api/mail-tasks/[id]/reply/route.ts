@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -11,44 +12,15 @@ function supabaseAdmin() {
 }
 
 /**
- * Ruft einen frischen Access-Token aus der gespeicherten n8n OAuth2-Credential ab,
- * indem es den Refresh-Token gegen das Microsoft Token-Endpoint tauscht.
+ * Ruft einen n8n-Webhook auf, der via Microsoft Graph eine Reply an die
+ * Original-Mail sendet. n8n haelt den OAuth-Token von Domenic, wir hier
+ * sehen den nie. Sicherheit via HMAC-Signatur (SHA256) + Timestamp.
  *
  * Erwartet folgende Env-Variablen im Controlling-Hub-Deploy:
- * - MS_TENANT_ID       — Azure Tenant
- * - MS_CLIENT_ID       — Azure App Client ID (n8n-mail-reader)
- * - MS_CLIENT_SECRET   — Azure App Client Secret
- * - MS_REFRESH_TOKEN   — Refresh-Token aus dem n8n-Connect-Flow (einmalig einkopieren)
+ * - N8N_REPLY_WEBHOOK_URL     z.B. https://n8n-eree.srv1603751.hstgr.cloud/webhook/mail-reply
+ * - N8N_REPLY_WEBHOOK_SECRET  Shared Secret (>= 32 chars), gleicher Wert
+ *                             muss in n8n als $env.REPLY_WEBHOOK_SECRET vorliegen
  */
-async function getAccessToken(): Promise<string> {
-  const tenant = process.env.MS_TENANT_ID;
-  const clientId = process.env.MS_CLIENT_ID;
-  const clientSecret = process.env.MS_CLIENT_SECRET;
-  const refreshToken = process.env.MS_REFRESH_TOKEN;
-  if (!tenant || !clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      "Microsoft Graph Reply nicht konfiguriert: MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET / MS_REFRESH_TOKEN fehlen",
-    );
-  }
-  const body = new URLSearchParams({
-    grant_type: "refresh_token",
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    scope: "https://graph.microsoft.com/Mail.Send offline_access",
-  });
-  const res = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(`Token-Refresh fehlgeschlagen: ${JSON.stringify(json)}`);
-  }
-  return json.access_token as string;
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -59,6 +31,18 @@ export async function POST(
     const message = (body.message ?? "").trim();
     if (!message) {
       return NextResponse.json({ error: "Body fehlt (Feld 'message')" }, { status: 400 });
+    }
+
+    const webhookUrl = process.env.N8N_REPLY_WEBHOOK_URL;
+    const webhookSecret = process.env.N8N_REPLY_WEBHOOK_SECRET;
+    if (!webhookUrl || !webhookSecret) {
+      return NextResponse.json(
+        {
+          error:
+            "Reply nicht konfiguriert: N8N_REPLY_WEBHOOK_URL / N8N_REPLY_WEBHOOK_SECRET fehlen in der Vercel-Env",
+        },
+        { status: 500 },
+      );
     }
 
     const supabase = supabaseAdmin();
@@ -80,27 +64,31 @@ export async function POST(
       );
     }
 
-    const accessToken = await getAccessToken();
+    // HMAC-signiertes Payload: ts.JSON(body) -> SHA256(secret)
+    const payload = { email_id: task.source_email_id, message };
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const bodyStr = JSON.stringify(payload);
+    const signed = `${ts}.${bodyStr}`;
+    const signature = crypto.createHmac("sha256", webhookSecret).update(signed).digest("hex");
 
-    // Microsoft Graph Reply Endpoint — fuegt antwort an die Original-Mail.
-    // Reply-To-All wuerde "replyAll" sein. Hier "reply" = nur an Sender.
-    const replyRes = await fetch(
-      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(task.source_email_id)}/reply`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          comment: message,
-        }),
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-jmx-timestamp": ts,
+        "x-jmx-signature": signature,
       },
-    );
+      body: bodyStr,
+    });
 
-    if (!replyRes.ok) {
-      const text = await replyRes.text();
-      return NextResponse.json({ error: `Graph reply failed: ${replyRes.status} ${text}` }, { status: 502 });
+    const respJson = await res.json().catch(() => ({}));
+    if (!res.ok || respJson.ok === false) {
+      return NextResponse.json(
+        {
+          error: `n8n-Webhook fehlgeschlagen: ${res.status} ${respJson.reason ?? respJson.error ?? "(no detail)"}`,
+        },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json({ ok: true, id, sent: true });
