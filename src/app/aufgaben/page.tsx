@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { loadHeizlastProjects } from "@/lib/supabase/hero-heizlast-queries";
-import { loadMailTasksPage } from "@/lib/supabase/mail-tasks-queries";
+import { loadMailTasksPage, loadMailTaskCounts } from "@/lib/supabase/mail-tasks-queries";
 import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 
 export const metadata: Metadata = {
@@ -12,9 +12,10 @@ export const revalidate = 60;
 
 export default async function AufgabenPage() {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
-  const [heizlastProjects, mailTasks] = await Promise.all([
+  const [heizlastProjects, initialAufgaben, counts] = await Promise.all([
     loadHeizlastProjects().catch(() => []),
-    loadMailTasksPage(0, 50).catch(() => ({ entries: [], total: 0 })),
+    loadMailTasksPage("aufgaben", 0, 50).catch(() => ({ entries: [], total: 0 })),
+    loadMailTaskCounts().catch(() => ({ aufgaben: 0, infos: 0, inbox: 0 })),
   ]);
 
   return (
@@ -28,7 +29,8 @@ export default async function AufgabenPage() {
       <AufgabenView
         heizlastProjects={heizlastProjects}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
-        initialMailTasks={mailTasks}
+        initialAufgaben={initialAufgaben}
+        counts={counts}
       />
     </div>
   );

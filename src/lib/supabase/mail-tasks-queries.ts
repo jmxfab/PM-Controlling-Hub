@@ -8,6 +8,7 @@ function supabaseAdmin() {
 
 export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
+export type MailCategory = "aufgabe" | "dringend" | "info" | "inbox";
 
 export interface MailTask {
   id: string;
@@ -19,6 +20,8 @@ export interface MailTask {
   created_at: string;
   /** Microsoft Graph Email-ID — null bei alten Tasks vor dem Reply-Feature */
   source_email_id: string | null;
+  /** Claude-Klassifikation: aufgabe / dringend = "Aufgaben"-Tab, info = "Infos"-Tab, inbox = unklar */
+  mail_category: MailCategory | null;
   /** Extracted from description prefix "Von: ..." */
   sender: string | null;
   /** description without "Von: ..." prefix */
@@ -37,7 +40,34 @@ function parseSenderAndBody(description: string | null): { sender: string | null
   return { sender: null, body: description };
 }
 
+export interface MailTaskCounts {
+  aufgaben: number;
+  infos: number;
+  inbox: number;
+}
+
+export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
+  const supabase = supabaseAdmin();
+  async function count(filter: string[]): Promise<number> {
+    const { count, error } = await supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("is_automated", true)
+      .neq("status", "done")
+      .in("mail_category", filter);
+    if (error) return 0;
+    return count ?? 0;
+  }
+  const [aufgaben, infos, inbox] = await Promise.all([
+    count(["aufgabe", "dringend"]),
+    count(["info"]),
+    count(["inbox"]),
+  ]);
+  return { aufgaben, infos, inbox };
+}
+
 export async function loadMailTasksPage(
+  filter: "aufgaben" | "infos" | "inbox",
   page = 0,
   pageSize = 50,
   search = "",
@@ -45,10 +75,14 @@ export async function loadMailTasksPage(
   const supabase = supabaseAdmin();
   const offset = page * pageSize;
 
+  const categories =
+    filter === "aufgaben" ? ["aufgabe", "dringend"] : filter === "infos" ? ["info"] : ["inbox"];
+
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, mail_category", { count: "exact" })
     .eq("is_automated", true)
+    .in("mail_category", categories)
     .order("created_at", { ascending: false });
 
   if (search) {
@@ -69,6 +103,7 @@ export async function loadMailTasksPage(
       due_date: row.due_date,
       created_at: row.created_at,
       source_email_id: row.source_email_id ?? null,
+      mail_category: (row.mail_category as MailCategory | null) ?? null,
       sender,
       body,
     };

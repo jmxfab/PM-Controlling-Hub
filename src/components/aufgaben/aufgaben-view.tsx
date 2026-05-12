@@ -7,15 +7,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
-import type { MailTask, MailTasksPage } from "@/lib/supabase/mail-tasks-queries";
+import type { MailTask, MailTasksPage, MailTaskCounts } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 
 const PAGE_SIZE = 50;
 
+type FilterKey = "aufgaben" | "infos" | "inbox";
+
 interface Props {
   heizlastProjects: HeizlastProject[];
   heroProjectLinkTemplate: string | null;
-  initialMailTasks: MailTasksPage;
+  initialAufgaben: MailTasksPage;
+  counts: MailTaskCounts;
 }
 
 const PRIORITY_CONFIG: Record<NonNullable<MailTask["priority"]>, { label: string; cls: string }> = {
@@ -25,15 +28,31 @@ const PRIORITY_CONFIG: Record<NonNullable<MailTask["priority"]>, { label: string
   low:    { label: "Niedrig",  cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
 };
 
-export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initialMailTasks }: Props) {
+export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initialAufgaben, counts }: Props) {
   return (
-    <Tabs defaultValue="inbox">
+    <Tabs defaultValue="aufgaben">
       <TabsList>
+        <TabsTrigger value="aufgaben">
+          Aufgaben
+          {counts.aufgaben > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
+              ({counts.aufgaben})
+            </span>
+          ) : null}
+        </TabsTrigger>
+        <TabsTrigger value="infos">
+          Infos
+          {counts.infos > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
+              ({counts.infos})
+            </span>
+          ) : null}
+        </TabsTrigger>
         <TabsTrigger value="inbox">
           Inbox
-          {initialMailTasks.total > 0 ? (
+          {counts.inbox > 0 ? (
             <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
-              ({initialMailTasks.total})
+              ({counts.inbox})
             </span>
           ) : null}
         </TabsTrigger>
@@ -46,8 +65,14 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
           ) : null}
         </TabsTrigger>
       </TabsList>
+      <TabsContent value="aufgaben" className="mt-4">
+        <MailTab initial={initialAufgaben} filter="aufgaben" />
+      </TabsContent>
+      <TabsContent value="infos" className="mt-4">
+        <MailTab initial={{ entries: [], total: 0 }} filter="infos" />
+      </TabsContent>
       <TabsContent value="inbox" className="mt-4">
-        <MailTab initial={initialMailTasks} />
+        <MailTab initial={{ entries: [], total: 0 }} filter="inbox" />
       </TabsContent>
       <TabsContent value="heizlast" className="mt-4">
         <HeizlastView
@@ -59,7 +84,7 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
   );
 }
 
-function MailTab({ initial }: { initial: MailTasksPage }) {
+function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKey }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<MailTasksPage>(initial);
@@ -68,13 +93,14 @@ function MailTab({ initial }: { initial: MailTasksPage }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [replyTask, setReplyTask] = useState<MailTask | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async (q: string, p: number) => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: String(p) });
+      const params = new URLSearchParams({ page: String(p), filter });
       if (q) params.set("search", q);
       const res = await window.fetch(`/api/mail-tasks?${params}`);
       if (!res.ok) {
@@ -84,12 +110,20 @@ function MailTab({ initial }: { initial: MailTasksPage }) {
       }
       const json = await res.json();
       setData({ entries: json.entries ?? [], total: json.total ?? 0 });
+      setHasFetched(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filter]);
+
+  // Lazy-load when tab gets shown for the first time (initial.entries is empty for non-default tabs)
+  useEffect(() => {
+    if (!hasFetched && initial.entries.length === 0 && initial.total === 0) {
+      fetchData("", 0);
+    }
+  }, [hasFetched, initial.entries.length, initial.total, fetchData]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
