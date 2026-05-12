@@ -22,6 +22,8 @@ export interface MailTask {
   created_at: string;
   /** Microsoft Graph Email-ID — null bei alten Tasks vor dem Reply-Feature */
   source_email_id: string | null;
+  /** Microsoft Graph restImmutableEntryId — stabile ID fuer ms-outlook:// Desktop Deep-Link */
+  source_email_entry_id: string | null;
   /** Microsoft Graph webLink — oeffnet die Original-Mail in Outlook (Desktop oder Web) */
   source_email_web_link: string | null;
   /** Claude-Klassifikation: aufgabe / dringend = "Aufgaben"-Tab, info = "Infos"-Tab, inbox = unklar */
@@ -118,7 +120,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_web_link, mail_category", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category", { count: "exact" })
     .eq("is_automated", true)
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
@@ -145,6 +147,7 @@ export async function loadMailTasksPage(
       due_date: row.due_date,
       created_at: row.created_at,
       source_email_id: row.source_email_id ?? null,
+      source_email_entry_id: row.source_email_entry_id ?? null,
       source_email_web_link: row.source_email_web_link ?? null,
       mail_category: (row.mail_category as MailCategory | null) ?? null,
       sender,
@@ -175,6 +178,7 @@ export function heroToMailItem(
     due_date: null,
     created_at: hero.notification_date ?? new Date().toISOString(),
     source_email_id: null,
+    source_email_entry_id: null,
     source_email_web_link: null,
     mail_category: category,
     sender: null,

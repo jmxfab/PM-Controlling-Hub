@@ -390,7 +390,17 @@ function MailTab({
     return `mailto:${task.sender}?subject=${encodeURIComponent("Re: " + task.title)}`;
   }
 
+  /**
+   * Baut den stabilen Desktop-Deep-Link.
+   * Strategie (best -> fallback):
+   * 1. source_email_entry_id (restImmutableEntryId via Graph translateExchangeIds) — stabil + Outlook-kompatibel
+   * 2. ItemID aus webLink — funktioniert oft, ist aber die unstable RestId
+   * 3. source_email_id roh — letzter Ausweg
+   */
   function buildOutlookDesktopLink(task: MailTask): string | null {
+    if (task.source_email_entry_id) {
+      return `ms-outlook://emails/open?ItemID=${encodeURIComponent(task.source_email_entry_id)}`;
+    }
     if (task.source_email_web_link) {
       try {
         const url = new URL(task.source_email_web_link);
@@ -804,28 +814,28 @@ function ActionButtons({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {task.source_email_web_link ? (
+      {desktopLink ? (
         <>
           <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
+            <a
+              href={desktopLink}
+              onClick={(e) => e.stopPropagation()}
+              title="Öffnet die Original-Mail direkt im Outlook Desktop"
+            >
+              <Reply size={13} />
+              In Outlook öffnen
+            </a>
+          </Button>
+          {task.source_email_web_link && (
             <a
               href={task.source_email_web_link}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              title="Öffnet die Original-Mail direkt im Browser (Outlook Web)"
-            >
-              <Reply size={13} />
-              Mail öffnen
-            </a>
-          </Button>
-          {desktopLink && (
-            <a
-              href={desktopLink}
-              onClick={(e) => e.stopPropagation()}
               className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
-              title="Versucht die Mail im Outlook Desktop zu oeffnen"
+              title="Fallback: Outlook Web im Browser"
             >
-              Desktop ↗
+              Web ↗
             </a>
           )}
         </>
