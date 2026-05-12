@@ -93,6 +93,40 @@ const KPIS_BASE: Omit<KpiDef, "description">[] = [
   },
 ];
 
+/** Themes pro Rechnungs-KPI fuer Icon-Bubble + Hover-Akzent + Werte-Faerbung */
+const INVOICE_THEMES: Record<KpiKey, { iconBg: string; iconFg: string; accent: string; value: string }> = {
+  total: {
+    iconBg: "bg-slate-100 dark:bg-slate-800",
+    iconFg: "text-slate-600 dark:text-slate-300",
+    accent: "group-hover:border-slate-300/50",
+    value: "text-foreground",
+  },
+  notOverdue: {
+    iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+    iconFg: "text-emerald-600 dark:text-emerald-400",
+    accent: "group-hover:border-emerald-300/50",
+    value: "text-emerald-700 dark:text-emerald-400",
+  },
+  overdue: {
+    iconBg: "bg-rose-100 dark:bg-rose-950/50",
+    iconFg: "text-rose-600 dark:text-rose-400",
+    accent: "group-hover:border-rose-300/50",
+    value: "text-rose-700 dark:text-rose-400",
+  },
+  inActiveStep: {
+    iconBg: "bg-amber-100 dark:bg-amber-950/50",
+    iconFg: "text-amber-600 dark:text-amber-400",
+    accent: "group-hover:border-amber-300/50",
+    value: "text-amber-700 dark:text-amber-400",
+  },
+  overdueInActiveStep: {
+    iconBg: "bg-orange-100 dark:bg-orange-950/50",
+    iconFg: "text-orange-600 dark:text-orange-400",
+    accent: "group-hover:border-orange-300/50",
+    value: "text-orange-700 dark:text-orange-400",
+  },
+};
+
 function buildKpiDefs(activeStepHumanList: string): KpiDef[] {
   return [
     {
@@ -249,72 +283,60 @@ export function PvCashInvoiceKpisCard({
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {KPIS.map((k) => {
             const Icon = k.icon;
             const count = valueFor(k.key);
             const eur = eurFor(k.key);
             const typeSummary = summarizeTypes(rowsFor(k.key));
+            const theme = INVOICE_THEMES[k.key];
             return (
               <button
                 key={k.key}
                 type="button"
                 aria-haspopup="dialog"
                 onClick={() => setSelected(k.key)}
-                className="group h-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className={cn(
+                  "group relative h-full overflow-hidden rounded-xl border bg-card text-left p-4",
+                  "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  theme.accent,
+                )}
               >
-                <Card
-                  className={cn(
-                    "h-full transition-colors group-hover:border-ring/40 group-hover:bg-accent/20"
-                  )}
-                >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      {k.title}
-                    </CardTitle>
-                    <Icon className={cn("h-4 w-4", k.toneClass)} />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-baseline justify-between gap-3 flex-wrap">
-                      <div
-                        className={cn(
-                          "text-2xl font-bold tabular-nums",
-                          k.toneClass
-                        )}
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+                    {k.title}
+                  </p>
+                  <div className={cn("shrink-0 grid place-items-center w-8 h-8 rounded-lg transition-transform group-hover:scale-110", theme.iconBg)}>
+                    <Icon className={cn("h-4 w-4", theme.iconFg)} />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 flex-wrap mb-1">
+                  <span className={cn("text-3xl font-bold tabular-nums tracking-tight leading-none", theme.value)}>
+                    {count.toLocaleString("de-DE")}
+                  </span>
+                  {eur > 0 ? (
+                    <span className={cn("text-sm font-semibold tabular-nums opacity-80", theme.value)}>
+                      {eurFormatter.format(eur)}
+                    </span>
+                  ) : null}
+                </div>
+                {typeSummary.length > 0 ? (
+                  <ul className="mt-2 space-y-0.5">
+                    {typeSummary.map((t) => (
+                      <li
+                        key={t.label}
+                        className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground tabular-nums"
                       >
-                        {count}
-                      </div>
-                      {eur > 0 ? (
-                        <div
-                          className={cn(
-                            "text-xl font-semibold tabular-nums",
-                            k.toneClass
-                          )}
-                        >
-                          {eurFormatter.format(eur)}
-                        </div>
-                      ) : null}
-                    </div>
-                    {typeSummary.length > 0 ? (
-                      <ul className="mt-1 space-y-0.5">
-                        {typeSummary.map((t) => (
-                          <li
-                            key={t.label}
-                            className="flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground tabular-nums"
-                          >
-                            <span>
-                              {t.count} × {t.label}
-                            </span>
-                            <span>{eurFormatter.format(t.eur)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {k.description}
-                    </p>
-                  </CardContent>
-                </Card>
+                        <span>{t.count} × {t.label}</span>
+                        <span>{eurFormatter.format(t.eur)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-2">
+                  {k.description}
+                </p>
               </button>
             );
           })}
