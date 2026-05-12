@@ -5,12 +5,6 @@ import { ArrowDownRight, CheckSquare, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -149,39 +143,63 @@ export function DashboardPeriodKpiCards({
     ? CARD_DEFINITIONS.find((d) => d.key === selected)
     : null;
 
+  const PERIOD_THEMES: Record<PeriodKpiKey, { iconBg: string; iconFg: string; accent: string }> = {
+    delta_new: {
+      iconBg: "bg-sky-100 dark:bg-sky-950/50",
+      iconFg: "text-sky-600 dark:text-sky-400",
+      accent: "group-hover:border-sky-300/50",
+    },
+    delta_completed: {
+      iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+      iconFg: "text-emerald-600 dark:text-emerald-400",
+      accent: "group-hover:border-emerald-300/50",
+    },
+    delta_reopens: {
+      iconBg: "bg-rose-100 dark:bg-rose-950/50",
+      iconFg: "text-rose-600 dark:text-rose-400",
+      accent: "group-hover:border-rose-300/50",
+    },
+  };
+
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         {CARD_DEFINITIONS.map((def) => {
           const Icon = def.icon;
           const value = valueByKey[def.key];
+          const theme = PERIOD_THEMES[def.key];
           return (
             <button
               key={def.key}
               type="button"
               aria-haspopup="dialog"
-              className="group h-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className={cn(
+                "group relative h-full overflow-hidden rounded-xl border bg-card text-left p-5",
+                "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                theme.accent
+              )}
               onClick={() => setSelected(def.key)}
             >
-              <Card
-                className={cn(
-                  "h-full transition-colors",
-                  "group-hover:border-ring/40 group-hover:bg-accent/20"
-                )}
-              >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {def.title}
-                  </CardTitle>
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{value}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {def.description} · Zeitraum {timeframeLabel}
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                  {def.title}
+                </p>
+                <div
+                  className={cn(
+                    "shrink-0 grid place-items-center w-10 h-10 rounded-xl transition-transform group-hover:scale-110",
+                    theme.iconBg
+                  )}
+                >
+                  <Icon className={cn("h-5 w-5", theme.iconFg)} />
+                </div>
+              </div>
+              <div className="text-4xl font-bold tabular-nums tracking-tight leading-none mb-2">
+                {value.toLocaleString("de-DE")}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {def.description} · Zeitraum {timeframeLabel}
+              </p>
             </button>
           );
         })}

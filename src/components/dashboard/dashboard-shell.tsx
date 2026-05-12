@@ -161,46 +161,54 @@ export function DashboardShell({
     (customFrom !== (timeframe.from ?? "") || customTo !== (timeframe.to ?? ""));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {isPending ? <NavigatingOverlay /> : null}
-      <div className="rounded-lg border bg-card p-3">
+
+      {/* Timeframe-Selector */}
+      <div className="rounded-xl border bg-card/60 backdrop-blur-sm p-3 shadow-sm">
         <Tabs value={timeframe.mode} onValueChange={handleTimeframeChange}>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 mr-1 hidden md:inline">
+              Zeitraum
+            </span>
             <TabsList
-              className="flex h-auto flex-wrap gap-1 bg-muted p-1"
+              className="flex h-auto flex-wrap gap-1 bg-muted/70 p-1 rounded-lg"
               title="Momentaufnahme + Jumax-Berichtswoche."
             >
-              <TabsTrigger value="current">Jetzt</TabsTrigger>
+              <TabsTrigger value="current" className="rounded-md">Jetzt</TabsTrigger>
               <TabsTrigger
                 value="jumax_week"
                 title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
-                className="border border-amber-500/60 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 data-[state=active]:bg-amber-500 data-[state=active]:text-amber-50 data-[state=active]:border-amber-500 data-[state=active]:shadow-sm"
+                className="rounded-md border border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 data-[state=active]:bg-amber-500 data-[state=active]:text-amber-50 data-[state=active]:border-amber-500 data-[state=active]:shadow-sm"
               >
                 Jumax-Woche
               </TabsTrigger>
             </TabsList>
 
+            <div className="h-5 w-px bg-border mx-1 hidden md:block" />
+
             <TabsList
-              className="flex h-auto flex-wrap gap-1 bg-muted p-1"
+              className="flex h-auto flex-wrap gap-1 bg-muted/70 p-1 rounded-lg"
               title="Änderungen im Zeitraum: zeigt zusätzlich wie viele Projekte in diesem Zeitraum neu angelegt / abgeschlossen / in Abrechnung / in Nacharbeit gegangen sind."
             >
-              <TabsTrigger value="gestern">Gestern</TabsTrigger>
-              <TabsTrigger value="3d">Letzte 3 Tage</TabsTrigger>
+              <TabsTrigger value="gestern" className="rounded-md">Gestern</TabsTrigger>
+              <TabsTrigger value="3d" className="rounded-md">Letzte 3 Tage</TabsTrigger>
               <TabsTrigger
                 value="7d"
                 title="Rollende letzte 7 Tage: heute-6 → heute. Inklusive heutigem Tag."
+                className="rounded-md"
               >
                 Letzte Woche
               </TabsTrigger>
-              <TabsTrigger value="14d">14 Tage</TabsTrigger>
-              <TabsTrigger value="frei">Frei</TabsTrigger>
+              <TabsTrigger value="14d" className="rounded-md">14 Tage</TabsTrigger>
+              <TabsTrigger value="frei" className="rounded-md">Frei</TabsTrigger>
             </TabsList>
           </div>
 
           {timeframe.mode === "frei" ? (
-            <div className="flex flex-wrap items-end gap-3 mt-3">
+            <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-border/50">
               <div className="space-y-1">
-                <Label htmlFor="dashboard-timeframe-from" className="text-xs">
+                <Label htmlFor="dashboard-timeframe-from" className="text-xs text-muted-foreground">
                   Von
                 </Label>
                 <Input
@@ -212,7 +220,7 @@ export function DashboardShell({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="dashboard-timeframe-to" className="text-xs">
+                <Label htmlFor="dashboard-timeframe-to" className="text-xs text-muted-foreground">
                   Bis
                 </Label>
                 <Input
@@ -227,6 +235,7 @@ export function DashboardShell({
                 size="sm"
                 onClick={applyCustomRange}
                 disabled={!customRangeDirty}
+                className="h-8"
               >
                 Anwenden
               </Button>
@@ -235,8 +244,9 @@ export function DashboardShell({
         </Tabs>
       </div>
 
-      <Tabs value={department} onValueChange={handleDepartmentChange} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 gap-1 lg:grid-cols-6 lg:w-full">
+      {/* Department-Tabs */}
+      <Tabs value={department} onValueChange={handleDepartmentChange} className="space-y-5">
+        <TabsList className="grid w-full grid-cols-3 gap-1.5 lg:grid-cols-6 lg:w-full h-auto bg-muted/50 p-1.5 rounded-xl">
           {departments.map((departmentKey) => {
             const DepartmentIcon = departmentIcons[departmentKey];
 
@@ -244,12 +254,12 @@ export function DashboardShell({
               <TabsTrigger
                 key={departmentKey}
                 value={departmentKey}
-                className="flex items-center gap-2"
+                className="flex items-center justify-center gap-2 py-2 rounded-lg data-[state=active]:shadow-sm transition-all"
                 onMouseEnter={() => prefetchDepartment(departmentKey)}
                 onFocus={() => prefetchDepartment(departmentKey)}
               >
                 <DepartmentIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">
+                <span className="hidden sm:inline font-medium">
                   {DASHBOARD_DEPARTMENT_SHORT_LABELS[departmentKey]}
                 </span>
               </TabsTrigger>
@@ -258,7 +268,7 @@ export function DashboardShell({
         </TabsList>
 
         {departments.map((departmentKey) => (
-          <TabsContent key={departmentKey} value={departmentKey} className="space-y-4">
+          <TabsContent key={departmentKey} value={departmentKey} className="space-y-5 mt-0">
             {tabContents[departmentKey]}
           </TabsContent>
         ))}
