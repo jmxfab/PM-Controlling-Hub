@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock, AlertTriangle, MessageSquare, FolderOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock, AlertTriangle, MessageSquare, FolderOpen, Euro } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type { MailTask, MailTasksPage, MailTaskCounts, MailTabFilter } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
@@ -67,6 +67,15 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
             </span>
           ) : null}
         </TabsTrigger>
+        <TabsTrigger value="rechnungen">
+          <Euro size={13} className="mr-1 inline" />
+          Rechnungen
+          {counts.rechnungen > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
+              ({counts.rechnungen})
+            </span>
+          ) : null}
+        </TabsTrigger>
         <TabsTrigger value="heizlast">
           Heizlast
           {heizlastProjects.length > 0 ? (
@@ -87,6 +96,9 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
       </TabsContent>
       <TabsContent value="inbox" className="mt-4">
         <MailTab initial={{ entries: [], total: 0 }} filter="inbox" />
+      </TabsContent>
+      <TabsContent value="rechnungen" className="mt-4">
+        <MailTab initial={{ entries: [], total: 0 }} filter="rechnungen" />
       </TabsContent>
       <TabsContent value="heizlast" className="mt-4">
         <HeizlastView

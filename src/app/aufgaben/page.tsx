@@ -14,7 +14,7 @@ export default async function AufgabenPage() {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
   const [heizlastProjects, counts] = await Promise.all([
     loadHeizlastProjects().catch(() => []),
-    loadMailTaskCounts().catch(() => ({ kritisch: 0, aufgaben: 0, infos: 0, inbox: 0 })),
+    loadMailTaskCounts().catch(() => ({ kritisch: 0, aufgaben: 0, infos: 0, inbox: 0, rechnungen: 0 })),
   ]);
 
   return (
