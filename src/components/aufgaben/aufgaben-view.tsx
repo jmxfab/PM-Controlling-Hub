@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, X, MessageSquare, FolderOpen, CheckSquare, FileUp, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, MessageSquare, FolderOpen, CheckSquare, FileUp, ExternalLink, Mail } from "lucide-react";
 import type { AufgabeEntry } from "@/lib/supabase/hero-aufgaben-queries";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
+import type { MailTask, MailTasksPage } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 const PAGE_SIZE = 50;
 
@@ -17,7 +18,15 @@ interface Props {
   initial: InfosData;
   heizlastProjects: HeizlastProject[];
   heroProjectLinkTemplate: string | null;
+  initialMailTasks: MailTasksPage;
 }
+
+const PRIORITY_CONFIG: Record<NonNullable<MailTask["priority"]>, { label: string; cls: string }> = {
+  urgent: { label: "Dringend", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  high:   { label: "Hoch",     cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  medium: { label: "Mittel",   cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  low:    { label: "Niedrig",  cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
+};
 
 function notifIcon(title: string | null) {
   if (!title) return null;
@@ -28,12 +37,20 @@ function notifIcon(title: string | null) {
   return null;
 }
 
-export function AufgabenView({ initial, heizlastProjects, heroProjectLinkTemplate }: Props) {
+export function AufgabenView({ initial, heizlastProjects, heroProjectLinkTemplate, initialMailTasks }: Props) {
   return (
     <Tabs defaultValue="infos">
       <TabsList>
         <TabsTrigger value="infos">Infos</TabsTrigger>
         <TabsTrigger value="aufgaben">Aufgaben</TabsTrigger>
+        <TabsTrigger value="mail">
+          Mail
+          {initialMailTasks.total > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
+              ({initialMailTasks.total})
+            </span>
+          ) : null}
+        </TabsTrigger>
         <TabsTrigger value="heizlast">
           Heizlast
           {heizlastProjects.length > 0 ? (
@@ -48,6 +65,9 @@ export function AufgabenView({ initial, heizlastProjects, heroProjectLinkTemplat
       </TabsContent>
       <TabsContent value="aufgaben" className="mt-4">
         <AufgabenTab />
+      </TabsContent>
+      <TabsContent value="mail" className="mt-4">
+        <MailTab initial={initialMailTasks} />
       </TabsContent>
       <TabsContent value="heizlast" className="mt-4">
         <HeizlastView
@@ -331,3 +351,169 @@ function AufgabenTab() {
     </div>
   );
 }
+
+
+function MailTab({ initial }: { initial: MailTasksPage }) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [data, setData] = useState<MailTasksPage>(initial);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchData = useCallback(async (q: string, p: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ page: String(p) });
+      if (q) params.set("search", q);
+      const res = await window.fetch(`/api/mail-tasks?${params}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? `Fehler ${res.status} beim Laden der Mail-Aufgaben`);
+        return;
+      }
+      const json = await res.json();
+      setData({ entries: json.entries ?? [], total: json.total ?? 0 });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { setPage(0); fetchData(search, 0); }, 250);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [search, fetchData]);
+
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+  const from = data.total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const to = Math.min((page + 1) * PAGE_SIZE, data.total);
+
+  function changePage(p: number) { setPage(p); fetchData(search, p); }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Suche..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-52 h-8 text-sm"
+        />
+        {search && (
+          <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground"
+            onClick={() => setSearch("")}>
+            <X size={13} /> Zurücksetzen
+          </Button>
+        )}
+        {loading && <span className="text-xs text-muted-foreground animate-pulse">Lädt…</span>}
+      </div>
+
+      {error ? (
+        <div className="rounded-md border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/20 p-4 text-sm">
+          <p className="font-medium text-red-700 dark:text-red-400">Fehler beim Laden</p>
+          <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1 font-mono break-all">{error}</p>
+          <Button variant="outline" size="sm" className="mt-3 h-7"
+            onClick={() => fetchData(search, page)}>
+            Erneut versuchen
+          </Button>
+        </div>
+      ) : !loading && data.entries.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+          <Mail size={24} className="text-muted-foreground/40" />
+          <p className="text-sm">Keine E-Mail-Aufgaben in der Datenbank.</p>
+          <p className="text-xs">
+            {search
+              ? "Suche liefert keine Treffer. Suchbegriff anpassen oder zurücksetzen."
+              : "Sobald der n8n-Workflow neue Mails klassifiziert, erscheinen sie hier."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-36">Datum</TableHead>
+                  <TableHead className="w-24">Prio</TableHead>
+                  <TableHead className="w-56">Absender</TableHead>
+                  <TableHead>Titel / Aktion</TableHead>
+                  <TableHead className="w-32">Fällig</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.entries.map((t) => {
+                  const prio = t.priority ? PRIORITY_CONFIG[t.priority] : null;
+                  const isOverdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== "done";
+                  const isDone = t.status === "done";
+                  return (
+                    <TableRow key={t.id} className={isDone ? "opacity-50" : undefined}>
+                      <TableCell className="text-xs tabular-nums text-muted-foreground whitespace-nowrap">
+                        {new Date(t.created_at).toLocaleString("de-AT", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {prio ? (
+                          <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full ${prio.cls}`}>
+                            {prio.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {t.sender ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs">
+                            <Mail size={12} className="text-blue-500 shrink-0" />
+                            <span className="truncate">{t.sender}</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">manuell</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div className={`font-medium ${isDone ? "line-through" : ""}`}>{t.title}</div>
+                        {t.body && (
+                          <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{t.body}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {t.due_date ? (
+                          <span className={isOverdue ? "text-red-500 font-medium" : "text-muted-foreground"}>
+                            {new Date(t.due_date).toLocaleString("de-AT", {
+                              day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                            })}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+            <span>{from}–{to} von {data.total.toLocaleString("de-AT")} Einträgen</span>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page === 0} onClick={() => changePage(page - 1)}>
+                <ChevronLeft size={14} />
+              </Button>
+              <span>{page + 1} / {totalPages}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages - 1} onClick={() => changePage(page + 1)}>
+                <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
