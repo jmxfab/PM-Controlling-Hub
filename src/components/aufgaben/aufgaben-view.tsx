@@ -22,6 +22,7 @@ import {
   Inbox,
   Search,
   Sparkles,
+  Flame,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -229,14 +230,14 @@ export function AufgabenView({
   const defaultTab: MailTabFilter =
     counts.kritisch > 0 ? "kritisch" : "aufgaben";
   return (
-    <Tabs defaultValue={defaultTab} className="space-y-4">
-      <TabsList className="h-10 p-1 bg-muted/50">
+    <Tabs defaultValue={defaultTab} className="space-y-5">
+      <TabsList className="h-auto p-1.5 bg-muted/40 rounded-xl gap-1 flex-wrap">
         <TabsTrigger
           value="kritisch"
           className={
             counts.kritisch > 0
-              ? "data-[state=active]:bg-red-600 data-[state=active]:text-white text-red-600 dark:text-red-400 font-semibold gap-1.5"
-              : "gap-1.5"
+              ? "data-[state=active]:bg-red-600 data-[state=active]:text-white text-red-600 dark:text-red-400 font-semibold gap-1.5 rounded-lg data-[state=active]:shadow-sm"
+              : "gap-1.5 rounded-lg data-[state=active]:shadow-sm"
           }
         >
           {counts.kritisch > 0 && (
@@ -245,28 +246,28 @@ export function AufgabenView({
           Kritisch
           <CountPill value={counts.kritisch} highlight={counts.kritisch > 0} />
         </TabsTrigger>
-        <TabsTrigger value="aufgaben" className="gap-1.5">
+        <TabsTrigger value="aufgaben" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Mail size={13} />
           Aufgaben
           <CountPill value={counts.aufgaben} />
         </TabsTrigger>
-        <TabsTrigger value="infos" className="gap-1.5">
+        <TabsTrigger value="infos" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Sparkles size={13} />
           Infos
           <CountPill value={counts.infos} />
         </TabsTrigger>
-        <TabsTrigger value="inbox" className="gap-1.5">
+        <TabsTrigger value="inbox" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Inbox size={13} />
           Inbox
           <CountPill value={counts.inbox} />
         </TabsTrigger>
-        <TabsTrigger value="rechnungen" className="gap-1.5">
+        <TabsTrigger value="rechnungen" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Euro size={13} />
           Rechnungen
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
-        <TabsTrigger value="heizlast" className="gap-1.5">
-          <FolderOpen size={13} />
+        <TabsTrigger value="heizlast" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
+          <Flame size={13} />
           Heizlast
           <CountPill value={heizlastProjects.length} />
         </TabsTrigger>
