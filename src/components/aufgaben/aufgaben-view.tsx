@@ -213,6 +213,30 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: MailTabF
     return `mailto:${task.sender}?subject=${encodeURIComponent("Re: " + task.title)}`;
   }
 
+  /**
+   * Baut eine ms-outlook:// Deep-Link URL, die auf Windows mit installiertem
+   * Outlook Desktop die richtige Mail direkt im Desktop-Client oeffnet.
+   * Browser fragt einmal "Mit Outlook oeffnen?" und merkt sich die Wahl.
+   * Faellt zurueck auf webLink wenn kein Item-ID verfuegbar.
+   */
+  function buildOutlookDesktopLink(task: MailTask): string | null {
+    // Strategie 1: ItemID aus webLink extrahieren (URL-bereits-encoded)
+    if (task.source_email_web_link) {
+      try {
+        const url = new URL(task.source_email_web_link);
+        const itemId = url.searchParams.get("ItemID");
+        if (itemId) return `ms-outlook://emails/open?ItemID=${encodeURIComponent(itemId)}`;
+      } catch {
+        // ignore parse errors, fall through
+      }
+    }
+    // Strategie 2: Roh-Graph-ID nutzen
+    if (task.source_email_id) {
+      return `ms-outlook://emails/open?ItemID=${encodeURIComponent(task.source_email_id)}`;
+    }
+    return null;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -402,25 +426,41 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: MailTabF
                                   </>
                                 ) : (
                                   <>
-                                    {t.source_email_web_link ? (
-                                      <Button
-                                        asChild
-                                        size="sm"
-                                        variant="default"
-                                        className="h-8 gap-1.5"
-                                      >
-                                        <a
-                                          href={t.source_email_web_link}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          title="Öffnet die Original-Mail in Outlook"
-                                        >
-                                          <Reply size={13} />
-                                          Antworten
-                                        </a>
-                                      </Button>
-                                    ) : mailto ? (
+                                    {(() => {
+                                      const desktopLink = buildOutlookDesktopLink(t);
+                                      return desktopLink ? (
+                                        <>
+                                          <Button
+                                            asChild
+                                            size="sm"
+                                            variant="default"
+                                            className="h-8 gap-1.5"
+                                          >
+                                            <a
+                                              href={desktopLink}
+                                              onClick={(e) => e.stopPropagation()}
+                                              title="Öffnet die Original-Mail im Outlook Desktop"
+                                            >
+                                              <Reply size={13} />
+                                              Antworten
+                                            </a>
+                                          </Button>
+                                          {t.source_email_web_link && (
+                                            <a
+                                              href={t.source_email_web_link}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="text-[11px] text-muted-foreground hover:text-foreground underline self-center"
+                                              title="Fallback: Outlook Web"
+                                            >
+                                              Web öffnen ↗
+                                            </a>
+                                          )}
+                                        </>
+                                      ) : null;
+                                    })()}
+                                    {!buildOutlookDesktopLink(t) && mailto ? (
                                       <Button
                                         asChild
                                         size="sm"
