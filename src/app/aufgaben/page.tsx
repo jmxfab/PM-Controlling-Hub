@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
 import { loadHeizlastProjects } from "@/lib/supabase/hero-heizlast-queries";
-import { loadMailTasksPage, loadMailTaskCounts } from "@/lib/supabase/mail-tasks-queries";
+import { loadMailTaskCounts } from "@/lib/supabase/mail-tasks-queries";
 import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 
 export const metadata: Metadata = {
   title: "Aufgaben | JMX",
-  description: "E-Mail-Aufgaben (n8n + Claude) und Heizlast-Status.",
+  description: "E-Mail-Aufgaben (n8n + Claude), Hero-Kommentare und Heizlast.",
 };
 
 export const revalidate = 60;
 
 export default async function AufgabenPage() {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
-  const [heizlastProjects, initialAufgaben, counts] = await Promise.all([
+  const [heizlastProjects, counts] = await Promise.all([
     loadHeizlastProjects().catch(() => []),
-    loadMailTasksPage("aufgaben", 0, 50, { status: "open" }).catch(() => ({ entries: [], total: 0 })),
     loadMailTaskCounts().catch(() => ({ kritisch: 0, aufgaben: 0, infos: 0, inbox: 0 })),
   ]);
 
@@ -23,13 +22,13 @@ export default async function AufgabenPage() {
       <div>
         <h1 className="text-xl font-semibold">Aufgaben</h1>
         <p className="text-sm text-muted-foreground">
-          E-Mail-Aufgaben (n8n + Claude) und Heizlast-Status.
+          E-Mail-Aufgaben (n8n + Claude), Hero-Kommentare und Heizlast.
         </p>
       </div>
       <AufgabenView
         heizlastProjects={heizlastProjects}
         heroProjectLinkTemplate={heroProjectLinkTemplate}
-        initialAufgaben={initialAufgaben}
+        initialAufgaben={{ entries: [], total: 0 }}
         counts={counts}
       />
     </div>
