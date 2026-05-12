@@ -135,6 +135,69 @@ function formatRelative(iso: string): string {
   });
 }
 
+type DateBucket = "heute" | "gestern" | "woche" | "aelter";
+
+function bucketOf(iso: string): DateBucket {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - 7);
+  if (d >= startOfToday) return "heute";
+  if (d >= startOfYesterday) return "gestern";
+  if (d >= startOfWeek) return "woche";
+  return "aelter";
+}
+
+const BUCKET_LABEL: Record<DateBucket, string> = {
+  heute: "Heute",
+  gestern: "Gestern",
+  woche: "Diese Woche",
+  aelter: "Älter",
+};
+
+function groupByDate(tasks: MailTask[]): { bucket: DateBucket; tasks: MailTask[] }[] {
+  const buckets: Record<DateBucket, MailTask[]> = {
+    heute: [],
+    gestern: [],
+    woche: [],
+    aelter: [],
+  };
+  for (const t of tasks) buckets[bucketOf(t.created_at)].push(t);
+  return (["heute", "gestern", "woche", "aelter"] as DateBucket[])
+    .filter((b) => buckets[b].length > 0)
+    .map((b) => ({ bucket: b, tasks: buckets[b] }));
+}
+
+/** Hash-basierte Farbe fuer Sender-Avatar */
+const AVATAR_PALETTE = [
+  "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+  "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+  "bg-lime-100 text-lime-700 dark:bg-lime-950/40 dark:text-lime-300",
+];
+
+function avatarFor(key: string): { initials: string; cls: string } {
+  const clean = key.trim();
+  if (!clean) return { initials: "—", cls: AVATAR_PALETTE[0] };
+  // Initials: erste 2 Buchstaben des local-parts der mail oder von Name-Parts
+  const local = clean.split("@")[0];
+  const parts = local.split(/[.\s_-]/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : local.slice(0, 2).toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) hash = (hash * 31 + clean.charCodeAt(i)) >>> 0;
+  return { initials, cls: AVATAR_PALETTE[hash % AVATAR_PALETTE.length] };
+}
+
 function formatDue(iso: string): { text: string; overdue: boolean } {
   const d = new Date(iso);
   const now = Date.now();
@@ -454,21 +517,36 @@ function MailTab({
           }
         />
       ) : (
-        <div className="space-y-2">
-          {data.entries.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              expanded={expanded === t.id}
-              busy={busyTaskId === t.id}
-              onToggle={() =>
-                setExpanded((cur) => (cur === t.id ? null : t.id))
-              }
-              onMarkDone={() => markDone(t)}
-              onSnooze={(ms) => snoozeBy(t, ms)}
-              buildMailto={buildMailto}
-              buildOutlookDesktopLink={buildOutlookDesktopLink}
-            />
+        <div className="space-y-6">
+          {groupByDate(data.entries).map((group) => (
+            <section key={group.bucket} className="space-y-2">
+              <div className="flex items-baseline gap-2 px-1">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {BUCKET_LABEL[group.bucket]}
+                </h2>
+                <span className="text-[11px] tabular-nums text-muted-foreground/60">
+                  {group.tasks.length}
+                </span>
+                <div className="flex-1 h-px bg-border/60 ml-2" />
+              </div>
+              <div className="space-y-2">
+                {group.tasks.map((t) => (
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    expanded={expanded === t.id}
+                    busy={busyTaskId === t.id}
+                    onToggle={() =>
+                      setExpanded((cur) => (cur === t.id ? null : t.id))
+                    }
+                    onMarkDone={() => markDone(t)}
+                    onSnooze={(ms) => snoozeBy(t, ms)}
+                    buildMailto={buildMailto}
+                    buildOutlookDesktopLink={buildOutlookDesktopLink}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
           <Pagination
             from={from}
@@ -645,11 +723,21 @@ function TaskCard({
     [t, buildOutlookDesktopLink],
   );
 
+  const avatarKey =
+    t.source === "hero"
+      ? t.hero_project_number || t.hero_project_name || "Hero"
+      : t.sender || "manuell";
+  const avatar = avatarFor(avatarKey);
+
   return (
     <div
-      className={`group relative overflow-hidden rounded-lg border bg-card transition-all ${
+      className={`group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 ${
         isDone ? "opacity-60" : ""
-      } ${expanded ? "shadow-sm ring-1 ring-foreground/5" : "hover:bg-accent/30"}`}
+      } ${
+        expanded
+          ? "shadow-lg ring-1 ring-foreground/10 scale-[1.005]"
+          : "hover:shadow-md hover:-translate-y-0.5 hover:border-foreground/10"
+      }`}
     >
       {/* Priority left bar */}
       {prio && (
@@ -662,13 +750,23 @@ function TaskCard({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full text-left pl-4 pr-3 py-3 flex items-start gap-3"
+        className="w-full text-left pl-5 pr-4 py-4 flex items-start gap-3.5"
       >
+        {/* Avatar */}
+        <div
+          className={`shrink-0 w-9 h-9 rounded-full grid place-items-center text-[11px] font-semibold ${avatar.cls} ${
+            t.source === "hero" ? "ring-2 ring-purple-200/60 dark:ring-purple-900/40" : ""
+          }`}
+          title={avatarKey}
+        >
+          {t.source === "hero" ? <MessageSquare size={14} /> : avatar.initials}
+        </div>
+
         <div className="flex-1 min-w-0 space-y-1.5">
           {/* Header line: title + datum */}
           <div className="flex items-baseline justify-between gap-3">
             <h3
-              className={`text-sm font-medium leading-tight truncate ${
+              className={`text-[15px] font-semibold leading-snug truncate ${
                 isDone ? "line-through" : ""
               }`}
             >
@@ -679,20 +777,23 @@ function TaskCard({
             </span>
           </div>
 
+          {/* Sender / project line */}
+          <SourceInfo task={t} />
+
           {/* Body preview */}
           {t.body && !expanded && (
-            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed pt-0.5">
               {t.body}
             </p>
           )}
 
-          {/* Meta row: sender + prio + due */}
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <SourceInfo task={t} />
+          {/* Meta row: prio + due + status */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
             {prio && (
               <span
                 className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ${prio.badge}`}
               >
+                <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${prio.dot}`} />
                 {prio.label}
               </span>
             )}
@@ -715,35 +816,46 @@ function TaskCard({
                 <Check size={10} /> erledigt
               </span>
             )}
+            {t.source === "hero" && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 ring-1 ring-purple-200 dark:bg-purple-950/40 dark:text-purple-300">
+                Hero
+              </span>
+            )}
           </div>
         </div>
 
         <ChevronDown
-          size={16}
-          className={`text-muted-foreground/60 mt-0.5 shrink-0 transition-transform ${
+          size={18}
+          className={`text-muted-foreground/50 mt-1 shrink-0 transition-transform duration-200 ${
             expanded ? "rotate-0" : "-rotate-90"
           }`}
         />
       </button>
 
-      {expanded && (
-        <div className="border-t bg-muted/20 px-4 py-4 space-y-3">
-          {t.body && (
-            <div className="whitespace-pre-wrap text-sm leading-relaxed max-w-3xl text-foreground/90">
-              {t.body}
-            </div>
-          )}
-          <ActionButtons
-            task={t}
-            isDone={isDone}
-            busy={busy}
-            mailto={mailto}
-            desktopLink={desktopLink}
-            onMarkDone={onMarkDone}
-            onSnooze={onSnooze}
-          />
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-5 py-4 space-y-4">
+            {t.body && (
+              <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed max-w-3xl text-foreground/90">
+                {t.body}
+              </div>
+            )}
+            <ActionButtons
+              task={t}
+              isDone={isDone}
+              busy={busy}
+              mailto={mailto}
+              desktopLink={desktopLink}
+              onMarkDone={onMarkDone}
+              onSnooze={onSnooze}
+            />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
