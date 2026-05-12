@@ -124,9 +124,9 @@ async function DashboardMainSection({
   const periodDelta = pipeline?.timeframeDelta ?? null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {statusNotice ? (
-        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-xl border bg-muted/40 backdrop-blur-sm px-4 py-3 text-sm text-muted-foreground shadow-sm">
           {statusNotice}
         </div>
       ) : null}
@@ -137,12 +137,12 @@ async function DashboardMainSection({
             windowLabel={jumaxWindow.label}
             heroProjectLinkTemplate={heroProjectLinkTemplate}
           />
-          <div className="relative my-2">
+          <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
+              <span className="w-full border-t border-border/60" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase tracking-wider">
-              <span className="bg-background px-2 text-muted-foreground">
+            <div className="relative flex justify-center">
+              <span className="bg-background px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 Klassische Übersicht
               </span>
             </div>

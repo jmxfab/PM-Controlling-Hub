@@ -88,13 +88,13 @@ export function DashboardCharts({
 
   if (historicData.length === 0) {
     return (
-      <Card className="col-span-4 mt-6 min-w-0">
-        <CardHeader>
-          <CardTitle>Zeitraumverlauf: {departmentName}</CardTitle>
-          <CardDescription>{historicDescription}</CardDescription>
+      <Card className="col-span-4 mt-6 min-w-0 rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Zeitraumverlauf · {departmentName}</CardTitle>
+          <CardDescription className="text-xs">{historicDescription}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-[220px] items-center justify-center rounded-lg border border-dashed bg-muted/20 text-sm text-muted-foreground">
             {emptyMessage}
           </div>
         </CardContent>
@@ -103,10 +103,10 @@ export function DashboardCharts({
   }
 
   return (
-    <Card className="col-span-4 mt-6 min-w-0">
-      <CardHeader>
-        <CardTitle>Zeitraumverlauf: {departmentName}</CardTitle>
-        <CardDescription>{historicDescription}</CardDescription>
+    <Card className="col-span-4 mt-6 min-w-0 rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Zeitraumverlauf · {departmentName}</CardTitle>
+        <CardDescription className="text-xs">{historicDescription}</CardDescription>
       </CardHeader>
       <CardContent className="min-w-0 pl-2">
         <div
