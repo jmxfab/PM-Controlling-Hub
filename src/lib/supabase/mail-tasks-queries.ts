@@ -17,6 +17,8 @@ export interface MailTask {
   priority: MailTaskPriority | null;
   due_date: string | null;
   created_at: string;
+  /** Microsoft Graph Email-ID — null bei alten Tasks vor dem Reply-Feature */
+  source_email_id: string | null;
   /** Extracted from description prefix "Von: ..." */
   sender: string | null;
   /** description without "Von: ..." prefix */
@@ -45,7 +47,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id", { count: "exact" })
     .eq("is_automated", true)
     .order("created_at", { ascending: false });
 
@@ -66,6 +68,7 @@ export async function loadMailTasksPage(
       priority: row.priority as MailTaskPriority | null,
       due_date: row.due_date,
       created_at: row.created_at,
+      source_email_id: row.source_email_id ?? null,
       sender,
       body,
     };
