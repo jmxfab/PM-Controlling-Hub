@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock, AlertTriangle, MessageSquare, FolderOpen } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type { MailTask, MailTasksPage, MailTaskCounts, MailTabFilter } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
@@ -318,7 +318,16 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: MailTabF
                           )}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {t.sender ? (
+                          {t.source === "hero" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs">
+                              <MessageSquare size={12} className="text-purple-500 shrink-0" />
+                              <span className="truncate" title={t.hero_project_name ?? "Hero"}>
+                                {t.hero_project_number
+                                  ? `${t.hero_project_number}${t.hero_project_name ? " · " + t.hero_project_name : ""}`
+                                  : "Hero"}
+                              </span>
+                            </span>
+                          ) : t.sender ? (
                             <span className="inline-flex items-center gap-1.5 text-xs">
                               <Mail size={12} className="text-blue-500 shrink-0" />
                               <span className="truncate">{t.sender}</span>
@@ -356,81 +365,108 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: MailTabF
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-2 pt-1">
-                                {t.source_email_web_link ? (
-                                  <Button
-                                    asChild
-                                    size="sm"
-                                    variant="default"
-                                    className="h-8 gap-1.5"
-                                  >
-                                    <a
-                                      href={t.source_email_web_link}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title="Öffnet die Original-Mail in Outlook"
+                                {t.source === "hero" ? (
+                                  <>
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      variant="default"
+                                      className="h-8 gap-1.5"
                                     >
-                                      <Reply size={13} />
-                                      Antworten
-                                    </a>
-                                  </Button>
-                                ) : mailto ? (
-                                  <Button
-                                    asChild
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 gap-1.5"
-                                  >
-                                    <a
-                                      href={mailto}
-                                      onClick={(e) => e.stopPropagation()}
-                                      title="Alte Task ohne Outlook-Link — öffnet neuen Mail-Entwurf"
+                                      <a
+                                        href="https://app.hero-software.de"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Öffnet Hero ERP"
+                                      >
+                                        <FolderOpen size={13} />
+                                        In Hero öffnen
+                                      </a>
+                                    </Button>
+                                    <span className="text-xs text-muted-foreground self-center ml-2">
+                                      Read-only — Statusänderung in Hero
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {t.source_email_web_link ? (
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="default"
+                                        className="h-8 gap-1.5"
+                                      >
+                                        <a
+                                          href={t.source_email_web_link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          title="Öffnet die Original-Mail in Outlook"
+                                        >
+                                          <Reply size={13} />
+                                          Antworten
+                                        </a>
+                                      </Button>
+                                    ) : mailto ? (
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 gap-1.5"
+                                      >
+                                        <a
+                                          href={mailto}
+                                          onClick={(e) => e.stopPropagation()}
+                                          title="Alte Task ohne Outlook-Link — öffnet neuen Mail-Entwurf"
+                                        >
+                                          <Reply size={13} />
+                                          Antworten (mailto)
+                                        </a>
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      size="sm"
+                                      variant={isDone ? "outline" : "default"}
+                                      className="h-8 gap-1.5"
+                                      disabled={isBusy}
+                                      onClick={(e) => { e.stopPropagation(); markDone(t); }}
                                     >
-                                      <Reply size={13} />
-                                      Antworten (mailto)
-                                    </a>
-                                  </Button>
-                                ) : null}
-                                <Button
-                                  size="sm"
-                                  variant={isDone ? "outline" : "default"}
-                                  className="h-8 gap-1.5"
-                                  disabled={isBusy}
-                                  onClick={(e) => { e.stopPropagation(); markDone(t); }}
-                                >
-                                  <Check size={13} />
-                                  {isDone ? "Wieder offen" : "Erledigt"}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 gap-1.5"
-                                  disabled={isBusy || isDone}
-                                  onClick={(e) => { e.stopPropagation(); snoozeBy(t, 3 * 60 * 60 * 1000); }}
-                                >
-                                  <Clock3 size={13} />
-                                  +3 Std
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 gap-1.5"
-                                  disabled={isBusy || isDone}
-                                  onClick={(e) => { e.stopPropagation(); snoozeBy(t, 24 * 60 * 60 * 1000); }}
-                                >
-                                  <CalendarDays size={13} />
-                                  Morgen
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 gap-1.5"
-                                  disabled={isBusy || isDone}
-                                  onClick={(e) => { e.stopPropagation(); snoozeBy(t, 7 * 24 * 60 * 60 * 1000); }}
-                                >
-                                  <CalendarClock size={13} />
-                                  +1 Woche
-                                </Button>
+                                      <Check size={13} />
+                                      {isDone ? "Wieder offen" : "Erledigt"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 gap-1.5"
+                                      disabled={isBusy || isDone}
+                                      onClick={(e) => { e.stopPropagation(); snoozeBy(t, 3 * 60 * 60 * 1000); }}
+                                    >
+                                      <Clock3 size={13} />
+                                      +3 Std
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 gap-1.5"
+                                      disabled={isBusy || isDone}
+                                      onClick={(e) => { e.stopPropagation(); snoozeBy(t, 24 * 60 * 60 * 1000); }}
+                                    >
+                                      <CalendarDays size={13} />
+                                      Morgen
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 gap-1.5"
+                                      disabled={isBusy || isDone}
+                                      onClick={(e) => { e.stopPropagation(); snoozeBy(t, 7 * 24 * 60 * 60 * 1000); }}
+                                    >
+                                      <CalendarClock size={13} />
+                                      +1 Woche
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </TableCell>

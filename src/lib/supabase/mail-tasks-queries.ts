@@ -9,9 +9,11 @@ function supabaseAdmin() {
 export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
 export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox";
+export type ItemSource = "mail" | "hero";
 
 export interface MailTask {
   id: string;
+  source: ItemSource;
   title: string;
   description: string | null;
   status: MailTaskStatus;
@@ -28,6 +30,11 @@ export interface MailTask {
   sender: string | null;
   /** description without "Von: ..." prefix */
   body: string | null;
+  /** Hero-spezifisch: Projekt-Nummer falls Hero-Notification an einem Projekt haengt */
+  hero_project_number?: string | null;
+  hero_project_name?: string | null;
+  /** Hero-spezifisch: ungelesen-Flag */
+  hero_is_read?: boolean | null;
 }
 
 export interface MailTasksPage {
@@ -60,7 +67,7 @@ export interface MailTaskCounts {
 
 export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   const supabase = supabaseAdmin();
-  async function count(filter: string[]): Promise<number> {
+  async function countMail(filter: string[]): Promise<number> {
     const { count, error } = await supabase
       .from("tasks")
       .select("id", { count: "exact", head: true })
@@ -70,13 +77,22 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     if (error) return 0;
     return count ?? 0;
   }
-  const [kritisch, aufgaben, infos, inbox] = await Promise.all([
-    count(CATEGORIES_PER_TAB.kritisch),
-    count(CATEGORIES_PER_TAB.aufgaben),
-    count(CATEGORIES_PER_TAB.infos),
-    count(CATEGORIES_PER_TAB.inbox),
+  // Hero-Comments mit Domenic-Bezug -> Aufgaben, Rest -> Infos
+  const { countHeroComments } = await import("./hero-comments-queries");
+  const [kritisch, aufgabenMail, infosMail, inbox, aufgabenHero, infosHero] = await Promise.all([
+    countMail(CATEGORIES_PER_TAB.kritisch),
+    countMail(CATEGORIES_PER_TAB.aufgaben),
+    countMail(CATEGORIES_PER_TAB.infos),
+    countMail(CATEGORIES_PER_TAB.inbox),
+    countHeroComments("aufgaben", true).catch(() => 0),
+    countHeroComments("infos", true).catch(() => 0),
   ]);
-  return { kritisch, aufgaben, infos, inbox };
+  return {
+    kritisch,
+    aufgaben: aufgabenMail + aufgabenHero,
+    infos: infosMail + infosHero,
+    inbox,
+  };
 }
 
 export interface MailTaskFilters {
@@ -117,6 +133,7 @@ export async function loadMailTasksPage(
     const { sender, body } = parseSenderAndBody(row.description);
     return {
       id: row.id,
+      source: "mail",
       title: row.title,
       description: row.description,
       status: row.status as MailTaskStatus,
@@ -132,4 +149,34 @@ export async function loadMailTasksPage(
   });
 
   return { entries, total: count ?? 0 };
+}
+
+/**
+ * Konvertiert Hero-Notifications in das MailTask-Schema fuer das gemeinsame UI.
+ * Hero-Notifications werden als pseudo-Tasks dargestellt (read-only),
+ * mit source='hero'. Mail-spezifische Felder sind leer.
+ */
+export function heroToMailItem(
+  hero: import("./hero-comments-queries").HeroCommentItem,
+  tab: "aufgaben" | "infos",
+): MailTask {
+  const category: MailCategory = tab === "aufgaben" ? "aufgabe" : "info";
+  return {
+    id: `hero-${hero.id}`,
+    source: "hero",
+    title: hero.title ?? "(Kein Titel)",
+    description: hero.body,
+    status: hero.is_read ? "done" : "open",
+    priority: null,
+    due_date: null,
+    created_at: hero.notification_date ?? new Date().toISOString(),
+    source_email_id: null,
+    source_email_web_link: null,
+    mail_category: category,
+    sender: null,
+    body: hero.body,
+    hero_project_number: hero.project_number,
+    hero_project_name: hero.project_name,
+    hero_is_read: hero.is_read,
+  };
 }
