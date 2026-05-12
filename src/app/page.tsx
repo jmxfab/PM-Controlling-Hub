@@ -47,10 +47,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   ) as Record<Department, ReactNode>;
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
+    <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen">
       <Suspense fallback={null}>
         <SyncInProgressBanner />
       </Suspense>
+
+      <header className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Controlling
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Projektcontrolling für PV, PV Gewerbe, Wärmepumpen, Klima und Gebäudetechnik
+        </p>
+      </header>
 
       <DashboardShell
         department={department}

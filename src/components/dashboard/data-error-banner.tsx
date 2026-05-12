@@ -34,26 +34,31 @@ export function DataErrorBanner({
     <div
       role="alert"
       className={cn(
-        "rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm",
+        "relative overflow-hidden rounded-xl border border-destructive/30 bg-gradient-to-br from-destructive/10 via-destructive/5 to-transparent px-4 py-3.5 text-sm shadow-sm",
         className
       )}
     >
       <div className="flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0 space-y-1">
-          <p className="font-semibold text-destructive">
+        <div className="shrink-0 grid place-items-center w-9 h-9 rounded-lg bg-destructive/15 ring-1 ring-destructive/20">
+          <AlertTriangle className="h-4.5 w-4.5 text-destructive" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p className="font-semibold text-destructive leading-tight">
             {errors.length === 1
               ? "Eine Datenquelle konnte nicht geladen werden"
               : `${errors.length} Datenquellen konnten nicht geladen werden`}
             {" — die Zahlen unten sind unvollständig."}
           </p>
-          <ul className="text-xs text-destructive/90 space-y-0.5">
+          <ul className="text-xs text-destructive/90 space-y-1">
             {errors.map((e, i) => (
-              <li key={i}>
-                <span className="font-medium">{e.source}</span>
-                {e.detail ? (
-                  <span className="text-destructive/70"> — {e.detail}</span>
-                ) : null}
+              <li key={i} className="flex items-start gap-1.5">
+                <span className="inline-block w-1 h-1 rounded-full bg-destructive/50 mt-1.5 shrink-0" />
+                <span>
+                  <span className="font-medium">{e.source}</span>
+                  {e.detail ? (
+                    <span className="text-destructive/70"> — {e.detail}</span>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
