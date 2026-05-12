@@ -92,7 +92,6 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
-  const [replyTask, setReplyTask] = useState<MailTask | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -182,25 +181,6 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
   function buildMailto(task: MailTask): string | null {
     if (!task.sender) return null;
     return `mailto:${task.sender}?subject=${encodeURIComponent("Re: " + task.title)}`;
-  }
-
-  function openReply(task: MailTask) {
-    setReplyTask(task);
-  }
-
-  async function sendReply(task: MailTask, message: string): Promise<{ ok: boolean; error?: string }> {
-    try {
-      const res = await window.fetch(`/api/mail-tasks/${task.id}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: json.error ?? `Fehler ${res.status}` };
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Netzwerk-Fehler" };
-    }
   }
 
   return (
@@ -330,15 +310,23 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
                                 </div>
                               )}
                               <div className="flex flex-wrap gap-2 pt-1">
-                                {t.source_email_id ? (
+                                {t.source_email_web_link ? (
                                   <Button
+                                    asChild
                                     size="sm"
                                     variant="default"
                                     className="h-8 gap-1.5"
-                                    onClick={(e) => { e.stopPropagation(); openReply(t); }}
                                   >
-                                    <Reply size={13} />
-                                    Antworten
+                                    <a
+                                      href={t.source_email_web_link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Öffnet die Original-Mail in Outlook"
+                                    >
+                                      <Reply size={13} />
+                                      Antworten
+                                    </a>
                                   </Button>
                                 ) : mailto ? (
                                   <Button
@@ -350,10 +338,10 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
                                     <a
                                       href={mailto}
                                       onClick={(e) => e.stopPropagation()}
-                                      title="Diese Task wurde vor dem Reply-Feature erstellt — öffnet lokalen Mail-Client"
+                                      title="Alte Task ohne Outlook-Link — öffnet neuen Mail-Entwurf"
                                     >
                                       <Reply size={13} />
-                                      Antworten (Outlook)
+                                      Antworten (mailto)
                                     </a>
                                   </Button>
                                 ) : null}
@@ -423,84 +411,6 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
         </div>
       )}
 
-      {replyTask && (
-        <ReplyModal
-          task={replyTask}
-          onClose={() => setReplyTask(null)}
-          onSent={() => {
-            setReplyTask(null);
-            // optimistic: nach Antwort als 'in_progress' markieren
-            patchTask(replyTask.id, { status: "in_progress" });
-          }}
-          onSend={(msg) => sendReply(replyTask, msg)}
-        />
-      )}
-    </div>
-  );
-}
-
-function ReplyModal({
-  task,
-  onClose,
-  onSent,
-  onSend,
-}: {
-  task: MailTask;
-  onClose: () => void;
-  onSent: () => void;
-  onSend: (message: string) => Promise<{ ok: boolean; error?: string }>;
-}) {
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function handleSend() {
-    if (!message.trim()) return;
-    setSending(true);
-    setErr(null);
-    const res = await onSend(message.trim());
-    setSending(false);
-    if (res.ok) {
-      onSent();
-    } else {
-      setErr(res.error ?? "Senden fehlgeschlagen");
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-card border rounded-lg shadow-lg w-full max-w-2xl p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="space-y-1">
-          <p className="text-xs text-muted-foreground">An: {task.sender ?? "(unbekannt)"}</p>
-          <p className="text-sm font-medium">Re: {task.title}</p>
-        </div>
-        <textarea
-          className="w-full h-40 rounded-md border bg-background p-3 text-sm font-sans resize-y focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Deine Antwort..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          disabled={sending}
-          autoFocus
-        />
-        {err && (
-          <div className="text-xs text-red-600 dark:text-red-400 font-mono break-all">{err}</div>
-        )}
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={sending}>
-            Abbrechen
-          </Button>
-          <Button size="sm" onClick={handleSend} disabled={sending || !message.trim()} className="gap-1.5">
-            <Reply size={13} />
-            {sending ? "Sende..." : "Senden"}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
