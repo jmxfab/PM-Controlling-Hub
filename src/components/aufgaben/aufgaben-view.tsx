@@ -27,10 +27,10 @@ const PRIORITY_CONFIG: Record<NonNullable<MailTask["priority"]>, { label: string
 
 export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initialMailTasks }: Props) {
   return (
-    <Tabs defaultValue="aufgaben">
+    <Tabs defaultValue="inbox">
       <TabsList>
-        <TabsTrigger value="aufgaben">
-          Aufgaben
+        <TabsTrigger value="inbox">
+          Inbox
           {initialMailTasks.total > 0 ? (
             <span className="ml-1.5 text-[10px] tabular-nums text-muted-foreground">
               ({initialMailTasks.total})
@@ -46,7 +46,7 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
           ) : null}
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="aufgaben" className="mt-4">
+      <TabsContent value="inbox" className="mt-4">
         <MailTab initial={initialMailTasks} />
       </TabsContent>
       <TabsContent value="heizlast" className="mt-4">
