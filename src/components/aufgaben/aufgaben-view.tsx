@@ -5,14 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Mail, ChevronDown, Reply, Check, Clock3, CalendarDays, CalendarClock, AlertTriangle } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
-import type { MailTask, MailTasksPage, MailTaskCounts } from "@/lib/supabase/mail-tasks-queries";
+import type { MailTask, MailTasksPage, MailTaskCounts, MailTabFilter } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 
 const PAGE_SIZE = 50;
 
-type FilterKey = "aufgaben" | "infos" | "inbox";
+type StatusFilter = "all" | "open" | "done";
+type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
 
 interface Props {
   heizlastProjects: HeizlastProject[];
@@ -29,9 +30,19 @@ const PRIORITY_CONFIG: Record<NonNullable<MailTask["priority"]>, { label: string
 };
 
 export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initialAufgaben, counts }: Props) {
+  const defaultTab: MailTabFilter = counts.kritisch > 0 ? "kritisch" : "aufgaben";
   return (
-    <Tabs defaultValue="aufgaben">
+    <Tabs defaultValue={defaultTab}>
       <TabsList>
+        <TabsTrigger value="kritisch" className={counts.kritisch > 0 ? "data-[state=active]:bg-red-600 data-[state=active]:text-white text-red-600 dark:text-red-400 font-semibold" : ""}>
+          {counts.kritisch > 0 && <AlertTriangle size={13} className="mr-1 inline animate-pulse" />}
+          Kritisch
+          {counts.kritisch > 0 ? (
+            <span className="ml-1.5 text-[10px] tabular-nums font-bold">
+              ({counts.kritisch})
+            </span>
+          ) : null}
+        </TabsTrigger>
         <TabsTrigger value="aufgaben">
           Aufgaben
           {counts.aufgaben > 0 ? (
@@ -65,6 +76,9 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
           ) : null}
         </TabsTrigger>
       </TabsList>
+      <TabsContent value="kritisch" className="mt-4">
+        <MailTab initial={{ entries: [], total: 0 }} filter="kritisch" />
+      </TabsContent>
       <TabsContent value="aufgaben" className="mt-4">
         <MailTab initial={initialAufgaben} filter="aufgaben" />
       </TabsContent>
@@ -84,8 +98,10 @@ export function AufgabenView({ heizlastProjects, heroProjectLinkTemplate, initia
   );
 }
 
-function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKey }) {
+function MailTab({ initial, filter }: { initial: MailTasksPage; filter: MailTabFilter }) {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(filter === "infos" ? "all" : "open");
+  const [prioFilter, setPrioFilter] = useState<PrioFilter>("all");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<MailTasksPage>(initial);
   const [loading, setLoading] = useState(false);
@@ -95,12 +111,14 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
   const [hasFetched, setHasFetched] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchData = useCallback(async (q: string, p: number) => {
+  const fetchData = useCallback(async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: String(p), filter });
       if (q) params.set("search", q);
+      if (st !== "all") params.set("status", st);
+      if (pr !== "all") params.set("priority", pr);
       const res = await window.fetch(`/api/mail-tasks?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -120,21 +138,21 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
   // Lazy-load when tab gets shown for the first time (initial.entries is empty for non-default tabs)
   useEffect(() => {
     if (!hasFetched && initial.entries.length === 0 && initial.total === 0) {
-      fetchData("", 0);
+      fetchData("", 0, statusFilter, prioFilter);
     }
-  }, [hasFetched, initial.entries.length, initial.total, fetchData]);
+  }, [hasFetched, initial.entries.length, initial.total, fetchData, statusFilter, prioFilter]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { setPage(0); fetchData(search, 0); }, 250);
+    debounceRef.current = setTimeout(() => { setPage(0); fetchData(search, 0, statusFilter, prioFilter); }, 250);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search, fetchData]);
+  }, [search, statusFilter, prioFilter, fetchData]);
 
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const from = data.total === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min((page + 1) * PAGE_SIZE, data.total);
 
-  function changePage(p: number) { setPage(p); fetchData(search, p); }
+  function changePage(p: number) { setPage(p); fetchData(search, p, statusFilter, prioFilter); }
 
   async function patchTask(taskId: string, update: { status?: MailTask["status"]; due_date?: string | null }) {
     setBusyTaskId(taskId);
@@ -192,10 +210,38 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
           onChange={(e) => setSearch(e.target.value)}
           className="w-52 h-8 text-sm"
         />
-        {search && (
-          <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground"
-            onClick={() => setSearch("")}>
-            <X size={13} /> Zurücksetzen
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground mr-1">Status:</span>
+          {(["all", "open", "done"] as StatusFilter[]).map((v) => (
+            <Button
+              key={v}
+              variant={statusFilter === v ? "default" : "outline"}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setStatusFilter(v)}
+            >
+              {v === "all" ? "Alle" : v === "open" ? "Offen" : "Erledigt"}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-muted-foreground mr-1">Prio:</span>
+          {(["all", "urgent", "high", "medium", "low"] as PrioFilter[]).map((v) => (
+            <Button
+              key={v}
+              variant={prioFilter === v ? "default" : "outline"}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setPrioFilter(v)}
+            >
+              {v === "all" ? "Alle" : v === "urgent" ? "Dringend" : v === "high" ? "Hoch" : v === "medium" ? "Mittel" : "Niedrig"}
+            </Button>
+          ))}
+        </div>
+        {(search || statusFilter !== "open" || prioFilter !== "all") && (
+          <Button variant="ghost" size="sm" className="h-7 gap-1 text-muted-foreground"
+            onClick={() => { setSearch(""); setStatusFilter("open"); setPrioFilter("all"); }}>
+            <X size={13} /> Reset
           </Button>
         )}
         {loading && <span className="text-xs text-muted-foreground animate-pulse">Lädt…</span>}
@@ -206,7 +252,7 @@ function MailTab({ initial, filter }: { initial: MailTasksPage; filter: FilterKe
           <p className="font-medium text-red-700 dark:text-red-400">Fehler beim Laden</p>
           <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-1 font-mono break-all">{error}</p>
           <Button variant="outline" size="sm" className="mt-3 h-7"
-            onClick={() => fetchData(search, page)}>
+            onClick={() => fetchData(search, page, statusFilter, prioFilter)}>
             Erneut versuchen
           </Button>
         </div>

@@ -8,7 +8,7 @@ function supabaseAdmin() {
 
 export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
-export type MailCategory = "aufgabe" | "dringend" | "info" | "inbox";
+export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox";
 
 export interface MailTask {
   id: string;
@@ -42,7 +42,17 @@ function parseSenderAndBody(description: string | null): { sender: string | null
   return { sender: null, body: description };
 }
 
+export type MailTabFilter = "kritisch" | "aufgaben" | "infos" | "inbox";
+
+const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
+  kritisch: ["kritisch"],
+  aufgaben: ["aufgabe", "dringend"],
+  infos: ["info"],
+  inbox: ["inbox"],
+};
+
 export interface MailTaskCounts {
+  kritisch: number;
   aufgaben: number;
   infos: number;
   inbox: number;
@@ -60,25 +70,31 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     if (error) return 0;
     return count ?? 0;
   }
-  const [aufgaben, infos, inbox] = await Promise.all([
-    count(["aufgabe", "dringend"]),
-    count(["info"]),
-    count(["inbox"]),
+  const [kritisch, aufgaben, infos, inbox] = await Promise.all([
+    count(CATEGORIES_PER_TAB.kritisch),
+    count(CATEGORIES_PER_TAB.aufgaben),
+    count(CATEGORIES_PER_TAB.infos),
+    count(CATEGORIES_PER_TAB.inbox),
   ]);
-  return { aufgaben, infos, inbox };
+  return { kritisch, aufgaben, infos, inbox };
+}
+
+export interface MailTaskFilters {
+  search?: string;
+  status?: "all" | "open" | "done";
+  priority?: "all" | "urgent" | "high" | "medium" | "low";
 }
 
 export async function loadMailTasksPage(
-  filter: "aufgaben" | "infos" | "inbox",
+  filter: MailTabFilter,
   page = 0,
   pageSize = 50,
-  search = "",
+  filters: MailTaskFilters = {},
 ): Promise<MailTasksPage> {
   const supabase = supabaseAdmin();
   const offset = page * pageSize;
 
-  const categories =
-    filter === "aufgaben" ? ["aufgabe", "dringend"] : filter === "infos" ? ["info"] : ["inbox"];
+  const categories = CATEGORIES_PER_TAB[filter];
 
   let query = supabase
     .from("tasks")
@@ -87,8 +103,11 @@ export async function loadMailTasksPage(
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
 
-  if (search) {
-    query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+  if (filters.status === "open") query = query.neq("status", "done");
+  if (filters.status === "done") query = query.eq("status", "done");
+  if (filters.priority && filters.priority !== "all") query = query.eq("priority", filters.priority);
+  if (filters.search) {
+    query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
   }
 
   const { data, count, error } = await query.range(offset, offset + pageSize - 1);
