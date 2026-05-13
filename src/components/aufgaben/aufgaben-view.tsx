@@ -248,6 +248,70 @@ export function AufgabenView({
     }
   }, [defaultTab, initialAufgaben]);
 
+  // BACKGROUND-PREFETCH: Nach idle alle anderen Tabs vorladen.
+  // → User klickt nach 1-2 Sek auf irgendeinen Tab = instant aus Cache.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tabsToPrefetch: Array<{ filter: MailTabFilter; status: StatusFilter }> = [
+      { filter: "kritisch", status: "open" },
+      { filter: "aufgaben", status: "open" },
+      { filter: "infos", status: "open" },
+      { filter: "rechnungen", status: "open" },
+    ];
+    if (counts.inbox > 0) {
+      tabsToPrefetch.push({ filter: "inbox", status: "open" });
+    }
+
+    async function prefetchOne(filter: MailTabFilter, status: StatusFilter) {
+      const k = cacheKey(filter, "", status, "all");
+      if (RESPONSE_CACHE.has(k)) return; // schon im Cache
+      try {
+        const params = new URLSearchParams({
+          page: "0",
+          filter,
+          page_size: String(PAGE_SIZE),
+          status,
+        });
+        const res = await window.fetch(`/api/mail-tasks?${params}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        RESPONSE_CACHE.set(k, {
+          data: { entries: json.entries ?? [], total: json.total ?? 0 },
+          ts: Date.now(),
+        });
+      } catch {
+        /* silent — Prefetch ist best-effort */
+      }
+    }
+
+    // Sequenziell um Server nicht zu fluten — alle in parallel waere ueberfordernd
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+
+    let cancelled = false;
+    const run = async () => {
+      for (const tab of tabsToPrefetch) {
+        if (cancelled) return;
+        await prefetchOne(tab.filter, tab.status);
+      }
+    };
+    const timer =
+      typeof w.requestIdleCallback === "function"
+        ? w.requestIdleCallback(run, { timeout: 2000 })
+        : (setTimeout(run, 800) as unknown as number);
+    return () => {
+      cancelled = true;
+      if (typeof timer === "number") {
+        const cancel = (window as unknown as {
+          cancelIdleCallback?: (id: number) => void;
+        }).cancelIdleCallback;
+        if (cancel) cancel(timer);
+        else clearTimeout(timer);
+      }
+    };
+  }, [counts.inbox]);
+
   return (
     <Tabs defaultValue={defaultTab} className="space-y-5">
       <TabsList className="h-auto p-1.5 bg-muted/40 rounded-xl gap-1 flex-wrap">
