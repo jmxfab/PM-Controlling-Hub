@@ -1157,16 +1157,18 @@ function StepList({
           return (
             <li key={step.id}>
               <label
-                className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors ${
-                  checked ? "bg-accent" : "hover:bg-accent/40"
+                className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm cursor-pointer transition-all ${
+                  checked
+                    ? "bg-foreground/5 ring-1 ring-foreground/10 shadow-sm"
+                    : "hover:bg-accent/40"
                 } ${muted ? "text-muted-foreground" : ""}`}
               >
-                <span className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                <span className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
                   <Checkbox
                     checked={checked}
                     onCheckedChange={() => onToggle(step.id)}
                   />
-                  <span className="truncate">{step.name}</span>
+                  <span className="truncate font-medium">{step.name}</span>
                 </span>
                 <span className="flex items-center gap-1 shrink-0 text-xs tabular-nums flex-wrap justify-end">
                   {hasInvoice ? (
