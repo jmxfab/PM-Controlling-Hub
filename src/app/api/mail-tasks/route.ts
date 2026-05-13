@@ -10,9 +10,29 @@ import { loadHeroComments } from "@/lib/supabase/hero-comments-queries";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+/** Wenn Hero gemischt wird: ALLE Mails + ALLE Hero ziehen,
+ *  damit die Sortierung+Pagination ueber den combined-Pool stimmt. */
+const COMBINED_LIMIT = 1000;
+
 function parseTab(v: string | null): MailTabFilter {
   if (v === "kritisch" || v === "infos" || v === "inbox" || v === "rechnungen") return v;
   return "aufgaben";
+}
+
+/** Robuste Fehler-zu-String-Konvertierung — verhindert "[object Object]" */
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
 }
 
 export async function GET(request: NextRequest) {
@@ -27,17 +47,20 @@ export async function GET(request: NextRequest) {
     const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("page_size") ?? "50", 10)));
 
-    const mailResult = await loadMailTasksPage(tab, page, pageSize, filters);
-
-    // Hero-Kommentare nur in 'aufgaben' und 'infos' mischen
-    let combinedEntries = mailResult.entries;
-    let combinedTotal = mailResult.total;
+    let combinedEntries;
+    let combinedTotal;
 
     if (tab === "aufgaben" || tab === "infos") {
-      const heroItems = await loadHeroComments(tab, 200).catch(() => []);
+      // Hero-Mix: alle Mails + alle Hero laden, dann lokal sortieren+slicen
+      const [mailResult, heroItems] = await Promise.all([
+        loadMailTasksPage(tab, 0, COMBINED_LIMIT, filters),
+        loadHeroComments(tab, COMBINED_LIMIT).catch(() => []),
+      ]);
+
       const heroAsMail = heroItems.map((h) => heroToMailItem(h, tab));
 
-      // Filter angewendet: nur unread Hero-Items wenn status='open' (Default)
+      // Hero nach gewaehltem Status filtern (Hero hat kein DB-status,
+      // wir mappen aus is_read).
       const filteredHero = heroAsMail.filter((item) => {
         if (filters.status === "done") return item.status === "done";
         if (filters.status === "open" || filters.status === undefined) return item.status !== "done";
@@ -48,7 +71,11 @@ export async function GET(request: NextRequest) {
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       const offset = page * pageSize;
       combinedEntries = all.slice(offset, offset + pageSize);
-      combinedTotal = mailResult.total + filteredHero.length;
+      combinedTotal = all.length;
+    } else {
+      const mailResult = await loadMailTasksPage(tab, page, pageSize, filters);
+      combinedEntries = mailResult.entries;
+      combinedTotal = mailResult.total;
     }
 
     return NextResponse.json({
@@ -59,6 +86,6 @@ export async function GET(request: NextRequest) {
       filter: tab,
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+    return NextResponse.json({ error: errMsg(error) }, { status: 500 });
   }
 }

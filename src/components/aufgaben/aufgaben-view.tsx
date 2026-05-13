@@ -23,6 +23,8 @@ import {
   Search,
   Sparkles,
   Flame,
+  ArrowRight,
+  Eye,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -323,6 +325,18 @@ function CountPill({
   );
 }
 
+/** Filter-Layout pro Tab — welche Filter machen Sinn fuer welchen Bucket? */
+const TAB_FILTERS: Record<
+  MailTabFilter,
+  { status: boolean; priority: boolean; defaultStatus: StatusFilter }
+> = {
+  kritisch:   { status: false, priority: false, defaultStatus: "open" },
+  aufgaben:   { status: true,  priority: true,  defaultStatus: "open" },
+  infos:      { status: false, priority: false, defaultStatus: "open" }, // Default "open" — gelesene verschwinden
+  inbox:      { status: true,  priority: false, defaultStatus: "open" },
+  rechnungen: { status: true,  priority: false, defaultStatus: "open" },
+};
+
 function MailTab({
   initial,
   filter,
@@ -331,9 +345,10 @@ function MailTab({
   filter: MailTabFilter;
 }) {
   const meta = TAB_META[filter];
+  const tabFilters = TAB_FILTERS[filter];
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    filter === "infos" ? "all" : "open",
+    tabFilters.defaultStatus,
   );
   const [prioFilter, setPrioFilter] = useState<PrioFilter>("all");
   const [page, setPage] = useState(0);
@@ -358,7 +373,8 @@ function MailTab({
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           setError(
-            body.error ?? `Fehler ${res.status} beim Laden der Mail-Aufgaben`,
+            toErrorString(body.error) ||
+              `Fehler ${res.status} beim Laden der Mail-Aufgaben`,
           );
           return;
         }
@@ -409,7 +425,14 @@ function MailTab({
 
   async function patchTask(
     taskId: string,
-    update: { status?: MailTask["status"]; due_date?: string | null },
+    update: {
+      status?: MailTask["status"];
+      due_date?: string | null;
+      mail_category?: MailTask["mail_category"];
+      priority?: MailTask["priority"];
+    },
+    /** Wenn true: Task aus aktueller Liste entfernen (z.B. nach Kategorie-Wechsel) */
+    removeFromList = false,
   ) {
     setBusyTaskId(taskId);
     try {
@@ -420,27 +443,50 @@ function MailTab({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? `Fehler ${res.status} beim Aktualisieren`);
+        setError(
+          toErrorString(body.error) ||
+            `Fehler ${res.status} beim Aktualisieren`,
+        );
         return;
       }
       setData((prev) => ({
         ...prev,
-        entries: prev.entries.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                status: update.status ?? t.status,
-                due_date:
-                  update.due_date !== undefined ? update.due_date : t.due_date,
-              }
-            : t,
-        ),
+        entries: removeFromList
+          ? prev.entries.filter((t) => t.id !== taskId)
+          : prev.entries.map((t) =>
+              t.id === taskId
+                ? {
+                    ...t,
+                    status: update.status ?? t.status,
+                    due_date:
+                      update.due_date !== undefined ? update.due_date : t.due_date,
+                    mail_category: update.mail_category ?? t.mail_category,
+                    priority: update.priority ?? t.priority,
+                  }
+                : t,
+            ),
+        total: removeFromList ? Math.max(0, prev.total - 1) : prev.total,
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
     } finally {
       setBusyTaskId(null);
     }
+  }
+
+  /** Verschiebt eine Info in den Aufgaben-Tab (mail_category = 'aufgabe'). */
+  function moveToAufgaben(task: MailTask) {
+    return patchTask(
+      task.id,
+      { mail_category: "aufgabe", priority: task.priority ?? "medium" },
+      true, // aus aktueller Liste entfernen
+    );
+  }
+
+  /** Markiert eine Info als gelesen (status = done). Auf Infos-Tab default
+   *  "open" -> nach Klick verschwindet die Info aus der Liste. */
+  function markAsRead(task: MailTask) {
+    return patchTask(task.id, { status: "done" }, statusFilter === "open");
   }
 
   function markDone(task: MailTask) {
@@ -488,7 +534,7 @@ function MailTab({
 
   const hasFilters =
     search ||
-    (filter !== "infos" ? statusFilter !== "open" : statusFilter !== "all") ||
+    statusFilter !== tabFilters.defaultStatus ||
     prioFilter !== "all";
 
   return (
@@ -501,8 +547,11 @@ function MailTab({
         prioFilter={prioFilter}
         setPrioFilter={setPrioFilter}
         hasFilters={!!hasFilters}
-        defaultStatus={filter === "infos" ? "all" : "open"}
+        defaultStatus={tabFilters.defaultStatus}
         loading={loading}
+        showStatus={tabFilters.status}
+        showPriority={tabFilters.priority}
+        tab={filter}
       />
 
       {error ? (
@@ -540,12 +589,15 @@ function MailTab({
                   <TaskCard
                     key={t.id}
                     task={t}
+                    tab={filter}
                     expanded={expanded === t.id}
                     busy={busyTaskId === t.id}
                     onToggle={() =>
                       setExpanded((cur) => (cur === t.id ? null : t.id))
                     }
                     onMarkDone={() => markDone(t)}
+                    onMarkAsRead={() => markAsRead(t)}
+                    onMoveToAufgaben={() => moveToAufgaben(t)}
                     onSnooze={(ms) => snoozeBy(t, ms)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
@@ -570,6 +622,23 @@ function MailTab({
 
 /* ---------------- Filter Bar ---------------- */
 
+/** Defensive: rendert auch Objects als String — verhindert "[object Object]" im UI */
+function toErrorString(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error;
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+  return String(v);
+}
+
 function FilterBar({
   search,
   setSearch,
@@ -580,6 +649,9 @@ function FilterBar({
   hasFilters,
   defaultStatus,
   loading,
+  showStatus,
+  showPriority,
+  tab,
 }: {
   search: string;
   setSearch: (v: string) => void;
@@ -590,7 +662,18 @@ function FilterBar({
   hasFilters: boolean;
   defaultStatus: StatusFilter;
   loading: boolean;
+  showStatus: boolean;
+  showPriority: boolean;
+  tab: MailTabFilter;
 }) {
+  // Bei Infos heisst "open" -> "Ungelesen", "done" -> "Gelesen"
+  const statusLabels: Record<StatusFilter, string> =
+    tab === "infos"
+      ? { all: "Alle", open: "Ungelesen", done: "Gelesen" }
+      : tab === "rechnungen"
+        ? { all: "Alle", open: "Offen", done: "Bezahlt / Erledigt" }
+        : { all: "Alle", open: "Offen", done: "Erledigt" };
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card/40 px-3 py-2">
       <div className="relative">
@@ -606,33 +689,39 @@ function FilterBar({
         />
       </div>
 
-      <div className="h-5 w-px bg-border" />
+      {showStatus && (
+        <>
+          <div className="h-5 w-px bg-border" />
+          <PillGroup
+            label="Status"
+            value={statusFilter}
+            options={[
+              { value: "all", label: statusLabels.all },
+              { value: "open", label: statusLabels.open },
+              { value: "done", label: statusLabels.done },
+            ]}
+            onChange={(v) => setStatusFilter(v as StatusFilter)}
+          />
+        </>
+      )}
 
-      <PillGroup
-        label="Status"
-        value={statusFilter}
-        options={[
-          { value: "all", label: "Alle" },
-          { value: "open", label: "Offen" },
-          { value: "done", label: "Erledigt" },
-        ]}
-        onChange={(v) => setStatusFilter(v as StatusFilter)}
-      />
-
-      <div className="h-5 w-px bg-border" />
-
-      <PillGroup
-        label="Prio"
-        value={prioFilter}
-        options={[
-          { value: "all", label: "Alle" },
-          { value: "urgent", label: "Dringend", dot: "bg-red-500" },
-          { value: "high", label: "Hoch", dot: "bg-orange-500" },
-          { value: "medium", label: "Mittel", dot: "bg-amber-500" },
-          { value: "low", label: "Niedrig", dot: "bg-slate-400" },
-        ]}
-        onChange={(v) => setPrioFilter(v as PrioFilter)}
-      />
+      {showPriority && (
+        <>
+          <div className="h-5 w-px bg-border" />
+          <PillGroup
+            label="Prio"
+            value={prioFilter}
+            options={[
+              { value: "all", label: "Alle" },
+              { value: "urgent", label: "Dringend", dot: "bg-red-500" },
+              { value: "high", label: "Hoch", dot: "bg-orange-500" },
+              { value: "medium", label: "Mittel", dot: "bg-amber-500" },
+              { value: "low", label: "Niedrig", dot: "bg-slate-400" },
+            ]}
+            onChange={(v) => setPrioFilter(v as PrioFilter)}
+          />
+        </>
+      )}
 
       {hasFilters && (
         <Button
@@ -701,19 +790,25 @@ function PillGroup({
 
 function TaskCard({
   task,
+  tab,
   expanded,
   busy,
   onToggle,
   onMarkDone,
+  onMarkAsRead,
+  onMoveToAufgaben,
   onSnooze,
   buildMailto,
   buildOutlookDesktopLink,
 }: {
   task: MailTask;
+  tab: MailTabFilter;
   expanded: boolean;
   busy: boolean;
   onToggle: () => void;
   onMarkDone: () => void;
+  onMarkAsRead: () => void;
+  onMoveToAufgaben: () => void;
   onSnooze: (ms: number) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
@@ -852,11 +947,14 @@ function TaskCard({
             )}
             <ActionButtons
               task={t}
+              tab={tab}
               isDone={isDone}
               busy={busy}
               mailto={mailto}
               desktopLink={desktopLink}
               onMarkDone={onMarkDone}
+              onMarkAsRead={onMarkAsRead}
+              onMoveToAufgaben={onMoveToAufgaben}
               onSnooze={onSnooze}
             />
           </div>
@@ -894,19 +992,25 @@ function SourceInfo({ task }: { task: MailTask }) {
 
 function ActionButtons({
   task,
+  tab,
   isDone,
   busy,
   mailto,
   desktopLink,
   onMarkDone,
+  onMarkAsRead,
+  onMoveToAufgaben,
   onSnooze,
 }: {
   task: MailTask;
+  tab: MailTabFilter;
   isDone: boolean;
   busy: boolean;
   mailto: string | null;
   desktopLink: string | null;
   onMarkDone: () => void;
+  onMarkAsRead: () => void;
+  onMoveToAufgaben: () => void;
   onSnooze: (ms: number) => void;
 }) {
   if (task.source === "hero") {
@@ -930,8 +1034,19 @@ function ActionButtons({
     );
   }
 
+  const isInfos = tab === "infos";
+  const isRechnungen = tab === "rechnungen";
+  const showSnooze = !isInfos; // Snooze macht bei Infos keinen Sinn
+  const doneLabel = isInfos
+    ? "Gelesen"
+    : isRechnungen
+      ? "Bezahlt / Erledigt"
+      : "Erledigt";
+  const doneIcon = isInfos ? Eye : Check;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Primaer-Aktion: Mail oeffnen */}
       {desktopLink ? (
         <>
           <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
@@ -972,6 +1087,7 @@ function ActionButtons({
 
       <div className="h-5 w-px bg-border" />
 
+      {/* Status-Toggle: bei Infos = "Gelesen", sonst "Erledigt" */}
       <Button
         size="sm"
         variant={isDone ? "outline" : "default"}
@@ -979,51 +1095,82 @@ function ActionButtons({
         disabled={busy}
         onClick={(e) => {
           e.stopPropagation();
-          onMarkDone();
+          if (isInfos && !isDone) {
+            onMarkAsRead();
+          } else {
+            onMarkDone();
+          }
         }}
       >
-        <Check size={13} />
-        {isDone ? "Wieder offen" : "Erledigt"}
+        {(() => {
+          const I = doneIcon;
+          return <I size={13} />;
+        })()}
+        {isDone ? "Wieder offen" : doneLabel}
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 gap-1.5"
-        disabled={busy || isDone}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSnooze(3 * 60 * 60 * 1000);
-        }}
-      >
-        <Clock3 size={13} />
-        +3 Std
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 gap-1.5"
-        disabled={busy || isDone}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSnooze(24 * 60 * 60 * 1000);
-        }}
-      >
-        <CalendarDays size={13} />
-        Morgen
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 gap-1.5"
-        disabled={busy || isDone}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSnooze(7 * 24 * 60 * 60 * 1000);
-        }}
-      >
-        <CalendarClock size={13} />
-        +1 Woche
-      </Button>
+
+      {/* Bei Infos: zusaetzlicher "Zu Aufgabe verschieben"-Button */}
+      {isInfos && !isDone && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5"
+          disabled={busy}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMoveToAufgaben();
+          }}
+          title="Diese Info wird zur Aufgabe und erscheint im Aufgaben-Tab"
+        >
+          <ArrowRight size={13} />
+          Zu Aufgabe machen
+        </Button>
+      )}
+
+      {/* Snooze-Buttons nur wo sinnvoll */}
+      {showSnooze && (
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5"
+            disabled={busy || isDone}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSnooze(3 * 60 * 60 * 1000);
+            }}
+          >
+            <Clock3 size={13} />
+            +3 Std
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5"
+            disabled={busy || isDone}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSnooze(24 * 60 * 60 * 1000);
+            }}
+          >
+            <CalendarDays size={13} />
+            Morgen
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5"
+            disabled={busy || isDone}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSnooze(7 * 24 * 60 * 60 * 1000);
+            }}
+          >
+            <CalendarClock size={13} />
+            +1 Woche
+          </Button>
+        </>
+      )}
     </div>
   );
 }
