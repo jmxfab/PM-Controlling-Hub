@@ -109,9 +109,10 @@ const TAB_META: Record<
     icon: Inbox,
   },
   rechnungen: {
-    label: "Rechnungen",
-    emptyTitle: "Keine offenen Rechnungen",
-    emptyHint: "Eingehende Rechnungen, Mahnungen und Gutschriften erscheinen hier.",
+    label: "Bestellungen & Rechnungen",
+    emptyTitle: "Keine offenen Bestellungen oder Rechnungen",
+    emptyHint:
+      "Eingehende Rechnungen, Mahnungen, Gutschriften, Bestellbestätigungen und Lieferscheine erscheinen hier.",
     icon: Euro,
   },
 };
@@ -256,14 +257,16 @@ export function AufgabenView({
           Infos
           <CountPill value={counts.infos} />
         </TabsTrigger>
-        <TabsTrigger value="inbox" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-          <Inbox size={13} />
-          Inbox
-          <CountPill value={counts.inbox} />
-        </TabsTrigger>
+        {counts.inbox > 0 && (
+          <TabsTrigger value="inbox" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
+            <Inbox size={13} />
+            Inbox
+            <CountPill value={counts.inbox} highlight />
+          </TabsTrigger>
+        )}
         <TabsTrigger value="rechnungen" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Euro size={13} />
-          Rechnungen
+          Bestellungen & Rechnungen
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
         <TabsTrigger value="heizlast" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
@@ -281,9 +284,11 @@ export function AufgabenView({
       <TabsContent value="infos">
         <MailTab initial={{ entries: [], total: 0 }} filter="infos" />
       </TabsContent>
-      <TabsContent value="inbox">
-        <MailTab initial={{ entries: [], total: 0 }} filter="inbox" />
-      </TabsContent>
+      {counts.inbox > 0 && (
+        <TabsContent value="inbox">
+          <MailTab initial={{ entries: [], total: 0 }} filter="inbox" />
+        </TabsContent>
+      )}
       <TabsContent value="rechnungen">
         <MailTab initial={{ entries: [], total: 0 }} filter="rechnungen" />
       </TabsContent>

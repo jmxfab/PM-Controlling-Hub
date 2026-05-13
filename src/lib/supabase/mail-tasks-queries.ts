@@ -8,7 +8,7 @@ function supabaseAdmin() {
 
 export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
-export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung";
+export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung" | "bestellung";
 export type ItemSource = "mail" | "hero";
 
 export interface MailTask {
@@ -58,7 +58,7 @@ const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   aufgaben: ["aufgabe", "dringend"],
   infos: ["info"],
   inbox: ["inbox"],
-  rechnungen: ["rechnung"],
+  rechnungen: ["rechnung", "bestellung"],
 };
 
 export interface MailTaskCounts {
