@@ -104,14 +104,14 @@ export function DashboardProjectList({
 
   if (projectRows.length === 0) {
     const emptyState = (
-      <div className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-8 text-center">
-        <Link2Off className="h-5 w-5 text-muted-foreground" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Keine Projekte im gewählten Zeitraum</p>
-          <p className="text-sm text-muted-foreground">
-            {getEmptyStateDescription(source)}
-          </p>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 py-16 px-4 text-center">
+        <div className="rounded-full bg-muted/60 p-3 mb-3">
+          <Link2Off className="h-5 w-5 text-muted-foreground/70" />
         </div>
+        <p className="text-sm font-medium">Keine Projekte im gewählten Zeitraum</p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+          {getEmptyStateDescription(source)}
+        </p>
       </div>
     );
 
@@ -157,7 +157,7 @@ export function DashboardProjectList({
               setExpandedProjectKey(open ? project.rowKey : null)
             }
           >
-            <div className="overflow-hidden rounded-lg border bg-background">
+            <div className="overflow-hidden rounded-xl border bg-card transition-all duration-200 hover:shadow-md hover:border-foreground/10">
               <div className="flex flex-col gap-4 p-4 sm:p-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1 space-y-3">
