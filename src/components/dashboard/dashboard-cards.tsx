@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Briefcase,
   CheckCircle,
@@ -14,6 +16,7 @@ import {
   DASHBOARD_KPI_KEYS,
   type DashboardKpiKey,
 } from "@/lib/hero/hero-aggregator";
+import { useCountUp } from "@/hooks/use-count-up";
 
 export interface KPIData {
   activeProjects: number;
@@ -181,78 +184,100 @@ export function DashboardCards({
 
   return (
     <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-      {DASHBOARD_KPI_KEYS.map((kpiKey, idx) => {
-        const card = DASHBOARD_KPI_CARD_DEFINITIONS[kpiKey];
-        const Icon = card.icon;
-        const theme = KPI_THEMES[kpiKey];
-        const isSelected = selectedKpiKey === kpiKey;
-        const value = card.getValue(data);
-
-        return (
-          <button
-            key={kpiKey}
-            type="button"
-            aria-haspopup="dialog"
-            aria-pressed={isSelected}
-            className={cn(
-              "group relative h-full overflow-hidden rounded-xl border bg-card text-left",
-              "transition-all duration-200 animate-fade-in-up",
-              "hover:-translate-y-0.5 hover:shadow-lg",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              theme.accent,
-              isSelected &&
-                "ring-2 ring-foreground/15 shadow-md border-foreground/15"
-            )}
-            style={{ animationDelay: `${idx * 40}ms` }}
-            onClick={() => onKpiSelect(kpiKey)}
-          >
-            {/* Subtle background tint nur on hover/selected */}
-            <span
-              className={cn(
-                "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200",
-                "bg-gradient-to-br from-transparent via-transparent to-current",
-                theme.iconFg,
-                "group-hover:opacity-[0.04]",
-                isSelected && "opacity-[0.06]"
-              )}
-              aria-hidden
-            />
-
-            <div className="relative p-5 space-y-4">
-              {/* Header: Icon-Bubble + Titel */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-0.5 min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-                    {card.title}
-                  </p>
-                </div>
-                <div
-                  className={cn(
-                    "shrink-0 grid place-items-center w-10 h-10 rounded-xl transition-transform duration-200",
-                    "group-hover:scale-110",
-                    theme.iconBg
-                  )}
-                >
-                  <Icon className={cn("h-5 w-5", theme.iconFg)} />
-                </div>
-              </div>
-
-              {/* Big number */}
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold tabular-nums tracking-tight leading-none">
-                  {value.toLocaleString("de-DE")}
-                </span>
-              </div>
-
-              {/* Description */}
-              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                {card.getDescription(descriptionContext)}
-              </p>
-            </div>
-          </button>
-        );
-      })}
+      {DASHBOARD_KPI_KEYS.map((kpiKey, idx) => (
+        <KpiCard
+          key={kpiKey}
+          kpiKey={kpiKey}
+          idx={idx}
+          data={data}
+          descriptionContext={descriptionContext}
+          isSelected={selectedKpiKey === kpiKey}
+          onSelect={onKpiSelect}
+        />
+      ))}
     </div>
+  );
+}
+
+interface KpiCardProps {
+  kpiKey: DashboardKpiKey;
+  idx: number;
+  data: KPIData;
+  descriptionContext: DashboardKpiDescriptionContext;
+  isSelected: boolean;
+  onSelect: (k: DashboardKpiKey) => void;
+}
+
+function KpiCard({
+  kpiKey,
+  idx,
+  data,
+  descriptionContext,
+  isSelected,
+  onSelect,
+}: KpiCardProps) {
+  const card = DASHBOARD_KPI_CARD_DEFINITIONS[kpiKey];
+  const Icon = card.icon;
+  const theme = KPI_THEMES[kpiKey];
+  const value = card.getValue(data);
+  const animated = useCountUp(value, 700);
+
+  return (
+    <button
+      type="button"
+      aria-haspopup="dialog"
+      aria-pressed={isSelected}
+      className={cn(
+        "group relative h-full overflow-hidden rounded-xl border bg-card text-left",
+        "transition-all duration-200 animate-fade-in-up",
+        "hover:-translate-y-0.5 hover:shadow-lg",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        theme.accent,
+        isSelected &&
+          "ring-2 ring-foreground/15 shadow-md border-foreground/15",
+      )}
+      style={{ animationDelay: `${idx * 40}ms` }}
+      onClick={() => onSelect(kpiKey)}
+    >
+      {/* Subtle background tint nur on hover/selected */}
+      <span
+        className={cn(
+          "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200",
+          "bg-gradient-to-br from-transparent via-transparent to-current",
+          theme.iconFg,
+          "group-hover:opacity-[0.04]",
+          isSelected && "opacity-[0.06]",
+        )}
+        aria-hidden
+      />
+
+      <div className="relative p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+            {card.title}
+          </p>
+          <div
+            className={cn(
+              "shrink-0 grid place-items-center w-10 h-10 rounded-xl transition-transform duration-200",
+              "group-hover:scale-110",
+              theme.iconBg,
+            )}
+          >
+            <Icon className={cn("h-5 w-5", theme.iconFg)} />
+          </div>
+        </div>
+
+        <div className="flex items-baseline gap-2">
+          <span className="text-4xl font-bold tabular-nums tracking-tight leading-none">
+            {animated.toLocaleString("de-DE")}
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+          {card.getDescription(descriptionContext)}
+        </p>
+      </div>
+    </button>
   );
 }
 
