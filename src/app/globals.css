@@ -82,7 +82,72 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    /* Subtiles Radialgradient für Tiefe — sehr dezent */
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        hsl(var(--primary) / 0.04),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 60% 50% at 100% 110%,
+        hsl(var(--primary) / 0.025),
+        transparent
+      );
+    background-attachment: fixed;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        hsl(217 91% 60% / 0.06),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 60% 50% at 100% 110%,
+        hsl(280 65% 60% / 0.04),
+        transparent
+      );
+  }
+}
+
+/* Refined scrollbar — passt zum Theme */
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Glow-Animation für wichtige Akzente */
+  @keyframes subtle-glow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  .animate-subtle-glow {
+    animation: subtle-glow 2.5s ease-in-out infinite;
+  }
+
+  /* Indeterminate loader bar */
+  @keyframes indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+  .animate-indeterminate {
+    animation: indeterminate 1.4s ease-in-out infinite;
   }
 }

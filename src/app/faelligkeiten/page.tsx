@@ -122,7 +122,15 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
+    <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen">
+      <header className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Geplant
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Projekte mit Fälligkeit in Sicht · Überfällig, Heute, Morgen, nächste Tage
+        </p>
+      </header>
       <UpcomingView
         department={department}
         window={win}

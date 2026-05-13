@@ -18,13 +18,15 @@ export default async function AufgabenPage() {
   ]);
 
   return (
-    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1600px] mx-auto">
-      <div>
-        <h1 className="text-xl font-semibold">Aufgaben</h1>
+    <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto">
+      <header className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Aufgaben
+        </h1>
         <p className="text-sm text-muted-foreground">
-          E-Mail-Aufgaben (n8n + Claude), Hero-Kommentare und Heizlast.
+          E-Mail-Aufgaben automatisch klassifiziert von Claude · Hero-Kommentare · Heizlast-Projekte
         </p>
-      </div>
+      </header>
       <AufgabenView
         heizlastProjects={heizlastProjects}
         heroProjectLinkTemplate={heroProjectLinkTemplate}

@@ -11,7 +11,14 @@ import {
   ListTodo,
   LogOut,
   Settings,
+  type LucideIcon,
 } from "lucide-react";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
 
 /**
  * Primäre Tabs — links im Header, in Lese-Reihenfolge. Einstellungen
@@ -19,9 +26,8 @@ import {
  *
  * /  (Controlling) ist aus dem Nav ausgeblendet — wird gerade nicht genutzt.
  * Seite ist via Logo-Klick + direkter URL noch erreichbar.
- * /deckungsbeitrag ebenfalls ausgeblendet bis Materialkosten-Datenbasis steht.
  */
-const navItems = [
+const navItems: NavItem[] = [
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/cash", label: "Cash", icon: Euro },
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
@@ -39,25 +45,26 @@ export function MainNav() {
   }
 
   return (
-    <header className="relative border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30">
-      <div className="relative max-w-[1600px] mx-auto pl-1 pr-4 h-24 flex items-center gap-6">
+    <header className="sticky top-0 z-30 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+      <div className="relative max-w-[1600px] mx-auto pl-2 pr-4 h-20 flex items-center gap-4">
+        {/* Logo */}
         <Link
           href="/"
-          className="shrink-0 block"
+          className="shrink-0 block transition-transform hover:scale-105 active:scale-95"
           aria-label="Jumax Controlling · Startseite"
         >
-          {/* Logo 96×96, passt komplett in die h-24-Header — kein Overlap
-              mit dem Seiteninhalt, keine Umrandung, kein Hover-Effekt. */}
           <Image
             src="/jumax-logo.png"
             alt="Jumax Logo"
-            width={96}
-            height={96}
+            width={80}
+            height={80}
             priority
             className="block"
           />
         </Link>
-        <nav className="flex items-center gap-1 flex-1">
+
+        {/* Primary nav */}
+        <nav className="flex items-center gap-0.5 flex-1">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -65,31 +72,40 @@ export function MainNav() {
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                className={`group relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm transition-all duration-150 ${
                   active
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    ? "bg-foreground text-background font-semibold shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 }`}
               >
-                <Icon size={15} />
-                {label}
+                <Icon
+                  size={15}
+                  className={`transition-transform ${
+                    active ? "" : "group-hover:scale-110"
+                  }`}
+                />
+                <span>{label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="shrink-0 ml-auto flex items-center gap-1">
+        {/* Right side: Settings + Logout */}
+        <div className="shrink-0 flex items-center gap-1">
           <Link
             href="/einstellungen"
             aria-label="Einstellungen"
             title="Einstellungen"
-            className={`flex items-center justify-center h-9 w-9 rounded-md transition-colors ${
+            className={`group flex items-center justify-center h-9 w-9 rounded-lg transition-all ${
               settingsActive
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             }`}
           >
-            <Settings size={18} />
+            <Settings
+              size={17}
+              className="transition-transform group-hover:rotate-45 duration-300"
+            />
           </Link>
           <LogoutButton />
         </div>
@@ -112,9 +128,12 @@ function LogoutButton() {
       onClick={handleClick}
       aria-label="Abmelden"
       title="Abmelden"
-      className="flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+      className="group flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-all"
     >
-      <LogOut size={18} />
+      <LogOut
+        size={17}
+        className="transition-transform group-hover:translate-x-0.5"
+      />
     </button>
   );
 }
