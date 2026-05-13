@@ -10,6 +10,39 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
+const VALID_STATUS = new Set([
+  "open",
+  "in_progress",
+  "waiting",
+  "done",
+  "cancelled",
+]);
+const VALID_CATEGORY = new Set([
+  "info",
+  "aufgabe",
+  "dringend",
+  "kritisch",
+  "inbox",
+  "rechnung",
+  "bestellung",
+]);
+const VALID_PRIORITY = new Set(["urgent", "high", "medium", "low"]);
+
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -17,16 +50,46 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = (await request.json().catch(() => ({}))) as {
-      status?: "open" | "in_progress" | "waiting" | "done" | "cancelled";
+      status?: string;
       due_date?: string | null;
+      mail_category?: string;
+      priority?: string;
     };
 
     const update: Record<string, unknown> = {};
+
     if (body.status !== undefined) {
+      if (!VALID_STATUS.has(body.status)) {
+        return NextResponse.json(
+          { error: `Invalid status: ${body.status}` },
+          { status: 400 },
+        );
+      }
       update.status = body.status;
       update.completed_at = body.status === "done" ? new Date().toISOString() : null;
     }
+
     if (body.due_date !== undefined) update.due_date = body.due_date;
+
+    if (body.mail_category !== undefined) {
+      if (!VALID_CATEGORY.has(body.mail_category)) {
+        return NextResponse.json(
+          { error: `Invalid mail_category: ${body.mail_category}` },
+          { status: 400 },
+        );
+      }
+      update.mail_category = body.mail_category;
+    }
+
+    if (body.priority !== undefined) {
+      if (!VALID_PRIORITY.has(body.priority)) {
+        return NextResponse.json(
+          { error: `Invalid priority: ${body.priority}` },
+          { status: 400 },
+        );
+      }
+      update.priority = body.priority;
+    }
 
     if (Object.keys(update).length === 0) {
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -34,13 +97,10 @@ export async function PATCH(
 
     const supabase = supabaseAdmin();
     const { error } = await supabase.from("tasks").update(update).eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: errMsg(error) }, { status: 500 });
 
     return NextResponse.json({ ok: true, id, update });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
   }
 }
