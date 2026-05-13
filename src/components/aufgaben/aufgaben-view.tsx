@@ -1124,29 +1124,38 @@ function ActionButtons({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Primaer-Aktion: Mail oeffnen */}
-      {desktopLink ? (
+      {/* Primaer-Aktion: Mail oeffnen
+       * Strategie fuer Mac M365 (neues Outlook):
+       * 1. webLink ist 100% zuverlaessig — oeffnet die exakte Mail im
+       *    neuen Browser-Tab in OWA. Das neue Mac-Outlook IST OWA-basiert,
+       *    also funktional dasselbe wie Desktop-App.
+       * 2. In OWA gibt es oben rechts den "In Outlook oeffnen"-Button
+       *    der den User korrekt zur Mac-Desktop-App weiterleitet.
+       * 3. Optional: ms-outlook:// Desktop-Link daneben (funktioniert auf
+       *    Windows mit Click-to-Run, auf Mac wackelig).
+       */}
+      {task.source_email_web_link ? (
         <>
           <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
-            <a
-              href={desktopLink}
-              onClick={(e) => e.stopPropagation()}
-              title="Öffnet die Original-Mail direkt im Outlook Desktop"
-            >
-              <Reply size={13} />
-              In Outlook öffnen
-            </a>
-          </Button>
-          {task.source_email_web_link && (
             <a
               href={task.source_email_web_link}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
-              title="Fallback: Outlook Web im Browser"
+              title="Öffnet die Original-Mail in Outlook (neuer Tab) — von dort eingebauter Knopf zum Desktop-Sprung"
             >
-              Web ↗
+              <Reply size={13} />
+              Mail öffnen
+            </a>
+          </Button>
+          {desktopLink && (
+            <a
+              href={desktopLink}
+              onClick={(e) => e.stopPropagation()}
+              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
+              title="Direkt im Outlook Desktop oeffnen (funktioniert nur wenn ms-outlook:// Protocol-Handler registriert ist)"
+            >
+              Desktop ↗
             </a>
           )}
         </>
