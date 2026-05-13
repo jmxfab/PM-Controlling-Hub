@@ -74,14 +74,30 @@ export function DashboardKpiDialog({
           }
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-6xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-6xl rounded-2xl">
           {selectedCard ? (
             <>
-              <DialogHeader className="pr-8">
-                <DialogTitle>{selectedCard.title}</DialogTitle>
-                {dialogDescription ? (
-                  <DialogDescription>{dialogDescription}</DialogDescription>
-                ) : null}
+              <DialogHeader className="pr-8 space-y-2">
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const Icon = selectedCard.icon;
+                    return (
+                      <div className="shrink-0 grid place-items-center w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                    );
+                  })()}
+                  <div className="space-y-0.5">
+                    <DialogTitle className="text-xl font-bold tracking-tight">
+                      {selectedCard.title}
+                    </DialogTitle>
+                    {dialogDescription ? (
+                      <DialogDescription className="text-xs">
+                        {dialogDescription}
+                      </DialogDescription>
+                    ) : null}
+                  </div>
+                </div>
               </DialogHeader>
 
               <DashboardProjectList
