@@ -332,7 +332,7 @@ const TAB_FILTERS: Record<
 > = {
   kritisch:   { status: false, priority: false, defaultStatus: "open" },
   aufgaben:   { status: true,  priority: true,  defaultStatus: "open" },
-  infos:      { status: false, priority: false, defaultStatus: "open" }, // Default "open" — gelesene verschwinden
+  infos:      { status: true,  priority: false, defaultStatus: "open" }, // Default ungelesene, "Gelesen"-Filter erreichbar
   inbox:      { status: true,  priority: false, defaultStatus: "open" },
   rechnungen: { status: true,  priority: false, defaultStatus: "open" },
 };
@@ -488,11 +488,20 @@ function MailTab({
 
   /** Hero-Read-Override setzen (eigene Tabelle hero_read_overrides) */
   async function markHeroAsRead(task: MailTask) {
+    return toggleHeroRead(task, "mark");
+  }
+
+  /** Hero-Read-Override entfernen — Item ist wieder "ungelesen" */
+  async function markHeroAsUnread(task: MailTask) {
+    return toggleHeroRead(task, "unmark");
+  }
+
+  async function toggleHeroRead(task: MailTask, action: "mark" | "unmark") {
     setBusyTaskId(task.id);
     try {
       const heroIdRaw = task.id.startsWith("hero-") ? task.id.slice(5) : task.id;
       const res = await window.fetch("/api/hero-mark-read", {
-        method: "POST",
+        method: action === "mark" ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hero_id: heroIdRaw }),
       });
@@ -500,25 +509,32 @@ function MailTab({
         const body = await res.json().catch(() => ({}));
         setError(
           toErrorString(body.error) ||
-            `Fehler ${res.status} beim Markieren als gelesen`,
+            `Fehler ${res.status} beim Aktualisieren`,
         );
         return;
       }
-      // Hero-Item lokal aus Liste entfernen (default-Filter "open")
+
+      // Wenn der aktuelle Filter das umgeschaltete Item nicht mehr zeigen
+      // wuerde, entferne es aus der Liste; sonst nur Status updaten.
+      const willStillMatch =
+        statusFilter === "all" ||
+        (statusFilter === "open" && action === "unmark") ||
+        (statusFilter === "done" && action === "mark");
+
       setData((prev) => ({
         ...prev,
-        entries:
-          statusFilter === "open"
-            ? prev.entries.filter((t) => t.id !== task.id)
-            : prev.entries.map((t) =>
-                t.id === task.id
-                  ? { ...t, status: "done" as const, hero_is_read: true }
-                  : t,
-              ),
-        total:
-          statusFilter === "open"
-            ? Math.max(0, prev.total - 1)
-            : prev.total,
+        entries: willStillMatch
+          ? prev.entries.map((t) =>
+              t.id === task.id
+                ? {
+                    ...t,
+                    status: action === "mark" ? "done" : "open",
+                    hero_is_read: action === "mark",
+                  }
+                : t,
+            )
+          : prev.entries.filter((t) => t.id !== task.id),
+        total: willStillMatch ? prev.total : Math.max(0, prev.total - 1),
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
@@ -529,8 +545,10 @@ function MailTab({
 
   function markDone(task: MailTask) {
     if (task.source === "hero") {
-      // Hero-Items: "Gelesen" toggeln via Override-Tabelle
-      return markHeroAsRead(task);
+      // Hero-Items: gelesen/ungelesen toggeln via Override-Tabelle
+      return task.status === "done"
+        ? markHeroAsUnread(task)
+        : markHeroAsRead(task);
     }
     return patchTask(task.id, {
       status: task.status === "done" ? "open" : "done",
@@ -1067,25 +1085,27 @@ function ActionButtons({
             In Hero öffnen
           </a>
         </Button>
-        {!isDone && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            disabled={busy}
-            onClick={(e) => {
-              e.stopPropagation();
-              onMarkAsRead();
-            }}
-            title="Markiert diese Hero-Notification lokal als gelesen (Hero selbst bleibt unangetastet)"
-          >
-            <Eye size={13} />
-            Gelesen
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant={isDone ? "outline" : "default"}
+          className="h-8 gap-1.5"
+          disabled={busy}
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkDone();
+          }}
+          title={
+            isDone
+              ? "Setzt diese Hero-Notification wieder auf ungelesen"
+              : "Markiert diese Hero-Notification lokal als gelesen (Hero selbst bleibt unangetastet)"
+          }
+        >
+          <Eye size={13} />
+          {isDone ? "Wieder ungelesen" : "Gelesen"}
+        </Button>
         {isDone && (
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
-            <Check size={13} /> als gelesen markiert
+          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+            <Check size={11} /> gelesen
           </span>
         )}
       </div>
