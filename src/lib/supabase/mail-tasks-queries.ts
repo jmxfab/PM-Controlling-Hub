@@ -135,13 +135,22 @@ export async function loadMailTasksPage(
   const { data, count, error } = await query.range(offset, offset + pageSize - 1);
   if (error) throw error;
 
+  // Description ist bis 2000 Zeichen — fuer die List-Card brauchen wir nur
+  // ein Preview. Truncaten halbiert die Wire-Payload bei vielen Tasks.
+  // Search-Filter laeuft auf der vollen DB-description (oben in der Query),
+  // also gehen keine Treffer verloren.
+  const DESC_PREVIEW_MAX = 800;
   const entries: MailTask[] = (data ?? []).map((row) => {
-    const { sender, body } = parseSenderAndBody(row.description);
+    const truncated =
+      (row.description ?? "").length > DESC_PREVIEW_MAX
+        ? `${(row.description ?? "").slice(0, DESC_PREVIEW_MAX)}…`
+        : row.description;
+    const { sender, body } = parseSenderAndBody(truncated);
     return {
       id: row.id,
       source: "mail",
       title: row.title,
-      description: row.description,
+      description: truncated,
       status: row.status as MailTaskStatus,
       priority: row.priority as MailTaskPriority | null,
       due_date: row.due_date,
