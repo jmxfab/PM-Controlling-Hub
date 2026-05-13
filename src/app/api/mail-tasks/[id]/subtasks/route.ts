@@ -1,0 +1,226 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key);
+}
+
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    if (typeof o.message === "string") return o.message;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  }
+  return String(e);
+}
+
+interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+function makeId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * POST: Generiert via Claude eine Subtask-Checkliste aus title + body.
+ * Body kann optional `regenerate: true` enthalten -> ueberschreibt bestehende.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const body = (await request.json().catch(() => ({}))) as {
+      regenerate?: boolean;
+    };
+
+    const supabase = supabaseAdmin();
+    const { data: task, error: fetchErr } = await supabase
+      .from("tasks")
+      .select("id, title, description, subtasks")
+      .eq("id", id)
+      .single();
+    if (fetchErr || !task) {
+      return NextResponse.json({ error: errMsg(fetchErr) || "Task nicht gefunden" }, { status: 404 });
+    }
+
+    const existing = Array.isArray(task.subtasks) ? (task.subtasks as Subtask[]) : [];
+    if (existing.length > 0 && !body.regenerate) {
+      return NextResponse.json({ subtasks: existing, regenerated: false });
+    }
+
+    const claudeKey = process.env.ANTHROPIC_API_KEY;
+    if (!claudeKey) {
+      return NextResponse.json(
+        { error: "ANTHROPIC_API_KEY nicht konfiguriert" },
+        { status: 500 },
+      );
+    }
+
+    const prompt = `Du bist Domenic's Assistent. Aus folgender Aufgabe sollst du eine konkrete Checkliste mit 3-7 Schritten generieren — was muss konkret getan/mitgenommen/erledigt werden? Keine Floskeln, jeder Schritt ist eine separate Handlung. Bei Terminen: was mitnehmen + nach dem Termin Folgeaktionen. Bei Rechnungen: pruefen + freigeben + buchen. Bei Anfragen: recherchieren + antworten.
+
+TITEL: ${task.title}
+
+BESCHREIBUNG: ${(task.description ?? "").slice(0, 2000)}
+
+Antwort NUR als JSON-Array mit Strings, KEIN Wrapper, KEINE Erklaerung:
+["Schritt 1", "Schritt 2", "Schritt 3", ...]
+
+Maximal 7 Schritte, jeder max 80 Zeichen, deutsche Sprache.`;
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": claudeKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 600,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return NextResponse.json(
+        { error: `Claude API ${res.status}: ${txt.slice(0, 200)}` },
+        { status: 502 },
+      );
+    }
+    const json = (await res.json()) as {
+      content?: Array<{ text?: string }>;
+    };
+    const text = json.content?.[0]?.text?.trim() ?? "";
+    // Parse Array — entweder pures JSON oder wrapped in ```...```
+    const arrMatch = text.match(/\[[\s\S]*\]/);
+    let titles: string[] = [];
+    try {
+      titles = arrMatch ? JSON.parse(arrMatch[0]) : [];
+    } catch {
+      titles = [];
+    }
+    titles = titles
+      .filter((t) => typeof t === "string" && t.trim().length > 0)
+      .map((t) => t.trim().slice(0, 200))
+      .slice(0, 7);
+
+    if (titles.length === 0) {
+      return NextResponse.json(
+        { error: "Claude konnte keine Schritte generieren" },
+        { status: 502 },
+      );
+    }
+
+    const subtasks: Subtask[] = titles.map((title) => ({
+      id: makeId(),
+      title,
+      done: false,
+    }));
+
+    const { error: updateErr } = await supabase
+      .from("tasks")
+      .update({ subtasks })
+      .eq("id", id);
+    if (updateErr) {
+      return NextResponse.json({ error: errMsg(updateErr) }, { status: 500 });
+    }
+
+    return NextResponse.json({ subtasks, regenerated: existing.length > 0 });
+  } catch (e) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH: Togglet einen Subtask oder updated titel.
+ * Body: { subtaskId: string, done?: boolean, title?: string }
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const body = (await request.json().catch(() => ({}))) as {
+      subtaskId?: string;
+      done?: boolean;
+      title?: string;
+    };
+
+    if (!body.subtaskId) {
+      return NextResponse.json({ error: "subtaskId required" }, { status: 400 });
+    }
+
+    const supabase = supabaseAdmin();
+    const { data: task, error: fetchErr } = await supabase
+      .from("tasks")
+      .select("subtasks")
+      .eq("id", id)
+      .single();
+    if (fetchErr || !task) {
+      return NextResponse.json({ error: "Task nicht gefunden" }, { status: 404 });
+    }
+
+    const current = Array.isArray(task.subtasks) ? (task.subtasks as Subtask[]) : [];
+    const updated = current.map((s) =>
+      s.id === body.subtaskId
+        ? {
+            ...s,
+            done: body.done !== undefined ? body.done : s.done,
+            title: body.title !== undefined ? body.title : s.title,
+          }
+        : s,
+    );
+
+    const { error: updateErr } = await supabase
+      .from("tasks")
+      .update({ subtasks: updated })
+      .eq("id", id);
+    if (updateErr) {
+      return NextResponse.json({ error: errMsg(updateErr) }, { status: 500 });
+    }
+
+    return NextResponse.json({ subtasks: updated });
+  } catch (e) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE: Loescht alle Subtasks (Reset).
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = supabaseAdmin();
+    const { error } = await supabase
+      .from("tasks")
+      .update({ subtasks: [] })
+      .eq("id", id);
+    if (error) {
+      return NextResponse.json({ error: errMsg(error) }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: errMsg(e) }, { status: 500 });
+  }
+}

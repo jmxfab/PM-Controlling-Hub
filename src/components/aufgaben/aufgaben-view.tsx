@@ -30,8 +30,10 @@ import type {
   MailTasksPage,
   MailTaskCounts,
   MailTabFilter,
+  Subtask,
 } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
+import { SubtaskList } from "@/components/aufgaben/subtask-list";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -730,6 +732,19 @@ function MailTab({
    * 2. ItemID aus webLink — funktioniert oft, ist aber die unstable RestId
    * 3. source_email_id roh — letzter Ausweg
    */
+  /** Subtask-Update lokal in den State spiegeln (ohne Server-Roundtrip,
+   *  der Subtask-Endpoint hat schon gespeichert). Cache fuer den
+   *  aktuellen Filter invalidieren damit naechster Tab-Switch fresh ist. */
+  function updateTaskSubtasks(taskId: string, subtasks: Subtask[]) {
+    setData((prev) => ({
+      ...prev,
+      entries: prev.entries.map((t) =>
+        t.id === taskId ? { ...t, subtasks } : t,
+      ),
+    }));
+    invalidateCacheForFilter(filter);
+  }
+
   function buildOutlookDesktopLink(task: MailTask): string | null {
     if (task.source_email_entry_id) {
       return `ms-outlook://emails/open?ItemID=${encodeURIComponent(task.source_email_entry_id)}`;
@@ -817,6 +832,7 @@ function MailTab({
                     onMarkAsRead={() => markAsRead(t)}
                     onMoveToAufgaben={() => moveToAufgaben(t)}
                     onSnooze={(ms) => snoozeBy(t, ms)}
+                    onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                   />
@@ -1014,6 +1030,7 @@ function TaskCard({
   onMarkAsRead,
   onMoveToAufgaben,
   onSnooze,
+  onSubtasksChange,
   buildMailto,
   buildOutlookDesktopLink,
 }: {
@@ -1026,6 +1043,7 @@ function TaskCard({
   onMarkAsRead: () => void;
   onMoveToAufgaben: () => void;
   onSnooze: (ms: number) => void;
+  onSubtasksChange: (next: Subtask[]) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
 }) {
@@ -1138,6 +1156,23 @@ function TaskCard({
                 Hero
               </span>
             )}
+            {t.subtasks.length > 0 && (() => {
+              const done = t.subtasks.filter((s) => s.done).length;
+              const all = t.subtasks.length;
+              const allDone = done === all;
+              return (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ring-1 ${
+                    allDone
+                      ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300"
+                  }`}
+                  title={`${done} von ${all} Schritten erledigt`}
+                >
+                  ✓ {done}/{all}
+                </span>
+              );
+            })()}
           </div>
         </div>
 
@@ -1160,6 +1195,14 @@ function TaskCard({
               <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed max-w-3xl text-foreground/90">
                 {t.body}
               </div>
+            )}
+            {/* Subtask-Checkliste — nur fuer echte Mail-Tasks, nicht Hero. */}
+            {t.source === "mail" && (
+              <SubtaskList
+                taskId={t.id}
+                initialSubtasks={t.subtasks}
+                onSubtasksChange={onSubtasksChange}
+              />
             )}
             <ActionButtons
               task={t}
