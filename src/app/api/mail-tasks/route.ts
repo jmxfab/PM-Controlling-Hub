@@ -80,13 +80,24 @@ export async function GET(request: NextRequest) {
       combinedTotal = mailResult.total;
     }
 
-    return NextResponse.json({
-      entries: combinedEntries,
-      total: combinedTotal,
-      page,
-      pageSize,
-      filter: tab,
-    });
+    return NextResponse.json(
+      {
+        entries: combinedEntries,
+        total: combinedTotal,
+        page,
+        pageSize,
+        filter: tab,
+      },
+      {
+        headers: {
+          // Browser-Cache: 15s frische Daten, 60s stale-while-revalidate.
+          // Bei Tab-zurueck oder Hard-Refresh innerhalb 15s = kein Server-Hit.
+          // Innerhalb 60s = stale Content sofort + Refresh in Background.
+          "Cache-Control":
+            "private, max-age=15, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (error) {
     return NextResponse.json({ error: errMsg(error) }, { status: 500 });
   }
