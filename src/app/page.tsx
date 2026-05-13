@@ -52,13 +52,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <SyncInProgressBanner />
       </Suspense>
 
-      <header className="space-y-1">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-          Controlling
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Projektcontrolling für PV, PV Gewerbe, Wärmepumpen, Klima und Gebäudetechnik
-        </p>
+      <header className="relative overflow-hidden rounded-2xl border bg-card/40 backdrop-blur-sm p-6 md:p-8">
+        {/* Dezenter Gradient-Akzent rechts */}
+        <div
+          className="absolute -right-32 -top-32 w-96 h-96 rounded-full blur-3xl opacity-30 bg-gradient-to-br from-blue-400/60 to-violet-400/60 dark:from-blue-600/40 dark:to-violet-600/40 -z-0 pointer-events-none"
+          aria-hidden
+        />
+        <div className="relative space-y-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/60 dark:bg-blue-950/40 text-[11px] font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/50 dark:ring-blue-900/50">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-subtle-glow" />
+            Hero Live
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+            Controlling
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Projektcontrolling für PV, PV Gewerbe, Wärmepumpen, Klima und Gebäudetechnik — Live aus Hero ERP.
+          </p>
+        </div>
       </header>
 
       <DashboardShell
