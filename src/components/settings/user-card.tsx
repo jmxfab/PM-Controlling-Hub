@@ -47,29 +47,29 @@ export async function UserCard() {
   const user = await getHeroUser().catch(() => null);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Benutzer</CardTitle>
-        <CardDescription>
-          Der Hero-Benutzer für den dieses Dashboard konfiguriert ist.
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Benutzer</CardTitle>
+        <CardDescription className="text-xs">
+          Der Hero-Benutzer für den dieses Dashboard konfiguriert ist
         </CardDescription>
       </CardHeader>
       <CardContent>
         {user ? (
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-              <User size={16} className="text-muted-foreground" />
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0 grid place-items-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-100 to-violet-100 dark:from-blue-950/50 dark:to-violet-950/50 ring-1 ring-border">
+              <User size={22} className="text-blue-600 dark:text-blue-400" />
             </div>
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 min-w-0">
               {user.email && (
-                <p className="text-sm font-medium">{formatNameFromEmail(user.email)}</p>
+                <p className="text-base font-semibold">{formatNameFromEmail(user.email)}</p>
               )}
-              <p className="text-sm text-muted-foreground">{user.email ?? "–"}</p>
-              <p className="text-xs text-muted-foreground font-mono">Hero User ID: {user.heroUserId}</p>
+              <p className="text-sm text-muted-foreground truncate">{user.email ?? "–"}</p>
+              <p className="text-[11px] text-muted-foreground/70 font-mono">Hero User ID: {user.heroUserId}</p>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Kein Benutzer gefunden.</p>
+          <p className="text-sm text-muted-foreground italic">Kein Benutzer gefunden.</p>
         )}
       </CardContent>
     </Card>

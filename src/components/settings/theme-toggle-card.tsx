@@ -32,16 +32,15 @@ export function ThemeToggleCard() {
   const active = mounted ? theme ?? "system" : "system";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Darstellung</CardTitle>
-        <CardDescription>
-          Farbschema des Dashboards. {`„System“`} folgt den Einstellungen deines
-          Betriebssystems.
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Darstellung</CardTitle>
+        <CardDescription className="text-xs">
+          Farbschema des Dashboards · „System" folgt den Einstellungen deines Betriebssystems
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="inline-flex rounded-md border p-1 bg-muted/30">
+        <div className="inline-flex rounded-xl border p-1 bg-muted/40 gap-1">
           {OPTIONS.map(({ value, label, icon: Icon }) => {
             const selected = active === value;
             return (
@@ -49,7 +48,9 @@ export function ThemeToggleCard() {
                 key={value}
                 variant={selected ? "default" : "ghost"}
                 size="sm"
-                className="gap-2"
+                className={`gap-2 rounded-lg transition-all ${
+                  selected ? "shadow-sm" : ""
+                }`}
                 onClick={() => setTheme(value)}
               >
                 <Icon className="h-4 w-4" />
