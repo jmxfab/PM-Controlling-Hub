@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -114,7 +114,7 @@ export function DashboardCharts({
           className="mt-4 h-[350px] min-h-[350px] w-full min-w-0"
         >
           {chartSize.width > 0 && chartSize.height > 0 ? (
-            <LineChart
+            <AreaChart
               width={chartSize.width}
               height={chartSize.height}
               data={historicData}
@@ -125,48 +125,76 @@ export function DashboardCharts({
                 bottom: 5,
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <defs>
+                <linearGradient id="gradActive" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradCompleted" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradAccounting" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
               <XAxis
                 dataKey="date"
-                className="text-xs"
                 stroke="hsl(var(--muted-foreground))"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
               />
               <YAxis
-                className="text-xs"
                 stroke="hsl(var(--muted-foreground))"
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
               />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "hsl(var(--card))",
-                  borderColor: "hsl(var(--border))",
-                  borderRadius: "var(--radius)",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "0.75rem",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                  fontSize: "12px",
                 }}
                 itemStyle={{ color: "hsl(var(--foreground))" }}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
-              <Line
+              <Legend
+                wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
+                iconType="circle"
+              />
+              <Area
                 type="monotone"
                 dataKey="active"
                 name="Aktive Projekte"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                activeDot={{ r: 8 }}
+                stroke="#3b82f6"
+                strokeWidth={2.5}
+                fill="url(#gradActive)"
+                activeDot={{ r: 6, strokeWidth: 2 }}
               />
-              <Line
+              <Area
                 type="monotone"
                 dataKey="completed"
                 name="Abgeschlossen"
-                stroke="hsl(var(--chart-2))"
-                strokeWidth={2}
+                stroke="#10b981"
+                strokeWidth={2.5}
+                fill="url(#gradCompleted)"
+                activeDot={{ r: 5, strokeWidth: 2 }}
               />
-              <Line
+              <Area
                 type="monotone"
                 dataKey="accounting"
                 name="Buchhaltung"
-                stroke="hsl(var(--chart-4))"
-                strokeWidth={2}
+                stroke="#f59e0b"
+                strokeWidth={2.5}
+                fill="url(#gradAccounting)"
+                activeDot={{ r: 5, strokeWidth: 2 }}
               />
-            </LineChart>
+            </AreaChart>
           ) : (
             <div className="h-full w-full rounded-lg bg-muted/30" />
           )}
