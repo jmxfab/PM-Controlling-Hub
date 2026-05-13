@@ -31,14 +31,15 @@ export default async function LogbuchPage({
   ]);
 
   return (
-    <div className="flex-1 space-y-4 p-6 md:p-8 max-w-[1600px] mx-auto">
-      <div>
-        <h1 className="text-xl font-semibold">Logbuch</h1>
+    <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto">
+      <header className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Logbuch
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Aktivitätsprotokoll aus Hero ERP — gefiltert nach Mitarbeiter,
-          Projekt und Zeitraum.
+          Aktivitätsprotokoll aus Hero ERP — gefiltert nach Mitarbeiter, Projekt und Zeitraum
         </p>
-      </div>
+      </header>
       <LogbuchView
         initial={{
           entries: pageResult.entries,

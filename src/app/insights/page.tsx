@@ -85,7 +85,15 @@ export default async function InsightsPage({
   ) as Record<Department, React.ReactNode>;
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 max-w-[1600px] mx-auto min-h-screen">
+    <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen">
+      <header className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Insights
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Durchsatz, Step-Laufzeiten, längste Projekte und kWp-Statistiken
+        </p>
+      </header>
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}
