@@ -11,6 +11,13 @@ export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
 export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung" | "bestellung";
 export type ItemSource = "mail" | "hero";
 
+/** Auto-generierte Subtask aus Mail-Body via Claude. */
+export interface Subtask {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
 export interface MailTask {
   id: string;
   source: ItemSource;
@@ -37,6 +44,8 @@ export interface MailTask {
   hero_project_name?: string | null;
   /** Hero-spezifisch: ungelesen-Flag */
   hero_is_read?: boolean | null;
+  /** Auto-generierte Subtasks (Checkliste) — leer wenn noch nicht generiert. */
+  subtasks: Subtask[];
 }
 
 export interface MailTasksPage {
@@ -120,7 +129,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category, subtasks", { count: "exact" })
     .eq("is_automated", true)
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
@@ -161,6 +170,7 @@ export async function loadMailTasksPage(
       mail_category: (row.mail_category as MailCategory | null) ?? null,
       sender,
       body,
+      subtasks: Array.isArray(row.subtasks) ? (row.subtasks as Subtask[]) : [],
     };
   });
 
@@ -195,5 +205,6 @@ export function heroToMailItem(
     hero_project_number: hero.project_number,
     hero_project_name: hero.project_name,
     hero_is_read: hero.is_read,
+    subtasks: [],
   };
 }
