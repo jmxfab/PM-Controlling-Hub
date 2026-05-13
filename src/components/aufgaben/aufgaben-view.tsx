@@ -44,6 +44,8 @@ interface Props {
   heizlastProjects: HeizlastProject[];
   heroProjectLinkTemplate: string | null;
   initialAufgaben: MailTasksPage;
+  /** Welcher Tab bekommt die initialAufgaben-Daten (default-Tab vom Server). */
+  initialTab?: MailTabFilter;
   counts: MailTaskCounts;
 }
 
@@ -228,10 +230,24 @@ export function AufgabenView({
   heizlastProjects,
   heroProjectLinkTemplate,
   initialAufgaben,
+  initialTab,
   counts,
 }: Props) {
   const defaultTab: MailTabFilter =
-    counts.kritisch > 0 ? "kritisch" : "aufgaben";
+    initialTab ?? (counts.kritisch > 0 ? "kritisch" : "aufgaben");
+
+  // Server-vorgeladene Daten in den globalen Response-Cache schreiben,
+  // damit MailTab sie sofort zeigt ohne erstes Client-Fetch.
+  // useMemo damit das nur einmal beim ersten Render passiert.
+  useMemo(() => {
+    if (typeof window === "undefined") return;
+    if (initialAufgaben.entries.length === 0) return;
+    const k = cacheKey(defaultTab, "", "open", "all");
+    if (!RESPONSE_CACHE.has(k)) {
+      RESPONSE_CACHE.set(k, { data: initialAufgaben, ts: Date.now() });
+    }
+  }, [defaultTab, initialAufgaben]);
+
   return (
     <Tabs defaultValue={defaultTab} className="space-y-5">
       <TabsList className="h-auto p-1.5 bg-muted/40 rounded-xl gap-1 flex-wrap">
@@ -278,13 +294,22 @@ export function AufgabenView({
         </TabsTrigger>
       </TabsList>
       <TabsContent value="kritisch">
-        <MailTab initial={{ entries: [], total: 0 }} filter="kritisch" />
+        <MailTab
+          initial={defaultTab === "kritisch" ? initialAufgaben : { entries: [], total: 0 }}
+          filter="kritisch"
+        />
       </TabsContent>
       <TabsContent value="aufgaben">
-        <MailTab initial={initialAufgaben} filter="aufgaben" />
+        <MailTab
+          initial={defaultTab === "aufgaben" ? initialAufgaben : { entries: [], total: 0 }}
+          filter="aufgaben"
+        />
       </TabsContent>
       <TabsContent value="infos">
-        <MailTab initial={{ entries: [], total: 0 }} filter="infos" />
+        <MailTab
+          initial={defaultTab === "infos" ? initialAufgaben : { entries: [], total: 0 }}
+          filter="infos"
+        />
       </TabsContent>
       {counts.inbox > 0 && (
         <TabsContent value="inbox">
