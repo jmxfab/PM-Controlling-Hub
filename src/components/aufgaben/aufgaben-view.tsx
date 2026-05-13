@@ -337,6 +337,33 @@ const TAB_FILTERS: Record<
   rechnungen: { status: true,  priority: false, defaultStatus: "open" },
 };
 
+/**
+ * Globaler Modul-Cache fuer /api/mail-tasks Responses.
+ * Persists across MailTab-mounts (Tabs unmount inactive content by default).
+ * → Tab-Wechsel ist instant statt 500ms+ Roundtrip.
+ *
+ * TTL 30s damit der Cache nicht zu alt wird. Background-Refetch bei Cache-Hit
+ * sorgt fuer stale-while-revalidate Verhalten.
+ */
+type CacheEntry = { data: MailTasksPage; ts: number };
+const RESPONSE_CACHE = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 30_000;
+
+function cacheKey(
+  filter: MailTabFilter,
+  search: string,
+  status: StatusFilter,
+  prio: PrioFilter,
+): string {
+  return `${filter}|${search}|${status}|${prio}`;
+}
+
+function invalidateCacheForFilter(filter: MailTabFilter) {
+  for (const k of RESPONSE_CACHE.keys()) {
+    if (k.startsWith(`${filter}|`)) RESPONSE_CACHE.delete(k);
+  }
+}
+
 function MailTab({
   initial,
   filter,
@@ -361,8 +388,27 @@ function MailTab({
 
   const fetchData = useCallback(
     async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
-      setLoading(true);
+      const key = cacheKey(filter, q, st, pr);
+      const cached = RESPONSE_CACHE.get(key);
+      const now = Date.now();
+
+      // Cache-Hit: sofort anzeigen, im Hintergrund refetchen wenn alt
+      if (cached) {
+        setData(cached.data);
+        setHasFetched(true);
+        const isStale = now - cached.ts > CACHE_TTL_MS;
+        if (!isStale) {
+          // Frisch genug — kein Refetch noetig
+          setLoading(false);
+          setError(null);
+          return;
+        }
+        // stale-while-revalidate: zeige sofort cached, refetch silent
+      } else {
+        setLoading(true);
+      }
       setError(null);
+
       try {
         const params = new URLSearchParams({
           page: String(p),
@@ -382,7 +428,12 @@ function MailTab({
           return;
         }
         const json = await res.json();
-        setData({ entries: json.entries ?? [], total: json.total ?? 0 });
+        const page: MailTasksPage = {
+          entries: json.entries ?? [],
+          total: json.total ?? 0,
+        };
+        RESPONSE_CACHE.set(key, { data: page, ts: Date.now() });
+        setData(page);
         setHasFetched(true);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
@@ -460,6 +511,23 @@ function MailTab({
             ),
         total: removeFromList ? Math.max(0, prev.total - 1) : prev.total,
       }));
+      // Cache fuer diesen Filter (und ggf. Ziel-Filter bei category change)
+      // invalidieren, damit der naechste Tab-Wechsel frische Daten holt.
+      invalidateCacheForFilter(filter);
+      if (update.mail_category) {
+        // Task wechselt Tab -> auch dort Cache leeren
+        if (update.mail_category === "aufgabe" || update.mail_category === "dringend") {
+          invalidateCacheForFilter("aufgaben");
+        } else if (update.mail_category === "info") {
+          invalidateCacheForFilter("infos");
+        } else if (update.mail_category === "kritisch") {
+          invalidateCacheForFilter("kritisch");
+        } else if (update.mail_category === "rechnung" || update.mail_category === "bestellung") {
+          invalidateCacheForFilter("rechnungen");
+        } else if (update.mail_category === "inbox") {
+          invalidateCacheForFilter("inbox");
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
     } finally {
@@ -536,6 +604,7 @@ function MailTab({
           : prev.entries.filter((t) => t.id !== task.id),
         total: willStillMatch ? prev.total : Math.max(0, prev.total - 1),
       }));
+      invalidateCacheForFilter(filter);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
     } finally {
