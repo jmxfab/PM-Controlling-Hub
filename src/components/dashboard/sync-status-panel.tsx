@@ -39,33 +39,33 @@ function formatDuration(ms: number | null): string {
 function statusBadge(status: EntitySyncSummary["lastRunStatus"]) {
   if (status === "success") {
     return (
-      <Badge variant="secondary" className="gap-1">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/50">
         <CheckCircle2 className="h-3 w-3" />
         OK
-      </Badge>
+      </span>
     );
   }
   if (status === "error") {
     return (
-      <Badge variant="destructive" className="gap-1">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900/50">
         <AlertCircle className="h-3 w-3" />
         Fehler
-      </Badge>
+      </span>
     );
   }
   if (status === "running") {
     return (
-      <Badge variant="outline" className="gap-1">
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900/50">
         <Loader2 className="h-3 w-3 animate-spin" />
         läuft
-      </Badge>
+      </span>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1">
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
       <Minus className="h-3 w-3" />
       noch nie
-    </Badge>
+    </span>
   );
 }
 
@@ -90,18 +90,18 @@ export async function SyncStatusPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle>Hero Sync Status</CardTitle>
+          <CardTitle className="text-base font-semibold">Hero Sync Status</CardTitle>
           {dto.activeRuns > 0 ? (
-            <Badge variant="outline" className="gap-1">
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900/50">
               <Loader2 className="h-3 w-3 animate-spin" />
               {dto.activeRuns} laufend
-            </Badge>
+            </span>
           ) : null}
         </div>
-        <CardDescription>
+        <CardDescription className="text-xs">
           Mirror der Hero-Daten in Supabase. Letzter Lauf:{" "}
           {formatTimestamp(dto.latestRunAt)}. Detaillierte Runs in der Tabelle{" "}
           <code className="font-mono">hero_sync_runs</code>.

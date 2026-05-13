@@ -183,23 +183,32 @@ export function HeroAdminPanel({
 
   return (
     <>
-    <Card>
-      <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between lg:space-y-0">
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="gap-4 pb-3 lg:flex-row lg:items-start lg:justify-between lg:space-y-0">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-xl">Hero Read-only Status</CardTitle>
-            <Badge variant={heroReadOnlyConfigured ? "secondary" : "outline"}>
+            <CardTitle className="text-base font-semibold">Hero Read-only Status</CardTitle>
+            <span
+              className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ring-1 ${
+                heroReadOnlyConfigured
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/50"
+                  : "bg-muted text-muted-foreground ring-border"
+              }`}
+            >
               {heroReadOnlyConfigured ? "Hero GraphQL aktiv" : "Hero GraphQL fehlt"}
-            </Badge>
-            <Badge variant={heroProjectLinkTemplateConfigured ? "secondary" : "outline"}>
-              {heroProjectLinkTemplateConfigured
-                ? "Link-Template aktiv"
-                : "Kein Link-Template"}
-            </Badge>
+            </span>
+            <span
+              className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ring-1 ${
+                heroProjectLinkTemplateConfigured
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/50"
+                  : "bg-muted text-muted-foreground ring-border"
+              }`}
+            >
+              {heroProjectLinkTemplateConfigured ? "Link-Template aktiv" : "Kein Link-Template"}
+            </span>
           </div>
-          <CardDescription>
-            Dieses Dashboard läuft bewusst read-only. Es liest Hero-Daten direkt,
-            schreibt aber nichts nach Supabase oder zurück zu Hero.
+          <CardDescription className="text-xs">
+            Dashboard ist read-only · liest Hero direkt, schreibt nichts zurück
           </CardDescription>
         </div>
       </CardHeader>
