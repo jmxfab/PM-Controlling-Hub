@@ -181,7 +181,7 @@ export function DashboardCards({
 
   return (
     <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-      {DASHBOARD_KPI_KEYS.map((kpiKey) => {
+      {DASHBOARD_KPI_KEYS.map((kpiKey, idx) => {
         const card = DASHBOARD_KPI_CARD_DEFINITIONS[kpiKey];
         const Icon = card.icon;
         const theme = KPI_THEMES[kpiKey];
@@ -196,13 +196,14 @@ export function DashboardCards({
             aria-pressed={isSelected}
             className={cn(
               "group relative h-full overflow-hidden rounded-xl border bg-card text-left",
-              "transition-all duration-200",
+              "transition-all duration-200 animate-fade-in-up",
               "hover:-translate-y-0.5 hover:shadow-lg",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               theme.accent,
               isSelected &&
                 "ring-2 ring-foreground/15 shadow-md border-foreground/15"
             )}
+            style={{ animationDelay: `${idx * 40}ms` }}
             onClick={() => onKpiSelect(kpiKey)}
           >
             {/* Subtle background tint nur on hover/selected */}
