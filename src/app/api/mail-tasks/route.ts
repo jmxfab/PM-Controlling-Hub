@@ -10,9 +10,11 @@ import { loadHeroComments } from "@/lib/supabase/hero-comments-queries";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-/** Wenn Hero gemischt wird: ALLE Mails + ALLE Hero ziehen,
- *  damit die Sortierung+Pagination ueber den combined-Pool stimmt. */
-const COMBINED_LIMIT = 1000;
+/** Wenn Hero gemischt wird: alle relevanten Mails + Hero ziehen,
+ *  damit die Sortierung+Pagination ueber den combined-Pool stimmt.
+ *  500 reicht praktisch immer (Aufgaben-Tab hat selten >500 offene Items).
+ *  Hot Path -> bewusst limitiert um Latenz + Payload klein zu halten. */
+const COMBINED_LIMIT = 500;
 
 function parseTab(v: string | null): MailTabFilter {
   if (v === "kritisch" || v === "infos" || v === "inbox" || v === "rechnungen") return v;
