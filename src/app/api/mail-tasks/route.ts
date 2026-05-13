@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       priority: (searchParams.get("priority") as MailTaskFilters["priority"]) ?? undefined,
     };
     const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("page_size") ?? "50", 10)));
+    const pageSize = Math.min(1000, Math.max(1, parseInt(searchParams.get("page_size") ?? "50", 10)));
 
     let combinedEntries;
     let combinedTotal;

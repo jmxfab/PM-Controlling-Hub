@@ -72,7 +72,7 @@ export async function loadHeroComments(
 
   // Project-Lookup
   const projectIds = [...new Set(filtered.map((e) => e.target_id).filter(Boolean) as string[])];
-  let projectMap: Record<string, { project_number: string | null; project_name: string | null }> = {};
+  const projectMap: Record<string, { project_number: string | null; project_name: string | null }> = {};
   if (projectIds.length > 0) {
     const { data: projects } = await supabase
       .from("hero_projects")
@@ -83,18 +83,36 @@ export async function loadHeroComments(
     }
   }
 
-  return filtered.map((e) => ({
-    id: e.id,
-    title: e.title ?? null,
-    body: e.body ?? null,
-    is_read: e.is_read ?? null,
-    category: e.category ?? null,
-    notification_date: e.notification_date ?? null,
-    target_id: e.target_id ?? null,
-    project_number: projectMap[e.target_id ?? ""]?.project_number ?? null,
-    project_name: projectMap[e.target_id ?? ""]?.project_name ?? null,
-    is_for_domenic: isForDomenic(e.title, e.body),
-  }));
+  // Read-Override Lookup: pruefen welche Hero-IDs lokal als gelesen markiert wurden
+  const heroIds = filtered.map((e) => e.id);
+  const overrideSet = new Set<string>();
+  if (heroIds.length > 0) {
+    const { data: overrides } = await supabase
+      .from("hero_read_overrides")
+      .select("hero_id")
+      .in("hero_id", heroIds);
+    for (const o of overrides ?? []) {
+      overrideSet.add(o.hero_id);
+    }
+  }
+
+  return filtered.map((e) => {
+    const heroReadFlag = e.is_read === true;
+    const localOverride = overrideSet.has(e.id);
+    return {
+      id: e.id,
+      title: e.title ?? null,
+      body: e.body ?? null,
+      // is_read = entweder Hero hat's selbst gelesen ODER lokal markiert
+      is_read: heroReadFlag || localOverride,
+      category: e.category ?? null,
+      notification_date: e.notification_date ?? null,
+      target_id: e.target_id ?? null,
+      project_number: projectMap[e.target_id ?? ""]?.project_number ?? null,
+      project_name: projectMap[e.target_id ?? ""]?.project_name ?? null,
+      is_for_domenic: isForDomenic(e.title, e.body),
+    };
+  });
 }
 
 export async function countHeroComments(

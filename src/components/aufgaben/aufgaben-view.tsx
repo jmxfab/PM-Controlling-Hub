@@ -5,8 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  ChevronLeft,
-  ChevronRight,
   X,
   Mail,
   ChevronDown,
@@ -35,7 +33,9 @@ import type {
 } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 
-const PAGE_SIZE = 50;
+/** Keine echte Pagination — alles auf einmal laden (bis 500),
+ *  einfach scrollen statt Seiten blaettern. */
+const PAGE_SIZE = 500;
 
 type StatusFilter = "all" | "open" | "done";
 type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
@@ -351,7 +351,6 @@ function MailTab({
     tabFilters.defaultStatus,
   );
   const [prioFilter, setPrioFilter] = useState<PrioFilter>("all");
-  const [page, setPage] = useState(0);
   const [data, setData] = useState<MailTasksPage>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +364,11 @@ function MailTab({
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ page: String(p), filter });
+        const params = new URLSearchParams({
+          page: String(p),
+          filter,
+          page_size: String(PAGE_SIZE),
+        });
         if (q) params.set("search", q);
         if (st !== "all") params.set("status", st);
         if (pr !== "all") params.set("priority", pr);
@@ -406,22 +409,12 @@ function MailTab({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setPage(0);
       fetchData(search, 0, statusFilter, prioFilter);
     }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [search, statusFilter, prioFilter, fetchData]);
-
-  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
-  const from = data.total === 0 ? 0 : page * PAGE_SIZE + 1;
-  const to = Math.min((page + 1) * PAGE_SIZE, data.total);
-
-  function changePage(p: number) {
-    setPage(p);
-    fetchData(search, p, statusFilter, prioFilter);
-  }
 
   async function patchTask(
     taskId: string,
@@ -483,13 +476,62 @@ function MailTab({
     );
   }
 
-  /** Markiert eine Info als gelesen (status = done). Auf Infos-Tab default
-   *  "open" -> nach Klick verschwindet die Info aus der Liste. */
-  function markAsRead(task: MailTask) {
+  /** Markiert eine Info als gelesen. Bei Hero-Items wird ein lokales
+   *  Override gesetzt (Hero selbst bleibt unangetastet), bei Mail-Tasks
+   *  status = done. Auf Infos-Tab Default "open" -> Item verschwindet. */
+  async function markAsRead(task: MailTask) {
+    if (task.source === "hero") {
+      return markHeroAsRead(task);
+    }
     return patchTask(task.id, { status: "done" }, statusFilter === "open");
   }
 
+  /** Hero-Read-Override setzen (eigene Tabelle hero_read_overrides) */
+  async function markHeroAsRead(task: MailTask) {
+    setBusyTaskId(task.id);
+    try {
+      const heroIdRaw = task.id.startsWith("hero-") ? task.id.slice(5) : task.id;
+      const res = await window.fetch("/api/hero-mark-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hero_id: heroIdRaw }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(
+          toErrorString(body.error) ||
+            `Fehler ${res.status} beim Markieren als gelesen`,
+        );
+        return;
+      }
+      // Hero-Item lokal aus Liste entfernen (default-Filter "open")
+      setData((prev) => ({
+        ...prev,
+        entries:
+          statusFilter === "open"
+            ? prev.entries.filter((t) => t.id !== task.id)
+            : prev.entries.map((t) =>
+                t.id === task.id
+                  ? { ...t, status: "done" as const, hero_is_read: true }
+                  : t,
+              ),
+        total:
+          statusFilter === "open"
+            ? Math.max(0, prev.total - 1)
+            : prev.total,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
+    } finally {
+      setBusyTaskId(null);
+    }
+  }
+
   function markDone(task: MailTask) {
+    if (task.source === "hero") {
+      // Hero-Items: "Gelesen" toggeln via Override-Tabelle
+      return markHeroAsRead(task);
+    }
     return patchTask(task.id, {
       status: task.status === "done" ? "open" : "done",
     });
@@ -557,7 +599,7 @@ function MailTab({
       {error ? (
         <ErrorBox
           error={error}
-          onRetry={() => fetchData(search, page, statusFilter, prioFilter)}
+          onRetry={() => fetchData(search, 0, statusFilter, prioFilter)}
         />
       ) : loading && data.entries.length === 0 ? (
         <SkeletonList />
@@ -606,14 +648,12 @@ function MailTab({
               </div>
             </section>
           ))}
-          <Pagination
-            from={from}
-            to={to}
-            total={data.total}
-            page={page}
-            totalPages={totalPages}
-            onChange={changePage}
-          />
+          {data.total > 0 && (
+            <p className="text-[11px] text-muted-foreground text-center pt-2">
+              {data.entries.length} von {data.total.toLocaleString("de-AT")} Einträgen
+              {data.entries.length < data.total ? " — verfeinere die Suche um mehr zu sehen" : ""}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -1027,9 +1067,27 @@ function ActionButtons({
             In Hero öffnen
           </a>
         </Button>
-        <span className="text-xs text-muted-foreground">
-          Read-only — Statusänderung in Hero
-        </span>
+        {!isDone && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            disabled={busy}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkAsRead();
+            }}
+            title="Markiert diese Hero-Notification lokal als gelesen (Hero selbst bleibt unangetastet)"
+          >
+            <Eye size={13} />
+            Gelesen
+          </Button>
+        )}
+        {isDone && (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+            <Check size={13} /> als gelesen markiert
+          </span>
+        )}
       </div>
     );
   }
@@ -1246,49 +1304,4 @@ function ErrorBox({
   );
 }
 
-function Pagination({
-  from,
-  to,
-  total,
-  page,
-  totalPages,
-  onChange,
-}: {
-  from: number;
-  to: number;
-  total: number;
-  page: number;
-  totalPages: number;
-  onChange: (p: number) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pt-2">
-      <span>
-        {from}–{to} von {total.toLocaleString("de-AT")} Einträgen
-      </span>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          disabled={page === 0}
-          onClick={() => onChange(page - 1)}
-        >
-          <ChevronLeft size={14} />
-        </Button>
-        <span>
-          {page + 1} / {totalPages}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          disabled={page >= totalPages - 1}
-          onClick={() => onChange(page + 1)}
-        >
-          <ChevronRight size={14} />
-        </Button>
-      </div>
-    </div>
-  );
-}
+/* Pagination entfernt — alles in einem Stream */
