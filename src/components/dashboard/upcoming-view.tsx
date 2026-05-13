@@ -257,19 +257,24 @@ export function UpcomingView({
           hint="Wenn das nach 1-2 Minuten und einem Reload immer noch erscheint, bitte Admin informieren."
         />
       ) : null}
-      <Card>
-        <CardContent className="pt-4 pb-4 space-y-3">
-          <div className="space-y-2">
-            <Label>Zeitfenster (nach Fälligkeitsdatum)</Label>
+      <Card className="rounded-xl shadow-sm">
+        <CardContent className="pt-5 pb-5 space-y-4">
+          <div className="space-y-2.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+              Zeitfenster (nach Fälligkeitsdatum)
+            </Label>
             <Tabs value={activeWindow} onValueChange={selectWindow}>
-              <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
-                <TabsTrigger value="overdue">Überfällig</TabsTrigger>
-                <TabsTrigger value="today">Heute</TabsTrigger>
-                <TabsTrigger value="tomorrow">Morgen</TabsTrigger>
-                <TabsTrigger value="next3d">In 3 Tagen</TabsTrigger>
-                <TabsTrigger value="next7d">Nächste Woche</TabsTrigger>
-                <TabsTrigger value="next30d">30 Tage</TabsTrigger>
-                <TabsTrigger value="frei">Frei</TabsTrigger>
+              <TabsList className="flex h-auto flex-wrap gap-1 bg-muted/60 p-1 rounded-lg">
+                <TabsTrigger value="overdue" className="rounded-md data-[state=active]:shadow-sm data-[state=active]:bg-red-500 data-[state=active]:text-white text-red-600 dark:text-red-400 font-medium">
+                  <AlertTriangle size={12} className="mr-1" />
+                  Überfällig
+                </TabsTrigger>
+                <TabsTrigger value="today" className="rounded-md data-[state=active]:shadow-sm">Heute</TabsTrigger>
+                <TabsTrigger value="tomorrow" className="rounded-md data-[state=active]:shadow-sm">Morgen</TabsTrigger>
+                <TabsTrigger value="next3d" className="rounded-md data-[state=active]:shadow-sm">In 3 Tagen</TabsTrigger>
+                <TabsTrigger value="next7d" className="rounded-md data-[state=active]:shadow-sm">Nächste Woche</TabsTrigger>
+                <TabsTrigger value="next30d" className="rounded-md data-[state=active]:shadow-sm">30 Tage</TabsTrigger>
+                <TabsTrigger value="frei" className="rounded-md data-[state=active]:shadow-sm">Frei</TabsTrigger>
               </TabsList>
             </Tabs>
             {activeWindow === "frei" ? (
@@ -308,18 +313,20 @@ export function UpcomingView({
               </div>
             ) : null}
           </div>
-          <div className="space-y-2">
-            <Label>Sparte</Label>
+          <div className="space-y-2.5">
+            <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+              Sparte
+            </Label>
             <Tabs
               value={department}
               onValueChange={(v) => updateParams({ department: v })}
             >
-              <TabsList className="flex h-auto flex-wrap gap-1 bg-muted p-1">
+              <TabsList className="flex h-auto flex-wrap gap-1 bg-muted/60 p-1 rounded-lg">
                 {/* Sparten-Tabs aus DASHBOARD_DEPARTMENTS — sichtbare Tabs
                     inkl. GESAMT (= PV+WP). PV_GEWERBE + KLIMA sind aktuell
                     ausgeblendet, kommen spaeter. */}
                 {DASHBOARD_DEPARTMENTS.map((d) => (
-                  <TabsTrigger key={d} value={d}>
+                  <TabsTrigger key={d} value={d} className="rounded-md data-[state=active]:shadow-sm">
                     {DASHBOARD_DEPARTMENT_SHORT_LABELS[d]}
                   </TabsTrigger>
                 ))}
@@ -496,26 +503,35 @@ export function UpcomingView({
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {WINDOW_LABELS[activeWindow]} ·{" "}
-            {DASHBOARD_DEPARTMENT_NAMES[department]}
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">
+            {WINDOW_LABELS[activeWindow]} · {DASHBOARD_DEPARTMENT_NAMES[department]}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             {isPending
               ? "Lade Projekte…"
               : activeFilterCount > 0
-                ? `${filteredProjects.length} von ${projects.length} Projekten nach Filter. Klick auf eine Zeile zeigt Details + letzte Logbuch-Einträge.`
-                : `${filteredProjects.length} Projekt${filteredProjects.length === 1 ? "" : "e"}. Klick auf eine Zeile zeigt Details + letzte Logbuch-Einträge.`}
+                ? `${filteredProjects.length} von ${projects.length} Projekten · Klick zeigt Details + Logbuch`
+                : `${filteredProjects.length} Projekt${filteredProjects.length === 1 ? "" : "e"} · Klick zeigt Details + Logbuch`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {filteredProjects.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-12 text-center border border-dashed rounded-md">
-              {activeFilterCount > 0
-                ? "Keine Projekte passen zu den gewählten Filtern."
-                : "Keine Projekte mit Fälligkeit in diesem Fenster."}
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 py-16 px-4 text-center">
+              <div className="rounded-full bg-muted/60 p-3 mb-3">
+                <Calendar size={22} className="text-muted-foreground/70" />
+              </div>
+              <p className="text-sm font-medium">
+                {activeFilterCount > 0
+                  ? "Keine Treffer"
+                  : "Keine Projekte mit Fälligkeit in diesem Fenster"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                {activeFilterCount > 0
+                  ? "Filter anpassen oder zurücksetzen."
+                  : "Ein anderes Zeitfenster wählen, oder warten bis neue Fälligkeiten reinrutschen."}
+              </p>
             </div>
           ) : (
             <Table>
@@ -662,25 +678,47 @@ function SummaryTile({
   tone: "neutral" | "attention" | "warning";
   icon: React.ReactNode;
 }) {
-  const toneClass = {
-    neutral: "",
-    attention: "text-rose-600",
-    warning: "text-yellow-600",
+  const toneConfig = {
+    neutral: {
+      value: "text-foreground",
+      iconBg: "bg-blue-100 dark:bg-blue-950/50",
+      iconFg: "text-blue-600 dark:text-blue-400",
+      accent: "hover:border-blue-300/50",
+    },
+    attention: {
+      value: "text-rose-700 dark:text-rose-400",
+      iconBg: "bg-rose-100 dark:bg-rose-950/50",
+      iconFg: "text-rose-600 dark:text-rose-400",
+      accent: "hover:border-rose-300/50",
+    },
+    warning: {
+      value: "text-amber-700 dark:text-amber-400",
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconFg: "text-amber-600 dark:text-amber-400",
+      accent: "hover:border-amber-300/50",
+    },
   }[tone];
+
   return (
-    <Card>
-      <CardContent className="pt-4 pb-4 space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{label}</span>
-          <span className={toneClass}>{icon}</span>
-        </div>
+    <div
+      className={`relative h-full overflow-hidden rounded-xl border bg-card p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${toneConfig.accent}`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {label}
+        </p>
         <div
-          className={`text-2xl font-semibold tabular-nums ${toneClass}`}
+          className={`shrink-0 grid place-items-center w-10 h-10 rounded-xl ${toneConfig.iconBg} ${toneConfig.iconFg}`}
         >
-          {value.toLocaleString("de-DE")}
+          {icon}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div
+        className={`text-3xl font-bold tabular-nums tracking-tight leading-none ${toneConfig.value}`}
+      >
+        {value.toLocaleString("de-DE")}
+      </div>
+    </div>
   );
 }
 
