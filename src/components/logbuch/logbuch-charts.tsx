@@ -37,9 +37,9 @@ export function LogbuchCharts({ aggregations }: LogbuchChartsProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <Card>
+      <Card className="rounded-xl shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">
+          <CardTitle className="text-base font-semibold">
             Aktivitäten je Mitarbeiter
           </CardTitle>
         </CardHeader>
@@ -79,9 +79,9 @@ export function LogbuchCharts({ aggregations }: LogbuchChartsProps) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-xl shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">
+          <CardTitle className="text-base font-semibold">
             Top-Projekte nach Aktivität
           </CardTitle>
         </CardHeader>

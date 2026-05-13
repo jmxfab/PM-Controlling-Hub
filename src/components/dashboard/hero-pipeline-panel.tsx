@@ -289,9 +289,9 @@ export function HeroPipelinePanel({
       ) : null}
 
       {pipeline.timeframeDelta && !hideTimeframeDelta ? (
-        <Card>
+        <Card className="rounded-xl shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Änderungen im Zeitraum</CardTitle>
+            <CardTitle className="text-base font-semibold">Änderungen im Zeitraum</CardTitle>
             <CardDescription>
               Alle Status-Bewegungen zwischen{" "}
               {new Date(pipeline.timeframeDelta.fromIso).toLocaleDateString(
@@ -377,14 +377,13 @@ export function HeroPipelinePanel({
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[420px_minmax(0,1fr)]">
-        <Card className="lg:sticky lg:top-4 h-fit">
-          <CardHeader>
-            <CardTitle className="text-base">
+        <Card className="lg:sticky lg:top-4 h-fit rounded-xl shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">
               Pipeline · {DASHBOARD_DEPARTMENT_NAMES[department]}
             </CardTitle>
-            <CardDescription>
-              Hero-Steps mit Projektanzahl. Mehrere Steps lassen sich
-              kombinieren, um die Liste rechts zu filtern.
+            <CardDescription className="text-xs">
+              Hero-Steps mit Projektanzahl · Klick auf Step filtert die Liste rechts
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -434,13 +433,13 @@ export function HeroPipelinePanel({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Projekte</CardTitle>
-            <CardDescription>
+        <Card className="rounded-xl shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Projekte</CardTitle>
+            <CardDescription className="text-xs">
               {selected.size === 0
-                ? "Wähle links einen oder mehrere Steps, um Projekte zu sehen."
-                : `${projects.length} Projekt${projects.length === 1 ? "" : "e"} in der Auswahl.`}
+                ? "Wähle links einen oder mehrere Steps um Projekte zu sehen"
+                : `${projects.length} Projekt${projects.length === 1 ? "" : "e"} in der Auswahl`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1008,41 +1007,71 @@ function KpiTile({
   /** Wenn gesetzt, wird die Kachel zum Button und öffnet den Detail-Dialog. */
   onClick?: () => void;
 }) {
-  const toneClass = {
-    neutral: "",
-    good: "text-emerald-600",
-    warning: "text-yellow-600",
-    attention: "text-rose-600",
+  const toneConfig = {
+    neutral: {
+      value: "text-foreground",
+      iconBg: "bg-blue-100 dark:bg-blue-950/50",
+      iconFg: "text-blue-600 dark:text-blue-400",
+      accent: "hover:border-blue-300/50",
+    },
+    good: {
+      value: "text-emerald-700 dark:text-emerald-400",
+      iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+      iconFg: "text-emerald-600 dark:text-emerald-400",
+      accent: "hover:border-emerald-300/50",
+    },
+    warning: {
+      value: "text-amber-700 dark:text-amber-400",
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconFg: "text-amber-600 dark:text-amber-400",
+      accent: "hover:border-amber-300/50",
+    },
+    attention: {
+      value: "text-rose-700 dark:text-rose-400",
+      iconBg: "bg-rose-100 dark:bg-rose-950/50",
+      iconFg: "text-rose-600 dark:text-rose-400",
+      accent: "hover:border-rose-300/50",
+    },
   }[tone];
 
-  const cursorClass = onClick
-    ? "cursor-pointer hover:border-primary hover:shadow-sm"
-    : "cursor-help hover:border-primary/40";
+  const interactiveClass = onClick
+    ? `cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${toneConfig.accent}`
+    : `cursor-help ${toneConfig.accent}`;
 
   const innerCard = (
-    <Card className={`transition-all ${cursorClass}`}>
-      <CardContent className="pt-4 pb-4 space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{label}</span>
-          {icon ? <span className={toneClass}>{icon}</span> : null}
-        </div>
-        <div
-          className={`text-2xl font-semibold tabular-nums ${toneClass}`}
-        >
-          {valueText ?? (value ?? 0).toLocaleString("de-DE")}
-        </div>
-        {hint ? (
-          <p className="text-xs text-muted-foreground">{hint}</p>
+    <div
+      className={`relative h-full overflow-hidden rounded-xl border bg-card p-4 transition-all duration-200 ${interactiveClass}`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {label}
+        </p>
+        {icon ? (
+          <div
+            className={`shrink-0 grid place-items-center w-8 h-8 rounded-lg ${toneConfig.iconBg} ${toneConfig.iconFg}`}
+          >
+            {icon}
+          </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+      <div
+        className={`text-2xl font-bold tabular-nums tracking-tight leading-none ${toneConfig.value}`}
+      >
+        {valueText ?? (value ?? 0).toLocaleString("de-DE")}
+      </div>
+      {hint ? (
+        <p className="text-[11px] text-muted-foreground leading-snug mt-1.5">
+          {hint}
+        </p>
+      ) : null}
+    </div>
   );
 
   const card = onClick ? (
     <button
       type="button"
       onClick={onClick}
-      className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+      className="text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
     >
       {innerCard}
     </button>
