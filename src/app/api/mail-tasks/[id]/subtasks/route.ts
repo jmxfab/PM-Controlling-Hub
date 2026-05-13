@@ -63,66 +63,39 @@ export async function POST(
       return NextResponse.json({ subtasks: existing, regenerated: false });
     }
 
-    const claudeKey = process.env.ANTHROPIC_API_KEY;
-    if (!claudeKey) {
-      return NextResponse.json(
-        { error: "ANTHROPIC_API_KEY nicht konfiguriert" },
-        { status: 500 },
-      );
-    }
+    // Claude-Call laeuft ueber n8n-Webhook — n8n hat die Anthropic-Credential
+    // bereits konfiguriert (CIVOmhKOUSF1m3z6), wir brauchen keinen API-Key
+    // hier in Vercel zu hinterlegen.
+    const webhookUrl =
+      process.env.N8N_SUBTASK_WEBHOOK_URL ||
+      "https://n8n-eree.srv1603751.hstgr.cloud/webhook/subtask-generate";
 
-    const prompt = `Du bist Domenic's Assistent. Aus folgender Aufgabe sollst du eine konkrete Checkliste mit 3-7 Schritten generieren — was muss konkret getan/mitgenommen/erledigt werden? Keine Floskeln, jeder Schritt ist eine separate Handlung. Bei Terminen: was mitnehmen + nach dem Termin Folgeaktionen. Bei Rechnungen: pruefen + freigeben + buchen. Bei Anfragen: recherchieren + antworten.
-
-TITEL: ${task.title}
-
-BESCHREIBUNG: ${(task.description ?? "").slice(0, 2000)}
-
-Antwort NUR als JSON-Array mit Strings, KEIN Wrapper, KEINE Erklaerung:
-["Schritt 1", "Schritt 2", "Schritt 3", ...]
-
-Maximal 7 Schritte, jeder max 80 Zeichen, deutsche Sprache.`;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(webhookUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": claudeKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 600,
-        messages: [{ role: "user", content: prompt }],
+        title: task.title,
+        description: (task.description ?? "").slice(0, 2000),
       }),
     });
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       return NextResponse.json(
-        { error: `Claude API ${res.status}: ${txt.slice(0, 200)}` },
+        { error: `n8n-Webhook ${res.status}: ${txt.slice(0, 200)}` },
         { status: 502 },
       );
     }
-    const json = (await res.json()) as {
-      content?: Array<{ text?: string }>;
-    };
-    const text = json.content?.[0]?.text?.trim() ?? "";
-    // Parse Array — entweder pures JSON oder wrapped in ```...```
-    const arrMatch = text.match(/\[[\s\S]*\]/);
-    let titles: string[] = [];
-    try {
-      titles = arrMatch ? JSON.parse(arrMatch[0]) : [];
-    } catch {
-      titles = [];
-    }
-    titles = titles
+
+    const json = (await res.json().catch(() => ({}))) as { titles?: string[] };
+    const titles = (json.titles ?? [])
       .filter((t) => typeof t === "string" && t.trim().length > 0)
       .map((t) => t.trim().slice(0, 200))
       .slice(0, 7);
 
     if (titles.length === 0) {
       return NextResponse.json(
-        { error: "Claude konnte keine Schritte generieren" },
+        { error: "Keine Schritte generiert — bitte erneut versuchen" },
         { status: 502 },
       );
     }
