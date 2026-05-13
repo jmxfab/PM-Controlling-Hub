@@ -120,12 +120,12 @@ export function DashboardProjectList({
     }
 
     return (
-      <Card>
-        <CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-xl">Projekte im Überblick</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-base font-semibold">Projekte im Überblick</CardTitle>
+              <CardDescription className="text-xs">
                 {departmentName} · {getDashboardTimeframeLabel(timeframe)}
               </CardDescription>
             </div>

@@ -157,13 +157,13 @@ export function InsightsView({
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md border p-3 space-y-1">
+              <div className="rounded-xl border bg-card/40 p-4 space-y-1 transition-all hover:-translate-y-0.5 hover:shadow-sm hover:border-foreground/10">
                 <p className="text-xs text-muted-foreground">Gesamt installiert</p>
                 <p className="text-2xl font-semibold tabular-nums">
                   {kwpStats.totalKwp.toLocaleString("de-DE")} kWp
                 </p>
               </div>
-              <div className="rounded-md border p-3 space-y-1">
+              <div className="rounded-xl border bg-card/40 p-4 space-y-1 transition-all hover:-translate-y-0.5 hover:shadow-sm hover:border-foreground/10">
                 <p className="text-xs text-muted-foreground">Ø pro Projekt</p>
                 <p className="text-2xl font-semibold tabular-nums">
                   {kwpStats.avgKwp !== null
@@ -171,7 +171,7 @@ export function InsightsView({
                     : "–"}
                 </p>
               </div>
-              <div className="rounded-md border p-3 space-y-1">
+              <div className="rounded-xl border bg-card/40 p-4 space-y-1 transition-all hover:-translate-y-0.5 hover:shadow-sm hover:border-foreground/10">
                 <p className="text-xs text-muted-foreground">Projekte mit kWp-Angabe</p>
                 <p className="text-2xl font-semibold tabular-nums">
                   {kwpStats.projectsWithKwp}
@@ -223,8 +223,8 @@ export function InsightsView({
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
           <CardTitle>{chartTitle} — {deptName}{rangeSuffix}</CardTitle>
           <CardDescription>
             Neu angelegt (blau), Abgeschlossen (grün), In Abrechnung (gelb),
@@ -260,8 +260,8 @@ export function InsightsView({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
           <CardTitle>
             Durchlaufzeit pro Step (Tage) — {deptName}{rangeSuffix}
           </CardTitle>
@@ -297,8 +297,8 @@ export function InsightsView({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
           <CardTitle>Älteste offene Projekte — {deptName}</CardTitle>
           <CardDescription>
             Projekte mit dem ältesten created-Datum die noch nicht

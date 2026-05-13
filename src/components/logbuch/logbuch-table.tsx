@@ -39,9 +39,12 @@ export function LogbuchTable({
 
   if (entries.length === 0 && total === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-        <p className="text-sm">Keine Einträge gefunden.</p>
-        <p className="text-xs">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 py-16 px-4 text-center">
+        <div className="rounded-full bg-muted/60 p-3 mb-3">
+          <ChevronDown size={22} className="text-muted-foreground/70 rotate-0" />
+        </div>
+        <p className="text-sm font-medium">Keine Einträge gefunden</p>
+        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
           Daten werden nach dem nächsten Hero-Sync verfügbar.
         </p>
       </div>
@@ -61,7 +64,7 @@ export function LogbuchTable({
 
   return (
     <div className="space-y-2">
-      <div className="rounded-md border overflow-hidden">
+      <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
