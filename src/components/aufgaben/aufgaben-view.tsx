@@ -1156,7 +1156,7 @@ function TaskCard({
                 Hero
               </span>
             )}
-            {t.subtasks.length > 0 && (() => {
+            {tab !== "infos" && t.subtasks.length > 0 && (() => {
               const done = t.subtasks.filter((s) => s.done).length;
               const all = t.subtasks.length;
               const allDone = done === all;
@@ -1196,8 +1196,10 @@ function TaskCard({
                 {t.body}
               </div>
             )}
-            {/* Subtask-Checkliste — nur fuer echte Mail-Tasks, nicht Hero. */}
-            {t.source === "mail" && (
+            {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
+             *  NICHT bei Infos (reine Lese-Items, keine Action) und nicht
+             *  bei Hero-Items (read-only). */}
+            {t.source === "mail" && tab !== "infos" && (
               <SubtaskList
                 taskId={t.id}
                 initialSubtasks={t.subtasks}
