@@ -190,13 +190,11 @@ export function CashflowView({
       </div>
 
       {/* Umsatz nach Sparte + Monat */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Umsatz nach Sparte — letzte 12 Monate</CardTitle>
-          <CardDescription>
-            Summe der Rechnungsbeträge (value) pro Monat, nach Sparte
-            aufgeschlüsselt. Rechnungserstellungsdatum aus Hero
-            (created_at_hero).
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Umsatz nach Sparte · letzte 12 Monate</CardTitle>
+          <CardDescription className="text-xs">
+            Summe der Rechnungsbeträge pro Monat, nach Sparte aufgeschlüsselt
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -262,18 +260,33 @@ function Kpi({
    *  Seite). */
   scrollTargetId?: string;
 }) {
-  const toneClass = {
-    neutral: "",
-    good: "text-emerald-600",
-    warning: "text-yellow-600",
+  const toneConfig = {
+    neutral: {
+      value: "text-foreground",
+      iconBg: "bg-blue-100 dark:bg-blue-950/50",
+      iconFg: "text-blue-600 dark:text-blue-400",
+      accent: "hover:border-blue-300/50",
+    },
+    good: {
+      value: "text-emerald-700 dark:text-emerald-400",
+      iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+      iconFg: "text-emerald-600 dark:text-emerald-400",
+      accent: "hover:border-emerald-300/50",
+    },
+    warning: {
+      value: "text-amber-700 dark:text-amber-400",
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconFg: "text-amber-600 dark:text-amber-400",
+      accent: "hover:border-amber-300/50",
+    },
   }[tone];
+
   const clickable = !!scrollTargetId;
   function handleClick() {
     if (!scrollTargetId) return;
     const el = document.getElementById(scrollTargetId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Kurzer Highlight-Pulse damit der User sieht wo er gelandet ist.
       el.classList.add("ring-2", "ring-primary", "ring-offset-2");
       window.setTimeout(() => {
         el.classList.remove("ring-2", "ring-primary", "ring-offset-2");
@@ -281,12 +294,12 @@ function Kpi({
     }
   }
   return (
-    <Card
-      className={
+    <div
+      className={`relative h-full overflow-hidden rounded-xl border bg-card p-5 transition-all duration-200 ${
         clickable
-          ? "cursor-pointer transition-colors hover:border-ring/40 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          ? `cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${toneConfig.accent} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`
           : ""
-      }
+      }`}
       onClick={clickable ? handleClick : undefined}
       onKeyDown={
         clickable
@@ -302,22 +315,28 @@ function Kpi({
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `${label} — Details anzeigen` : undefined}
     >
-      <CardContent className="pt-4 pb-4 space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{label}</span>
-          <span className={toneClass}>{icon}</span>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {label}
+        </p>
+        <div
+          className={`shrink-0 grid place-items-center w-10 h-10 rounded-xl ${toneConfig.iconBg} ${toneConfig.iconFg}`}
+        >
+          {icon}
         </div>
-        <div className={`text-2xl font-semibold tabular-nums ${toneClass}`}>
-          {valueText}
-        </div>
-        <p className="text-xs text-muted-foreground">{hint}</p>
-        {clickable ? (
-          <p className="text-[10px] text-primary/70 pt-0.5">
-            Klick für Details ↓
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
+      </div>
+      <div
+        className={`text-3xl font-bold tabular-nums tracking-tight leading-none mb-1.5 ${toneConfig.value}`}
+      >
+        {valueText}
+      </div>
+      <p className="text-xs text-muted-foreground leading-snug line-clamp-2">{hint}</p>
+      {clickable ? (
+        <p className="text-[10px] text-muted-foreground/60 pt-1.5 mt-1.5 border-t border-border/40">
+          Klick für Details ↓
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -373,16 +392,12 @@ function InvoiceStatusBreakdown({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Rechnungs-Status — {deptName}</CardTitle>
-        <CardDescription>
-          Verteilung aller Rechnungen nach Hero-Status. Stornorechnungen
-          (negative Beträge) sind mit saldiert — pro Zeile siehst du
-          darunter, wie viele Stornos in der Netto-Summe stecken. 0 €-
-          Einträge (Entwürfe, gelöschte, wertlose Storni) sind bewusst mit
-          gezählt, damit man die Stückzahl sieht. Klick auf einen Status
-          zeigt die einzelnen Rechnungen mit Projekt + Kunde.
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Rechnungs-Status · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Verteilung aller Rechnungen nach Hero-Status · Stornos saldiert
+          · Klick auf Status zeigt Einzel-Rechnungen
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -631,16 +646,12 @@ function InvoiceAgingBreakdown({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Forderungs-Aging — {deptName}</CardTitle>
-        <CardDescription>
-          Offene Rechnungen (Status Erstellt/Versendet) gruppiert nach
-          Tagen seit Erstellung. Originale mit Status {`„Storniert“`} und
-          gelöschte sind ausgeschlossen; Stornorechnungen (reversal_invoice
-          mit negativen Werten) sind in den Summen saldiert enthalten und
-          reduzieren den Netto-Betrag entsprechend. Klick auf einen Bucket
-          zeigt die einzelnen Rechnungen mit Projekt + Kunde.
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Forderungs-Aging · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Offene Rechnungen gruppiert nach Tagen seit Erstellung · Stornos
+          saldiert · Klick auf Bucket zeigt Einzel-Rechnungen
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -813,15 +824,12 @@ function CashflowForecast({
   const totalOpen = buckets.reduce((s, b) => s + b.openEur, 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Fälligkeits-Forecast — {deptName}</CardTitle>
-        <CardDescription>
-          Offene Rechnungssummen nach Projekt-Fälligkeit
-          (<code className="font-mono text-xs">current_project_match_status.maturity_date</code>).
-          Zeigt auf einen Blick, welche Beträge wann zahlungswirksam werden.
-          Klick auf einen Bucket zeigt die einzelnen Projekte mit Kunde +
-          Step + Fälligkeit.
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Fälligkeits-Forecast · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Offene Rechnungssummen nach Projekt-Fälligkeit · Klick auf Bucket
+          zeigt einzelne Projekte
         </CardDescription>
       </CardHeader>
       <CardContent>
