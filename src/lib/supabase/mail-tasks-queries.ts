@@ -82,20 +82,20 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     return count ?? 0;
   }
   // Hero-Comments mit Domenic-Bezug -> Aufgaben, Rest -> Infos
-  const { countHeroComments } = await import("./hero-comments-queries");
-  const [kritisch, aufgabenMail, infosMail, inbox, rechnungen, aufgabenHero, infosHero] = await Promise.all([
+  // countHeroCommentsBoth() macht 1 Roundtrip fuer BEIDE Tabs statt 2 separate
+  const { countHeroCommentsBoth } = await import("./hero-comments-queries");
+  const [kritisch, aufgabenMail, infosMail, inbox, rechnungen, heroCounts] = await Promise.all([
     countMail(CATEGORIES_PER_TAB.kritisch),
     countMail(CATEGORIES_PER_TAB.aufgaben),
     countMail(CATEGORIES_PER_TAB.infos),
     countMail(CATEGORIES_PER_TAB.inbox),
     countMail(CATEGORIES_PER_TAB.rechnungen),
-    countHeroComments("aufgaben", true).catch(() => 0),
-    countHeroComments("infos", true).catch(() => 0),
+    countHeroCommentsBoth().catch(() => ({ aufgaben: 0, infos: 0 })),
   ]);
   return {
     kritisch,
-    aufgaben: aufgabenMail + aufgabenHero,
-    infos: infosMail + infosHero,
+    aufgaben: aufgabenMail + heroCounts.aufgaben,
+    infos: infosMail + heroCounts.infos,
     inbox,
     rechnungen,
   };
