@@ -70,30 +70,31 @@ export async function loadHeroComments(
     return tab === "aufgaben" ? forD : !forD;
   });
 
-  // Project-Lookup
+  // Project + Override Lookup PARALLEL ausfuehren (statt sequenziell)
+  // → spart einen Roundtrip ~50-100ms pro API-Call
   const projectIds = [...new Set(filtered.map((e) => e.target_id).filter(Boolean) as string[])];
+  const heroIds = filtered.map((e) => e.id);
+
+  const [projectsRes, overridesRes] = await Promise.all([
+    projectIds.length > 0
+      ? supabase
+          .from("hero_projects")
+          .select("id, project_number, project_name")
+          .in("id", projectIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; project_number: string | null; project_name: string | null }> }),
+    heroIds.length > 0
+      ? supabase.from("hero_read_overrides").select("hero_id").in("hero_id", heroIds)
+      : Promise.resolve({ data: [] as Array<{ hero_id: string }> }),
+  ]);
+
   const projectMap: Record<string, { project_number: string | null; project_name: string | null }> = {};
-  if (projectIds.length > 0) {
-    const { data: projects } = await supabase
-      .from("hero_projects")
-      .select("id, project_number, project_name")
-      .in("id", projectIds);
-    for (const p of projects ?? []) {
-      projectMap[p.id] = { project_number: p.project_number ?? null, project_name: p.project_name ?? null };
-    }
+  for (const p of projectsRes.data ?? []) {
+    projectMap[p.id] = { project_number: p.project_number ?? null, project_name: p.project_name ?? null };
   }
 
-  // Read-Override Lookup: pruefen welche Hero-IDs lokal als gelesen markiert wurden
-  const heroIds = filtered.map((e) => e.id);
   const overrideSet = new Set<string>();
-  if (heroIds.length > 0) {
-    const { data: overrides } = await supabase
-      .from("hero_read_overrides")
-      .select("hero_id")
-      .in("hero_id", heroIds);
-    for (const o of overrides ?? []) {
-      overrideSet.add(o.hero_id);
-    }
+  for (const o of overridesRes.data ?? []) {
+    overrideSet.add(o.hero_id);
   }
 
   return filtered.map((e) => {
@@ -122,4 +123,49 @@ export async function countHeroComments(
   const items = await loadHeroComments(tab, 1000);
   if (onlyUnread) return items.filter((i) => i.is_read !== true).length;
   return items.length;
+}
+
+/**
+ * Lightweight counts fuer BEIDE Tabs (aufgaben + infos) in EINEM DB-Roundtrip.
+ * Vorher rief loadMailTaskCounts zweimal countHeroComments auf → 2× 1000-Zeilen-
+ * Fetch + 2× Project-Lookup + 2× Override-Lookup. Jetzt: 1× fetch (minimal cols),
+ * 1× Override-Lookup, dann in-memory split. ~3× schneller bei vielen Hero-Items.
+ */
+export async function countHeroCommentsBoth(): Promise<{
+  aufgaben: number;
+  infos: number;
+}> {
+  const supabase = supabaseAdmin();
+  const limit = 1000;
+
+  const { data, error } = await supabase
+    .from("hero_notifications")
+    .select("id, title, body, is_read")
+    .eq("is_deleted", false)
+    .order("notification_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) return { aufgaben: 0, infos: 0 };
+  const rows = data ?? [];
+
+  // Override-Lookup nur fuer ungelesene-Filter
+  const heroIds = rows.map((r) => r.id);
+  const overrideSet = new Set<string>();
+  if (heroIds.length > 0) {
+    const { data: overrides } = await supabase
+      .from("hero_read_overrides")
+      .select("hero_id")
+      .in("hero_id", heroIds);
+    for (const o of overrides ?? []) overrideSet.add(o.hero_id);
+  }
+
+  let aufgaben = 0;
+  let infos = 0;
+  for (const r of rows) {
+    const isUnread = r.is_read !== true && !overrideSet.has(r.id);
+    if (!isUnread) continue;
+    if (isForDomenic(r.title, r.body)) aufgaben++;
+    else infos++;
+  }
+  return { aufgaben, infos };
 }
