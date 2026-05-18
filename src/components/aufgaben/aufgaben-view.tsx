@@ -23,6 +23,7 @@ import {
   Flame,
   ArrowRight,
   Eye,
+  EyeOff,
   UserCheck,
   Bell,
 } from "lucide-react";
@@ -1344,6 +1345,26 @@ function TaskCard({
                 Hero
               </span>
             )}
+            {/* Outlook-Read-Status: zeigt ob Domenic die Mail schon in Outlook
+             *  geoeffnet hat. Synct alle 10 Min vom Sync-Workflow. */}
+            {t.source === "mail" && t.source_email_is_read === true && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+                title="In Outlook bereits geoeffnet (Stand: max 10 Min alt)"
+              >
+                <Eye size={10} /> In Outlook gelesen
+              </span>
+            )}
+            {t.source === "mail" &&
+              t.source_email_is_read === false &&
+              t.source_email_id && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
+                  title="Noch nicht in Outlook geoeffnet"
+                >
+                  <EyeOff size={10} /> Ungelesen
+                </span>
+              )}
             {tab !== "infos" && t.subtasks.length > 0 && (() => {
               const done = t.subtasks.filter((s) => s.done).length;
               const all = t.subtasks.length;
