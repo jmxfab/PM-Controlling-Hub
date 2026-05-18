@@ -33,6 +33,9 @@ export interface MailTask {
   source_email_entry_id: string | null;
   /** Microsoft Graph webLink — oeffnet die Original-Mail in Outlook (Desktop oder Web) */
   source_email_web_link: string | null;
+  /** Spiegelt Outlook-isRead: true wenn Domenic die Mail bereits in Outlook geoeffnet hat.
+   *  Wird vom Sync-Workflow alle 10 Min refreshed solange der Task open ist. */
+  source_email_is_read: boolean | null;
   /** Claude-Klassifikation: aufgabe / dringend = "Aufgaben"-Tab, info = "Infos"-Tab, inbox = unklar */
   mail_category: MailCategory | null;
   /** Extracted from description prefix "Von: ..." */
@@ -136,7 +139,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category, subtasks, assigned_to, remind_at, is_user_created", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, mail_category, subtasks, assigned_to, remind_at, is_user_created", { count: "exact" })
     .or("is_automated.eq.true,is_user_created.eq.true")
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
@@ -174,6 +177,10 @@ export async function loadMailTasksPage(
       source_email_id: row.source_email_id ?? null,
       source_email_entry_id: row.source_email_entry_id ?? null,
       source_email_web_link: row.source_email_web_link ?? null,
+      source_email_is_read:
+        typeof row.source_email_is_read === "boolean"
+          ? row.source_email_is_read
+          : null,
       mail_category: (row.mail_category as MailCategory | null) ?? null,
       sender,
       body,
@@ -209,6 +216,7 @@ export function heroToMailItem(
     source_email_id: null,
     source_email_entry_id: null,
     source_email_web_link: null,
+    source_email_is_read: null,
     mail_category: category,
     sender: null,
     body: hero.body,
