@@ -56,17 +56,6 @@ export default async function CashPage({ searchParams }: PageProps) {
       >);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
-  // Liquiditaets-Forecast laeuft global (dept-uebergreifend) damit man auch
-  // im PV-Tab die gesamte Firma-Liquiditaet sieht. Defensiv: bei DB-Fehler
-  // wird das Panel mit Fehlertext angezeigt statt die ganze Seite zu killen.
-  const forecastResult = await loadLiquidityForecast().then(
-    (f) => ({ ok: true as const, forecast: f }),
-    (e) => ({
-      ok: false as const,
-      error: e instanceof Error ? e.message : String(e),
-    }),
-  );
-
   const tabContents = Object.fromEntries(
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
@@ -105,14 +94,47 @@ export default async function CashPage({ searchParams }: PageProps) {
         tabContents={tabContents}
         timeframe={timeframe}
       />
-      {/* Liquiditaets-Forecast: zusaetzliche Sicht UNTER den dept-spezifischen
-       *  Cash-KPIs. Liefert die "Wie viel Geld kommt in den naechsten 30/60/90
-       *  Tagen rein"-Frage ohne die bestehenden Kennzahlen zu verdraengen. */}
-      <LiquidityForecastPanel
-        forecast={forecastResult.ok ? forecastResult.forecast : null}
-        error={forecastResult.ok ? null : forecastResult.error}
-      />
+      {/* Liquiditaets-Forecast: laeuft in eigener Suspense damit die dept-Cash-KPIs
+       *  (DashboardShell oben) NICHT auf den Forecast warten muessen — die werden
+       *  jetzt sofort gestreamt, der Forecast kommt nach. */}
+      <Suspense fallback={<LiquiditySkeleton />}>
+        <LiquidityForecastSection />
+      </Suspense>
     </div>
+  );
+}
+
+async function LiquidityForecastSection() {
+  // Defensive: bei DB-Fehler zeigt das Panel den Fehler statt die ganze Seite zu killen.
+  const result = await loadLiquidityForecast().then(
+    (f) => ({ ok: true as const, forecast: f }),
+    (e) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  return (
+    <LiquidityForecastPanel
+      forecast={result.ok ? result.forecast : null}
+      error={result.ok ? null : result.error}
+    />
+  );
+}
+
+function LiquiditySkeleton() {
+  return (
+    <section className="space-y-4">
+      <div className="h-12 rounded-2xl bg-card/40 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 rounded-2xl bg-card/40 animate-pulse"
+          />
+        ))}
+      </div>
+      <div className="h-40 rounded-2xl bg-card/40 animate-pulse" />
+    </section>
   );
 }
 
