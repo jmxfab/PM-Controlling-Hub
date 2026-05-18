@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import {
   loadMailTasksPage,
   heroToMailItem,
@@ -6,6 +7,23 @@ import {
   type MailTaskFilters,
 } from "@/lib/supabase/mail-tasks-queries";
 import { loadHeroComments } from "@/lib/supabase/hero-comments-queries";
+
+const VALID_CATEGORY = new Set([
+  "info",
+  "aufgabe",
+  "dringend",
+  "kritisch",
+  "inbox",
+  "rechnung",
+  "bestellung",
+]);
+const VALID_PRIORITY = new Set(["urgent", "high", "medium", "low"]);
+
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key);
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -98,6 +116,80 @@ export async function GET(request: NextRequest) {
         },
       },
     );
+  } catch (error) {
+    return NextResponse.json({ error: errMsg(error) }, { status: 500 });
+  }
+}
+
+/**
+ * POST: Erstellt eine manuelle Aufgabe (vom User, nicht vom n8n-Workflow).
+ * Body: { title, description?, mail_category, priority?, due_date?, assigned_to?, remind_at? }
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json().catch(() => ({}))) as {
+      title?: string;
+      description?: string;
+      mail_category?: string;
+      priority?: string;
+      due_date?: string | null;
+      assigned_to?: string | null;
+      remind_at?: string | null;
+    };
+
+    const title = (body.title ?? "").trim();
+    if (title.length === 0) {
+      return NextResponse.json({ error: "title required" }, { status: 400 });
+    }
+    if (title.length > 200) {
+      return NextResponse.json({ error: "title max 200 chars" }, { status: 400 });
+    }
+
+    const category = body.mail_category ?? "aufgabe";
+    if (!VALID_CATEGORY.has(category)) {
+      return NextResponse.json({ error: `Invalid mail_category: ${category}` }, { status: 400 });
+    }
+
+    const priority = body.priority ?? "medium";
+    if (!VALID_PRIORITY.has(priority)) {
+      return NextResponse.json({ error: `Invalid priority: ${priority}` }, { status: 400 });
+    }
+
+    const row: Record<string, unknown> = {
+      title,
+      description: (body.description ?? "").slice(0, 4000),
+      mail_category: category,
+      priority,
+      status: "open",
+      is_user_created: true,
+      is_automated: false,
+      subtasks: [],
+    };
+
+    if (body.due_date) {
+      const d = new Date(body.due_date);
+      if (!Number.isNaN(d.getTime())) row.due_date = d.toISOString();
+    }
+    if (body.assigned_to && typeof body.assigned_to === "string") {
+      row.assigned_to = body.assigned_to.trim().slice(0, 200);
+    }
+    if (body.remind_at) {
+      const d = new Date(body.remind_at);
+      if (!Number.isNaN(d.getTime())) row.remind_at = d.toISOString();
+    }
+
+    const supabase = supabaseAdmin();
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert(row)
+      .select("id")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: errMsg(error) }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, id: data?.id });
   } catch (error) {
     return NextResponse.json({ error: errMsg(error) }, { status: 500 });
   }

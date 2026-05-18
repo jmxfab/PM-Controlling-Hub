@@ -23,6 +23,8 @@ import {
   Flame,
   ArrowRight,
   Eye,
+  UserCheck,
+  Bell,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -34,6 +36,7 @@ import type {
 } from "@/lib/supabase/mail-tasks-queries";
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 import { SubtaskList } from "@/components/aufgaben/subtask-list";
+import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -745,6 +748,20 @@ function MailTab({
     invalidateCacheForFilter(filter);
   }
 
+  /** Delegate/Reminder-Update — PATCH wurde schon vom Form gemacht. */
+  function updateTaskDelegation(
+    taskId: string,
+    next: { assigned_to: string | null; remind_at: string | null },
+  ) {
+    setData((prev) => ({
+      ...prev,
+      entries: prev.entries.map((t) =>
+        t.id === taskId ? { ...t, ...next } : t,
+      ),
+    }));
+    invalidateCacheForFilter(filter);
+  }
+
   function buildOutlookDesktopLink(task: MailTask): string | null {
     if (task.source_email_entry_id) {
       return `ms-outlook://emails/open?ItemID=${encodeURIComponent(task.source_email_entry_id)}`;
@@ -833,6 +850,7 @@ function MailTab({
                     onMoveToAufgaben={() => moveToAufgaben(t)}
                     onSnooze={(ms) => snoozeBy(t, ms)}
                     onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
+                    onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                   />
@@ -1031,6 +1049,7 @@ function TaskCard({
   onMoveToAufgaben,
   onSnooze,
   onSubtasksChange,
+  onDelegationChange,
   buildMailto,
   buildOutlookDesktopLink,
 }: {
@@ -1044,6 +1063,10 @@ function TaskCard({
   onMoveToAufgaben: () => void;
   onSnooze: (ms: number) => void;
   onSubtasksChange: (next: Subtask[]) => void;
+  onDelegationChange: (next: {
+    assigned_to: string | null;
+    remind_at: string | null;
+  }) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
 }) {
@@ -1173,6 +1196,38 @@ function TaskCard({
                 </span>
               );
             })()}
+            {t.assigned_to && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300"
+                title={`Delegiert an ${t.assigned_to}`}
+              >
+                <UserCheck size={10} /> {t.assigned_to}
+              </span>
+            )}
+            {t.remind_at && (() => {
+              const remDate = new Date(t.remind_at);
+              const isFuture = remDate.getTime() > Date.now();
+              return (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ring-1 ${
+                    isFuture
+                      ? "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300"
+                      : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300"
+                  }`}
+                  title={`Erinnerung: ${remDate.toLocaleString("de-AT")}`}
+                >
+                  <Bell size={10} /> {isFuture ? formatRelative(t.remind_at) : "fällig"}
+                </span>
+              );
+            })()}
+            {t.is_user_created && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-foreground/5 text-muted-foreground ring-1 ring-border"
+                title="Manuell angelegt"
+              >
+                Manuell
+              </span>
+            )}
           </div>
         </div>
 
@@ -1204,6 +1259,15 @@ function TaskCard({
                 taskId={t.id}
                 initialSubtasks={t.subtasks}
                 onSubtasksChange={onSubtasksChange}
+              />
+            )}
+            {/* Delegieren + Erinnerung — nur fuer Mail-Tasks, nicht Hero. */}
+            {t.source === "mail" && tab !== "infos" && (
+              <DelegateRemindForm
+                taskId={t.id}
+                currentAssignedTo={t.assigned_to}
+                currentRemindAt={t.remind_at}
+                onUpdated={onDelegationChange}
               />
             )}
             <ActionButtons

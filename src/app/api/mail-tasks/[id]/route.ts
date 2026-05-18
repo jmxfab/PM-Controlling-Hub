@@ -54,6 +54,10 @@ export async function PATCH(
       due_date?: string | null;
       mail_category?: string;
       priority?: string;
+      assigned_to?: string | null;
+      remind_at?: string | null;
+      title?: string;
+      description?: string;
     };
 
     const update: Record<string, unknown> = {};
@@ -89,6 +93,40 @@ export async function PATCH(
         );
       }
       update.priority = body.priority;
+    }
+
+    if (body.assigned_to !== undefined) {
+      const v = body.assigned_to;
+      if (v !== null && (typeof v !== "string" || v.length > 200)) {
+        return NextResponse.json(
+          { error: "Invalid assigned_to (must be string ≤200 chars or null)" },
+          { status: 400 },
+        );
+      }
+      update.assigned_to = v && v.trim().length > 0 ? v.trim() : null;
+    }
+
+    if (body.remind_at !== undefined) {
+      if (body.remind_at !== null) {
+        const d = new Date(body.remind_at);
+        if (Number.isNaN(d.getTime())) {
+          return NextResponse.json(
+            { error: "Invalid remind_at (must be ISO date or null)" },
+            { status: 400 },
+          );
+        }
+        update.remind_at = d.toISOString();
+      } else {
+        update.remind_at = null;
+      }
+    }
+
+    if (body.title !== undefined && typeof body.title === "string") {
+      update.title = body.title.trim().slice(0, 200);
+    }
+
+    if (body.description !== undefined && typeof body.description === "string") {
+      update.description = body.description.slice(0, 4000);
     }
 
     if (Object.keys(update).length === 0) {
