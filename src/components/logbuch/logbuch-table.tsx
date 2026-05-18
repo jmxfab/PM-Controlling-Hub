@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ListTodo } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { LogbuchEntry } from "@/lib/supabase/hero-logbuch-queries";
 
@@ -116,14 +117,29 @@ export function LogbuchTable({
                     </TableCell>
                     <TableCell className="text-sm">
                       {entry.project_number || entry.project_name ? (
-                        <span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {entry.project_number && (
-                            <span className="font-mono text-xs mr-1.5 text-muted-foreground">
+                            <span className="font-mono text-xs text-muted-foreground">
                               {entry.project_number}
                             </span>
                           )}
-                          {entry.project_name}
-                        </span>
+                          {entry.project_name && (
+                            <span>{entry.project_name}</span>
+                          )}
+                          {/* Cross-Link: oeffnet /aufgaben mit Projekt-Nr
+                           *  als Suchbegriff. So findet man schnell ob es
+                           *  zu diesem Projekt eine Mail-Aufgabe gibt. */}
+                          {entry.project_number && (
+                            <Link
+                              href={`/aufgaben?search=${encodeURIComponent(entry.project_number)}`}
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Aufgaben zu Projekt ${entry.project_number} suchen`}
+                              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline decoration-dotted underline-offset-2 ml-0.5"
+                            >
+                              <ListTodo size={10} /> Aufgaben
+                            </Link>
+                          )}
+                        </div>
                       ) : entry.project_match_id ? (
                         <span className="text-xs text-muted-foreground font-mono">
                           {entry.project_match_id}

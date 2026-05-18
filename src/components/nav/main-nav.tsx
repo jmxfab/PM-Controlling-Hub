@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   BarChart3,
   BookOpen,
   CalendarClock,
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
+  { href: "/projekte", label: "Pulse", icon: Activity },
 ];
 
 export function MainNav() {
