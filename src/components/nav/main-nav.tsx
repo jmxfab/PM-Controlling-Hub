@@ -45,26 +45,45 @@ export function MainNav() {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-30 border-b border-border/40 bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50">
+      {/* Razor-thin brand accent line — sits on the bottom border */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent dark:via-blue-400/30"
+      />
       <div className="relative max-w-[1600px] mx-auto pl-2 pr-4 h-20 flex items-center gap-4">
-        {/* Logo */}
+        {/* Logo + Wordmark */}
         <Link
           href="/"
-          className="shrink-0 block transition-transform hover:scale-105 active:scale-95"
+          className="group shrink-0 flex items-center gap-2.5 transition-transform hover:scale-[1.02] active:scale-95"
           aria-label="Jumax Controlling · Startseite"
         >
-          <Image
-            src="/jumax-logo.png"
-            alt="Jumax Logo"
-            width={80}
-            height={80}
-            priority
-            className="block"
-          />
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-400/30 to-violet-500/30 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+            />
+            <Image
+              src="/jumax-logo.png"
+              alt="Jumax Logo"
+              width={72}
+              height={72}
+              priority
+              className="relative block"
+            />
+          </div>
+          <div className="hidden lg:flex flex-col leading-tight">
+            <span className="text-[15px] font-bold tracking-tight">
+              Controlling Hub
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-medium">
+              Jumax Elektrotechnik
+            </span>
+          </div>
         </Link>
 
         {/* Primary nav */}
-        <nav className="flex items-center gap-0.5 flex-1">
+        <nav className="flex items-center gap-0.5 flex-1 ml-2">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -72,19 +91,26 @@ export function MainNav() {
               <Link
                 key={href}
                 href={href}
-                className={`group relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm transition-all duration-150 ${
+                aria-current={active ? "page" : undefined}
+                className={`group relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm transition-all duration-200 ${
                   active
-                    ? "bg-foreground text-background font-semibold shadow-sm"
+                    ? "bg-foreground text-background font-semibold shadow-[0_4px_14px_-2px_hsl(var(--foreground)/0.25)] dark:shadow-[0_4px_14px_-2px_hsl(var(--foreground)/0.4)]"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 }`}
               >
                 <Icon
                   size={15}
-                  className={`transition-transform ${
-                    active ? "" : "group-hover:scale-110"
+                  className={`transition-transform duration-200 ${
+                    active ? "" : "group-hover:scale-110 group-hover:-rotate-3"
                   }`}
                 />
                 <span>{label}</span>
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 h-0.5 w-6 rounded-full bg-gradient-to-r from-blue-500 to-violet-500"
+                  />
+                )}
               </Link>
             );
           })}
@@ -98,7 +124,7 @@ export function MainNav() {
             title="Einstellungen"
             className={`group flex items-center justify-center h-9 w-9 rounded-lg transition-all ${
               settingsActive
-                ? "bg-foreground text-background"
+                ? "bg-foreground text-background shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             }`}
           >
