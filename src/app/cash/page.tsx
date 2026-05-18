@@ -99,15 +99,18 @@ export default async function CashPage({ searchParams }: PageProps) {
           Rechnungs- und Zahlungsfluss · Cashflow-Übersicht je Abteilung
         </p>
       </header>
-      <LiquidityForecastPanel
-        forecast={forecastResult.ok ? forecastResult.forecast : null}
-        error={forecastResult.ok ? null : forecastResult.error}
-      />
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}
         tabContents={tabContents}
         timeframe={timeframe}
+      />
+      {/* Liquiditaets-Forecast: zusaetzliche Sicht UNTER den dept-spezifischen
+       *  Cash-KPIs. Liefert die "Wie viel Geld kommt in den naechsten 30/60/90
+       *  Tagen rein"-Frage ohne die bestehenden Kennzahlen zu verdraengen. */}
+      <LiquidityForecastPanel
+        forecast={forecastResult.ok ? forecastResult.forecast : null}
+        error={forecastResult.ok ? null : forecastResult.error}
       />
     </div>
   );
