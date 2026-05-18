@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { CashflowView } from "@/components/dashboard/cashflow-view";
+import { LiquidityForecastPanel } from "@/components/dashboard/liquidity-forecast-panel";
+import { loadLiquidityForecast } from "@/lib/supabase/hero-liquidity-forecast";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
 import {
   loadCashInvoiceKpisForDept,
@@ -54,6 +56,17 @@ export default async function CashPage({ searchParams }: PageProps) {
       >);
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
 
+  // Liquiditaets-Forecast laeuft global (dept-uebergreifend) damit man auch
+  // im PV-Tab die gesamte Firma-Liquiditaet sieht. Defensiv: bei DB-Fehler
+  // wird das Panel mit Fehlertext angezeigt statt die ganze Seite zu killen.
+  const forecastResult = await loadLiquidityForecast().then(
+    (f) => ({ ok: true as const, forecast: f }),
+    (e) => ({
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+
   const tabContents = Object.fromEntries(
     DASHBOARD_DEPARTMENTS.map((dept) => [
       dept,
@@ -86,6 +99,10 @@ export default async function CashPage({ searchParams }: PageProps) {
           Rechnungs- und Zahlungsfluss · Cashflow-Übersicht je Abteilung
         </p>
       </header>
+      <LiquidityForecastPanel
+        forecast={forecastResult.ok ? forecastResult.forecast : null}
+        error={forecastResult.ok ? null : forecastResult.error}
+      />
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}
