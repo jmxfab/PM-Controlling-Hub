@@ -271,20 +271,32 @@ const loadLongestRunningInner = cache(
       age_reset_at: string | null;
       age_reset_note: string | null;
     }> = [];
-    for (let offset = 0; offset < 10000; offset += 1000) {
-      let query = supabase
-        .from("hero_dashboard_projects")
-        .select(
-          "id, project_number, project_name, step_name, customer_name, created_at_hero, was_reopened, last_finish_at, last_rework_at, age_reset_at, age_reset_note, department_key"
-        )
-        .eq("is_finished", false)
-        .not("created_at_hero", "is", null);
-      if (department !== "GESAMT") query = query.eq("department_key", department);
-      else query = query.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
-      const { data } = await query.range(offset, offset + 999);
-      const rows = (data ?? []) as typeof all;
-      all.push(...rows);
-      if (rows.length < 1000) break;
+    // Vorher: bis zu 10 sequenzielle Range-Queries fuer alle offenen Projekte (10k Rows)
+    // + JS-Sort. Jetzt: 1 RPC mit ORDER BY effective_start + LIMIT auf DB-Seite.
+    // Falls die RPC fehlt (z.B. vor Migration) -> Fallback auf alte Logik.
+    const rpcRes = await supabase.rpc("compute_longest_running", {
+      p_department: department,
+      p_limit: limit,
+    });
+    if (!rpcRes.error && Array.isArray(rpcRes.data)) {
+      all.push(...(rpcRes.data as typeof all));
+    } else {
+      // Fallback alte Logik
+      for (let offset = 0; offset < 10000; offset += 1000) {
+        let query = supabase
+          .from("hero_dashboard_projects")
+          .select(
+            "id, project_number, project_name, step_name, customer_name, created_at_hero, was_reopened, last_finish_at, last_rework_at, age_reset_at, age_reset_note, department_key",
+          )
+          .eq("is_finished", false)
+          .not("created_at_hero", "is", null);
+        if (department !== "GESAMT") query = query.eq("department_key", department);
+        else query = query.in("department_key", GESAMT_DEPARTMENT_KEYS_ARR);
+        const { data } = await query.range(offset, offset + 999);
+        const rows = (data ?? []) as typeof all;
+        all.push(...rows);
+        if (rows.length < 1000) break;
+      }
     }
 
     const now = Date.now();
