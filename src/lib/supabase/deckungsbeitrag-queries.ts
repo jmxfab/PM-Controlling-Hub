@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 import {
   GESAMT_DEPARTMENT_KEYS_ARR,
@@ -115,7 +116,7 @@ export const loadDeckungsbeitrag = cache(
         return {
           projectMatchId: p.id,
           projectNumber: p.project_number,
-          projectName: p.project_name,
+          projectName: cleanProjectName(p.project_name),
           customerName: p.customer_name,
           departmentKey: p.department_key,
           revenue,

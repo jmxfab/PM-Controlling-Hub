@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -108,7 +109,7 @@ export async function loadLogbuchPage(
     for (const p of projects ?? []) {
       projectMap[p.id] = {
         project_number: p.project_number ?? null,
-        project_name: p.project_name ?? null,
+        project_name: cleanProjectName(p.project_name),
       };
     }
   }

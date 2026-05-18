@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -77,7 +78,7 @@ export async function loadAufgabenPage(
       notification_date: e.notification_date ?? null,
       target_id: e.target_id ?? null,
       project_number: projectMap[e.target_id ?? ""]?.project_number ?? null,
-      project_name: projectMap[e.target_id ?? ""]?.project_name ?? null,
+      project_name: cleanProjectName(projectMap[e.target_id ?? ""]?.project_name),
     })),
     total: count ?? 0,
   };

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -68,7 +69,7 @@ export async function loadHeizlastProjects(): Promise<HeizlastProject[]> {
   return projects.map((p) => ({
     id: String(p.id),
     project_number: p.project_number ?? null,
-    project_name: p.project_name ?? null,
+    project_name: cleanProjectName(p.project_name),
     step_name: p.step_name ?? null,
     customer_name: p.customer_name ?? null,
     customer_address: p.customer_address ?? null,
