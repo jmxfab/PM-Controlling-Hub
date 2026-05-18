@@ -251,6 +251,109 @@ function formatDue(iso: string): {
   return { text, overdue, implausible: false };
 }
 
+/**
+ * Erkennt ob ein Description-Text als Bullet-Liste formatiert ist und
+ * splittet ihn entsprechend. Akzeptiert: "-", "*", "•", "·", "—" sowie
+ * "1.", "2)" etc. am Zeilenanfang.
+ *
+ * Rueckgabe:
+ *  - lead: optionaler Einleitungstext vor den Bullets (oder null)
+ *  - items: Bullet-Texte (ohne Marker), oder leeres Array wenn kein Listen-Pattern
+ */
+function parseBullets(text: string): { lead: string | null; items: string[] } {
+  if (!text) return { lead: null, items: [] };
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length < 2) return { lead: null, items: [] };
+
+  const BULLET_RE = /^[-*•·—–]\s+(.+)$/;
+  const NUMBERED_RE = /^\d+[.)]\s+(.+)$/;
+
+  const items: string[] = [];
+  let lead: string | null = null;
+  let bulletStarted = false;
+
+  for (const line of lines) {
+    const bm = BULLET_RE.exec(line) ?? NUMBERED_RE.exec(line);
+    if (bm) {
+      bulletStarted = true;
+      items.push(bm[1].trim());
+    } else if (!bulletStarted) {
+      // Einleitungstext vor erstem Bullet sammeln
+      lead = lead ? `${lead} ${line}` : line;
+    } else {
+      // Fortsetzungszeile eines Bullets (kein Marker) → an letztes Item anhaengen
+      if (items.length > 0) {
+        items[items.length - 1] = `${items[items.length - 1]} ${line}`;
+      }
+    }
+  }
+
+  // Sinnvoll nur wenn mindestens 2 Bullets
+  if (items.length < 2) return { lead: null, items: [] };
+  return { lead, items };
+}
+
+/**
+ * Description-Renderer: zeigt Bullet-Listen als <ul>, sonst Fliesstext.
+ * `clamp` blendet bei nicht-expanded Karten auf 2 Zeilen ab.
+ */
+function DescriptionBody({ text, clamp }: { text: string; clamp?: boolean }) {
+  const { lead, items } = parseBullets(text);
+
+  if (items.length === 0) {
+    return clamp ? (
+      <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed pt-0.5">
+        {text}
+      </p>
+    ) : (
+      <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed max-w-3xl text-foreground/90">
+        {text}
+      </div>
+    );
+  }
+
+  if (clamp) {
+    // Kompakt-Ansicht: nur erste 2 Bullets, Rest als "+N weitere"
+    const visible = items.slice(0, 2);
+    const rest = items.length - visible.length;
+    return (
+      <ul className="text-[13px] text-muted-foreground leading-relaxed pt-0.5 space-y-0.5">
+        {visible.map((it, i) => (
+          <li key={i} className="flex gap-1.5">
+            <span className="text-foreground/40 select-none shrink-0">•</span>
+            <span className="truncate">{it}</span>
+          </li>
+        ))}
+        {rest > 0 && (
+          <li className="text-[11px] text-muted-foreground/70 pl-3">
+            +{rest} weitere{rest === 1 ? "r" : ""} Punkt{rest === 1 ? "" : "e"}
+          </li>
+        )}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-2 max-w-3xl text-[13.5px] leading-relaxed text-foreground/90">
+      {lead && <p className="whitespace-pre-wrap">{lead}</p>}
+      <ul className="space-y-1.5">
+        {items.map((it, i) => (
+          <li key={i} className="flex gap-2">
+            <span
+              aria-hidden
+              className="mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500/70 dark:bg-blue-400/70"
+            />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function AufgabenView({
   heizlastProjects,
   heroProjectLinkTemplate,
@@ -1197,12 +1300,8 @@ function TaskCard({
           {/* Sender / project line */}
           <SourceInfo task={t} />
 
-          {/* Body preview */}
-          {t.body && !expanded && (
-            <p className="text-[13px] text-muted-foreground line-clamp-2 leading-relaxed pt-0.5">
-              {t.body}
-            </p>
-          )}
+          {/* Body preview — bullets werden als Liste gerendert wenn vorhanden */}
+          {t.body && !expanded && <DescriptionBody text={t.body} clamp />}
 
           {/* Meta row: prio + due + status */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
@@ -1312,11 +1411,7 @@ function TaskCard({
       >
         <div className="overflow-hidden">
           <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-5 py-4 space-y-4">
-            {t.body && (
-              <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed max-w-3xl text-foreground/90">
-                {t.body}
-              </div>
-            )}
+            {t.body && <DescriptionBody text={t.body} />}
             {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
              *  NICHT bei Infos (reine Lese-Items, keine Action) und nicht
              *  bei Hero-Items (read-only). */}
