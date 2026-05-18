@@ -209,13 +209,34 @@ function avatarFor(key: string): { initials: string; cls: string } {
   return { initials, cls: AVATAR_PALETTE[hash % AVATAR_PALETTE.length] };
 }
 
-function formatDue(iso: string): { text: string; overdue: boolean } {
+function formatDue(iso: string): {
+  text: string;
+  overdue: boolean;
+  /** Wert wirkt unplausibel (>1 Jahr überfällig) — z.B. Claude hat ein
+   *  Datum aus dem Mail-Body falsch geparst (Rechnungsnummer als Jahr o.ä.).
+   *  UI zeigt dann das absolute Datum + Hinweis statt "vor 854 Tagen". */
+  implausible: boolean;
+} {
   const d = new Date(iso);
   const now = Date.now();
   const diffMs = d.getTime() - now;
   const overdue = diffMs < 0;
   const abs = Math.abs(diffMs);
   const diffMin = Math.round(abs / 60000);
+  const diffD = Math.round(diffMin / 60 / 24);
+
+  // Schwelle: > 1 Jahr überfällig ODER > 5 Jahre in der Zukunft = wahrscheinlich
+  // ein Parse-Fehler von Claude. Wir zeigen das Datum dann absolut.
+  const implausible = (overdue && diffD > 365) || (!overdue && diffD > 365 * 5);
+  if (implausible) {
+    const text = d.toLocaleDateString("de-AT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    return { text, overdue, implausible: true };
+  }
+
   let text: string;
   if (diffMin < 60)
     text = overdue ? `vor ${diffMin} Min` : `in ${diffMin} Min`;
@@ -223,12 +244,11 @@ function formatDue(iso: string): { text: string; overdue: boolean } {
     const diffH = Math.round(diffMin / 60);
     if (diffH < 24) text = overdue ? `vor ${diffH} Std` : `in ${diffH} Std`;
     else {
-      const diffD = Math.round(diffH / 24);
       if (overdue) text = diffD === 1 ? "gestern fällig" : `vor ${diffD} Tagen`;
       else text = diffD === 1 ? "morgen" : `in ${diffD} Tagen`;
     }
   }
-  return { text, overdue };
+  return { text, overdue, implausible: false };
 }
 
 export function AufgabenView({
@@ -1160,7 +1180,16 @@ function TaskCard({
             >
               {t.title}
             </h3>
-            <span className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap shrink-0">
+            <span
+              className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap shrink-0"
+              title={`Eingegangen ${new Date(t.created_at).toLocaleString("de-AT", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`}
+            >
               {formatRelative(t.created_at)}
             </span>
           </div>
@@ -1188,15 +1217,22 @@ function TaskCard({
             {due && (
               <span
                 className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                  due.overdue
-                    ? "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300"
-                    : isWaiting
-                      ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
-                      : "bg-muted text-muted-foreground"
+                  due.implausible
+                    ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900/50"
+                    : due.overdue
+                      ? "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-300"
+                      : isWaiting
+                        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
+                        : "bg-muted text-muted-foreground"
                 }`}
+                title={
+                  due.implausible
+                    ? `Fälligkeit von Claude geschätzt: ${due.text} — wirkt unplausibel (>1 Jahr abweichend). Bitte prüfen.`
+                    : `Fälligkeitsdatum der Aufgabe`
+                }
               >
                 <CalendarClock size={10} />
-                {due.text}
+                {due.implausible ? `Fällig ${due.text}?` : due.text}
               </span>
             )}
             {isDone && (
