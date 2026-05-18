@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { berlinIsoStartOfDay } from "@/lib/dashboard/berlin-iso";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -132,7 +133,7 @@ export async function loadPvControllingKpis(
   const toProject = (r: (typeof allPv)[number]): PvKpiProject => ({
     id: r.id,
     projectNumber: r.project_number,
-    projectName: r.project_name,
+    projectName: cleanProjectName(r.project_name),
     customerName: r.customer_name,
     stepName: r.step_name,
     maturityDate: r.maturity_date,
@@ -202,7 +203,7 @@ export async function loadPvControllingKpis(
       return {
         id: String(r.id),
         projectNumber: proj?.project_number ?? null,
-        projectName: proj?.project_name ?? null,
+        projectName: cleanProjectName(proj?.project_name),
         customerName: proj?.customer_name ?? null,
         docNumber: (r.nr as string | null) ?? null,
         type: (r.type as string | null) ?? null,

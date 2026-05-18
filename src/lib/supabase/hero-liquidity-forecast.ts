@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -327,7 +328,7 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
             p.id,
             {
               number: p.project_number ?? null,
-              name: p.project_name ?? null,
+              name: cleanProjectName(p.project_name),
               customerName: p.customer_name ?? null,
             },
           ],
