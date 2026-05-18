@@ -52,6 +52,8 @@ export interface MailTask {
   /** Hero-spezifisch: Projekt-Nummer falls Hero-Notification an einem Projekt haengt */
   hero_project_number?: string | null;
   hero_project_name?: string | null;
+  /** Hero-spezifisch: project_match_id fuer Cross-Link zur Projekt-Aktivitaet */
+  hero_project_id?: string | null;
   /** Hero-spezifisch: ungelesen-Flag */
   hero_is_read?: boolean | null;
   /** Auto-generierte Subtasks (Checkliste) — leer wenn noch nicht generiert. */
@@ -243,6 +245,7 @@ export function heroToMailItem(
     body: hero.body,
     hero_project_number: hero.project_number,
     hero_project_name: hero.project_name,
+    hero_project_id: hero.target_id ?? null,
     hero_is_read: hero.is_read,
     subtasks: [],
     assigned_to: null,

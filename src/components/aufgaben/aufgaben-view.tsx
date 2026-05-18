@@ -40,6 +40,7 @@ import { HeizlastView } from "@/components/heizlast/heizlast-view";
 import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
+import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-strip";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -617,7 +618,12 @@ function MailTab({
 }) {
   const meta = TAB_META[filter];
   const tabFilters = TAB_FILTERS[filter];
-  const [search, setSearch] = useState("");
+  // URL-Param ?search=... unterstuetzen — wird beim Mount in den Filter
+  // uebernommen damit Cross-Links vom Logbuch funktionieren.
+  const [search, setSearch] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("search") ?? "";
+  });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
     tabFilters.defaultStatus,
   );
@@ -1533,6 +1539,12 @@ function TaskCard({
         <div className="overflow-hidden">
           <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-5 py-4 space-y-4">
             {t.body && <DescriptionBody text={t.body} />}
+            {/* Projekt-Pulse: zeigt letzte 5 Logbuch-Eintraege des Hero-Projekts,
+             *  falls verknuepft. Nur fuer Hero-source-Tasks aktiv (da haben wir
+             *  die hero_project_id). */}
+            {t.source === "hero" && t.hero_project_id && (
+              <ProjectActivityStrip projectId={t.hero_project_id} />
+            )}
             {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
              *  NICHT bei Infos (reine Lese-Items, keine Action) und nicht
              *  bei Hero-Items (read-only). */}
