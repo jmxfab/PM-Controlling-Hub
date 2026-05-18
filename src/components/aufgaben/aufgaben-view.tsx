@@ -26,6 +26,7 @@ import {
   EyeOff,
   UserCheck,
   Bell,
+  History,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -38,6 +39,7 @@ import type {
 import { HeizlastView } from "@/components/heizlast/heizlast-view";
 import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
+import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -632,6 +634,8 @@ function MailTab({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
+  /** Wenn gesetzt -> SenderHistoryDialog ist offen mit dieser Mail-Adresse. */
+  const [historyEmail, setHistoryEmail] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(
@@ -1005,6 +1009,7 @@ function MailTab({
                     onSnooze={(ms) => snoozeBy(t, ms)}
                     onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
                     onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
+                    onSenderClick={(email) => setHistoryEmail(email)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                   />
@@ -1020,6 +1025,14 @@ function MailTab({
           )}
         </div>
       )}
+      {/* Kunden-History: zeigt alle Tasks dieses Absenders der letzten 30/90/365 Tage. */}
+      <SenderHistoryDialog
+        email={historyEmail}
+        open={historyEmail !== null}
+        onOpenChange={(open) => {
+          if (!open) setHistoryEmail(null);
+        }}
+      />
     </div>
   );
 }
@@ -1204,6 +1217,7 @@ function TaskCard({
   onSnooze,
   onSubtasksChange,
   onDelegationChange,
+  onSenderClick,
   buildMailto,
   buildOutlookDesktopLink,
 }: {
@@ -1221,6 +1235,7 @@ function TaskCard({
     assigned_to: string | null;
     remind_at: string | null;
   }) => void;
+  onSenderClick: (email: string) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
 }) {
@@ -1299,7 +1314,7 @@ function TaskCard({
           </div>
 
           {/* Sender / project line */}
-          <SourceInfo task={t} />
+          <SourceInfo task={t} onSenderClick={onSenderClick} />
 
           {/* Body preview — bullets werden als Liste gerendert wenn vorhanden */}
           {t.body && !expanded && <DescriptionBody text={t.body} clamp />}
@@ -1493,7 +1508,13 @@ function TaskCard({
   );
 }
 
-function SourceInfo({ task }: { task: MailTask }) {
+function SourceInfo({
+  task,
+  onSenderClick,
+}: {
+  task: MailTask;
+  onSenderClick?: (email: string) => void;
+}) {
   if (task.source === "hero") {
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -1507,11 +1528,30 @@ function SourceInfo({ task }: { task: MailTask }) {
     );
   }
   if (task.sender) {
+    // Sender ist klickbar -> oeffnet Verlauf-Dialog (Kunden-History).
+    // Wir stoppen Bubbling damit nicht die Karte ein-/aufgeklappt wird.
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Mail size={11} className="text-blue-500 shrink-0" />
-        <span className="truncate max-w-[260px]">{task.sender}</span>
-      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onSenderClick && task.sender) onSenderClick(task.sender);
+        }}
+        title={`Verlauf aller Aufgaben von ${task.sender}`}
+        className="group inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+      >
+        <Mail
+          size={11}
+          className="text-blue-500 shrink-0 group-hover:scale-110 transition-transform"
+        />
+        <span className="truncate max-w-[260px] group-hover:underline decoration-dotted underline-offset-2">
+          {task.sender}
+        </span>
+        <History
+          size={10}
+          className="shrink-0 opacity-0 group-hover:opacity-70 -translate-x-1 group-hover:translate-x-0 transition-all"
+        />
+      </button>
     );
   }
   return (
