@@ -2,7 +2,15 @@
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, Snowflake, Sun, Sunrise, Wind, Wrench } from "lucide-react";
+import {
+  Building2,
+  CalendarRange,
+  Snowflake,
+  Sun,
+  Sunrise,
+  Wind,
+  Wrench,
+} from "lucide-react";
 
 import {
   getDefaultDashboardCustomRange,
@@ -179,9 +187,17 @@ export function DashboardShell({
               <TabsTrigger
                 value="jumax_week"
                 title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
-                className="rounded-md border border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 data-[state=active]:bg-amber-500 data-[state=active]:text-amber-50 data-[state=active]:border-amber-500 data-[state=active]:shadow-sm"
+                className="group relative gap-1.5 rounded-md font-medium ring-1 ring-amber-500/40 bg-gradient-to-b from-amber-50 to-amber-100/60 text-amber-800 hover:ring-amber-500/70 hover:from-amber-100 hover:to-amber-200/70 dark:from-amber-500/10 dark:to-amber-600/5 dark:text-amber-300 dark:hover:from-amber-500/15 dark:hover:to-amber-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-400 data-[state=active]:via-orange-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:ring-amber-500/0 data-[state=active]:shadow-[0_4px_16px_-2px_hsl(35_95%_55%/0.45)] dark:data-[state=active]:shadow-[0_6px_22px_-4px_hsl(35_95%_55%/0.55)] transition-all duration-200"
               >
+                <CalendarRange
+                  size={13}
+                  className="opacity-80 group-data-[state=active]:opacity-100 transition-transform duration-300 group-data-[state=active]:rotate-6"
+                />
                 Jumax-Woche
+                <span
+                  aria-hidden
+                  className="hidden group-data-[state=active]:block absolute inset-0 rounded-md pointer-events-none ring-1 ring-inset ring-white/25 dark:ring-white/15"
+                />
               </TabsTrigger>
             </TabsList>
 
