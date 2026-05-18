@@ -52,14 +52,33 @@ export interface LiquidityForecast {
   totalOpenAmount: number;
   totalOpenCount: number;
   buckets: LiquidityBucket[];
+  /** Top 10 offene Rechnungen nach openAmount sortiert — fuer Detail-Liste im UI. */
+  topOpen: TopOpenInvoice[];
+}
+
+export interface TopOpenInvoice {
+  id: string;
+  nr: string | null;
+  customerName: string | null;
+  projectNumber: string | null;
+  projectName: string | null;
+  documentDate: string | null;
+  dueDate: string | null;
+  openAmount: number;
+  daysOverdue: number | null;
 }
 
 type InvoiceRow = {
+  id: string;
+  nr: string | null;
+  document_date: string | null;
   value: number | string | null;
   booking_balance: number | string | null;
   booking_due_date: string | null;
   booking_paid_date: string | null;
   booking_is_open: boolean | null;
+  raw: { Customer?: { Name?: string }; CustomerName?: string } | null;
+  project_match_id: string | null;
 };
 
 function toNum(v: number | string | null): number | null {
@@ -83,7 +102,7 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
   const { data: openRowsData, error: openErr } = await supabase
     .from("hero_customer_documents")
     .select(
-      "value, booking_balance, booking_due_date, booking_paid_date, booking_is_open",
+      "id, nr, document_date, value, booking_balance, booking_due_date, booking_paid_date, booking_is_open, raw, project_match_id",
     )
     .eq("type", "invoice")
     .eq("is_deleted", false)
@@ -91,7 +110,7 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     .eq("booking_is_open", true)
     .limit(10_000);
   if (openErr) throw openErr;
-  const openRows: InvoiceRow[] = openRowsData ?? [];
+  const openRows: InvoiceRow[] = (openRowsData ?? []) as InvoiceRow[];
 
   // 2) Bezahlte Rechnungen der letzten 12 Monate fuer Zahlungsverhalten
   const { data: paidRowsData, error: paidErr } = await supabase
@@ -248,6 +267,68 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     buckets.noduedate,
   ];
 
+  // Top-10 offene Rechnungen — fuer Detail-Liste im Panel.
+  // Resolve customerName aus raw (Hero-API liefert ihn dort) und Projekt
+  // ueber project_match_id einmal in einer Batch-Query (statt N+1).
+  const projectIds = openRows
+    .map((r) => r.project_match_id)
+    .filter((id): id is string => Boolean(id));
+  const uniqueProjectIds = Array.from(new Set(projectIds));
+  let projectMap: Record<string, { number: string | null; name: string | null }> = {};
+  if (uniqueProjectIds.length > 0) {
+    const { data: projData } = await supabase
+      .from("hero_projects")
+      .select("id, number, name")
+      .in("id", uniqueProjectIds)
+      .limit(uniqueProjectIds.length);
+    if (Array.isArray(projData)) {
+      projectMap = Object.fromEntries(
+        projData.map((p: { id: string; number: string | null; name: string | null }) => [
+          p.id,
+          { number: p.number ?? null, name: p.name ?? null },
+        ]),
+      );
+    }
+  }
+
+  const topOpen: TopOpenInvoice[] = openRows
+    .map((r) => {
+      const openAmt = toNum(r.booking_balance) ?? toNum(r.value) ?? 0;
+      if (openAmt <= 0) return null;
+      const proj = r.project_match_id ? projectMap[r.project_match_id] : null;
+      // Customer-Name aus raw — Hero packt das in unterschiedliche Felder,
+      // wir greifen die zwei haeufigsten ab.
+      const rawAny = r.raw as
+        | { Customer?: { Name?: string }; CustomerName?: string }
+        | null;
+      const customerName =
+        rawAny?.Customer?.Name ?? rawAny?.CustomerName ?? null;
+
+      let daysOverdue: number | null = null;
+      if (r.booking_due_date) {
+        const due = new Date(r.booking_due_date);
+        if (!Number.isNaN(due.getTime())) {
+          const d = daysBetween(today, due);
+          daysOverdue = d > 0 ? d : 0;
+        }
+      }
+
+      return {
+        id: r.id,
+        nr: r.nr,
+        customerName,
+        projectNumber: proj?.number ?? null,
+        projectName: proj?.name ?? null,
+        documentDate: r.document_date,
+        dueDate: r.booking_due_date,
+        openAmount: openAmt,
+        daysOverdue,
+      } satisfies TopOpenInvoice;
+    })
+    .filter((x): x is TopOpenInvoice => x !== null)
+    .sort((a, b) => b.openAmount - a.openAmount)
+    .slice(0, 10);
+
   return {
     generatedAt: now.toISOString(),
     meanDelayDays: Math.round(meanDelayDays * 10) / 10,
@@ -256,5 +337,6 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     totalOpenAmount,
     totalOpenCount,
     buckets: orderedBuckets,
+    topOpen,
   };
 }
