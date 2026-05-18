@@ -46,11 +46,26 @@ export interface KpiSnapshot {
   scheduled_closings: number;
 }
 
+/** Berlin-Kalender-Datum als YYYY-MM-DD — robust gegen UTC-Tagesgrenzen.
+ *  Wichtig: in den Stunden 22-24 UTC (=23-01 Berlin im Winter / 00-02 Sommer)
+ *  liefert UTC einen anderen Kalendertag als Berlin. Snapshots muessen aber
+ *  IMMER auf dem Berlin-Tag landen, sonst sind Wochen-Aggregate kaputt.
+ */
+function berlinDateString(d: Date = new Date()): string {
+  // sv-SE Locale liefert "YYYY-MM-DD" Format
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 /** Upsert a KPI snapshot for a given department and date (called by sync route) */
 export async function upsertKpiSnapshot(
   department: SupabaseDepartment | "GESAMT",
   kpis: KPIData,
-  date: string = new Date().toISOString().split("T")[0]
+  date: string = berlinDateString()
 ): Promise<void> {
   const supabase = supabaseAdmin();
   const { error } = await supabase.from("kpi_snapshots").upsert(
