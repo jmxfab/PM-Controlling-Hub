@@ -97,7 +97,6 @@ type InvoiceRow = {
   booking_due_date: string | null;
   booking_paid_date: string | null;
   booking_is_open: boolean | null;
-  raw: { Customer?: { Name?: string }; CustomerName?: string } | null;
   project_match_id: string | null;
 };
 
@@ -118,11 +117,12 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
   const twelveMonthsAgo = new Date(now);
   twelveMonthsAgo.setMonth(now.getMonth() - 12);
 
-  // 1) Offene Rechnungen (status_code=200, booking_is_open=true, mit due_date)
+  // 1) Offene Rechnungen — OHNE raw JSONB (Performance: spart MB-Payload
+  //    bei 10k Zeilen, raw brauchen wir nur fuer die Top-10).
   const { data: openRowsData, error: openErr } = await supabase
     .from("hero_customer_documents")
     .select(
-      "id, nr, document_date, value, booking_balance, booking_due_date, booking_paid_date, booking_is_open, raw, project_match_id",
+      "id, nr, document_date, value, booking_balance, booking_due_date, booking_paid_date, booking_is_open, project_match_id",
     )
     .eq("type", "invoice")
     .eq("is_deleted", false)
@@ -299,6 +299,30 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     .sort((a, b) => b.openAmt - a.openAmt)
     .slice(0, 10);
 
+  // Schritt 1b: raw-JSONB NUR fuer die Top-10 nachladen (Fallback fuer
+  // Customer-Name wenn hero_dashboard_projects.customer_name fehlt).
+  const topIds = rankedOpen.map((x) => x.row.id);
+  let rawById: Record<
+    string,
+    { Customer?: { Name?: string }; CustomerName?: string } | null
+  > = {};
+  if (topIds.length > 0) {
+    const { data: rawData } = await supabase
+      .from("hero_customer_documents")
+      .select("id, raw")
+      .in("id", topIds)
+      .limit(topIds.length);
+    if (Array.isArray(rawData)) {
+      rawById = Object.fromEntries(
+        rawData.map((r: { id: string; raw: unknown }) => [
+          r.id,
+          (r.raw as { Customer?: { Name?: string }; CustomerName?: string }) ??
+            null,
+        ]),
+      );
+    }
+  }
+
   // Schritt 2: Batch-Resolve project_match_id -> Projekt-Daten (Number/Name/Kunde).
   // hero_dashboard_projects ist die richtige Tabelle weil sie customer_name
   // direkt mitliefert (im Gegensatz zu hero_projects).
@@ -411,10 +435,8 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     const r = x.row;
     const proj = r.project_match_id ? projectMap[r.project_match_id] : null;
     // Customer-Name: hero_dashboard_projects.customer_name als primary,
-    // raw.Customer.Name als Fallback (falls Projekt noch nicht gesynct).
-    const rawAny = r.raw as
-      | { Customer?: { Name?: string }; CustomerName?: string }
-      | null;
+    // raw.Customer.Name als Fallback (nur fuer Top-10 nachgeladen).
+    const rawAny = rawById[r.id] ?? null;
     const customerName =
       proj?.customerName ??
       rawAny?.Customer?.Name ??

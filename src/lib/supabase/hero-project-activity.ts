@@ -187,7 +187,6 @@ export async function loadProjectPulse(limit = 12): Promise<ProjectPulseCard[]> 
   ).toISOString();
 
   // Schritt 1: Welche Projekte hatten in den letzten 60 Tagen einen Event?
-  // Nutze hero_histories als primary signal (Step-Wechsel sind auch dort).
   const { data: recent } = await supabase
     .from("hero_histories")
     .select("project_match_id, entry_date")
@@ -199,7 +198,8 @@ export async function loadProjectPulse(limit = 12): Promise<ProjectPulseCard[]> 
 
   if (!Array.isArray(recent) || recent.length === 0) return [];
 
-  // Schritt 2: Per project_match_id die juengste entry_date sammeln
+  // Schritt 2: Per project_match_id die juengste entry_date sammeln,
+  // top-N nach last-event sortiert.
   const lastByProject: Map<string, string> = new Map();
   for (const r of recent as Array<{
     project_match_id: string | null;
@@ -210,16 +210,175 @@ export async function loadProjectPulse(limit = 12): Promise<ProjectPulseCard[]> 
       lastByProject.set(r.project_match_id, r.entry_date);
     }
   }
-
-  // Schritt 3: Top-N nach last event sortiert
-  const top = Array.from(lastByProject.entries())
+  const topIds = Array.from(lastByProject.entries())
     .sort((a, b) => new Date(b[1]).getTime() - new Date(a[1]).getTime())
-    .slice(0, limit);
+    .slice(0, limit)
+    .map(([pid]) => pid);
 
-  // Schritt 4: Activity-Details parallel laden
-  const activities = await Promise.all(
-    top.map(([pid]) => loadProjectActivity(pid, 5)),
+  if (topIds.length === 0) return [];
+
+  // Schritt 3: BATCH-Load. Statt N x 3 Queries (vorher loadProjectActivity je
+  // Projekt = 3 Queries) machen wir jetzt 3 Queries total.
+  const [projectsRes, histRes, transRes] = await Promise.all([
+    supabase
+      .from("hero_dashboard_projects")
+      .select(
+        "id, project_number, project_name, customer_name, step_name, is_finished",
+      )
+      .in("id", topIds)
+      .limit(topIds.length),
+    supabase
+      .from("hero_histories")
+      .select(
+        "id, project_match_id, entry_date, custom_text, custom_title, description, author_name, event_type",
+      )
+      .in("project_match_id", topIds)
+      .eq("is_deleted", false)
+      .order("entry_date", { ascending: false, nullsFirst: false })
+      .limit(topIds.length * 15),
+    supabase
+      .from("hero_status_transitions")
+      .select("id, project_match_id, entered_at, step_name")
+      .in("project_match_id", topIds)
+      .order("entered_at", { ascending: false, nullsFirst: false })
+      .limit(topIds.length * 10),
+  ]);
+
+  // Indizieren nach project_match_id
+  const histByProject = new Map<
+    string,
+    Array<{
+      id: string;
+      entry_date: string | null;
+      custom_text: string | null;
+      custom_title: string | null;
+      description: string | null;
+      author_name: string | null;
+      event_type: string | null;
+    }>
+  >();
+  for (const h of (histRes.data ?? []) as Array<{
+    id: string;
+    project_match_id: string | null;
+    entry_date: string | null;
+    custom_text: string | null;
+    custom_title: string | null;
+    description: string | null;
+    author_name: string | null;
+    event_type: string | null;
+  }>) {
+    if (!h.project_match_id) continue;
+    const arr = histByProject.get(h.project_match_id) ?? [];
+    arr.push(h);
+    histByProject.set(h.project_match_id, arr);
+  }
+  const transByProject = new Map<
+    string,
+    Array<{ id: string; entered_at: string | null; step_name: string | null }>
+  >();
+  for (const t of (transRes.data ?? []) as Array<{
+    id: string;
+    project_match_id: string | null;
+    entered_at: string | null;
+    step_name: string | null;
+  }>) {
+    if (!t.project_match_id) continue;
+    const arr = transByProject.get(t.project_match_id) ?? [];
+    arr.push(t);
+    transByProject.set(t.project_match_id, arr);
+  }
+
+  // Schritt 4: Pro Projekt die Pulse-Karte bauen
+  const result: ProjectPulseCard[] = [];
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  for (const proj of (projectsRes.data ?? []) as Array<{
+    id: string;
+    project_number: string | null;
+    project_name: string | null;
+    customer_name: string | null;
+    step_name: string | null;
+    is_finished: boolean | null;
+  }>) {
+    const hist = histByProject.get(proj.id) ?? [];
+    const trans = transByProject.get(proj.id) ?? [];
+    const combined = [
+      ...hist.map((h) => {
+        const raw = [h.custom_title, h.custom_text, h.description]
+          .filter((s): s is string => Boolean(s))
+          .join(" — ");
+        const clean = raw
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return {
+          id: `h_${h.id}`,
+          date: h.entry_date,
+          text: clean.length > 300 ? clean.slice(0, 297) + "…" : clean,
+          author: h.author_name ?? null,
+          eventType: h.event_type ?? null,
+        };
+      }),
+      ...trans.map((t) => ({
+        id: `t_${t.id}`,
+        date: t.entered_at,
+        text: t.step_name
+          ? `Step gewechselt zu: ${t.step_name}`
+          : "Status-Wechsel",
+        author: null as string | null,
+        eventType: "transition" as string | null,
+      })),
+    ]
+      .filter((e) => e.date && e.text.length > 0)
+      .sort(
+        (a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime(),
+      );
+
+    // Dedup: 60s Toleranz, gleicher Text
+    const dedup: typeof combined = [];
+    for (const e of combined) {
+      const eMs = new Date(e.date!).getTime();
+      if (
+        dedup.some(
+          (d) =>
+            d.text === e.text &&
+            Math.abs(new Date(d.date!).getTime() - eMs) < 60_000,
+        )
+      ) {
+        continue;
+      }
+      dedup.push(e);
+    }
+
+    const events30d = dedup.filter((e) => {
+      const t = new Date(e.date!).getTime();
+      return Number.isFinite(t) && t >= thirtyDaysAgo;
+    }).length;
+
+    result.push({
+      projectId: proj.id,
+      projectNumber: proj.project_number ?? null,
+      projectName: proj.project_name ?? null,
+      customerName: proj.customer_name ?? null,
+      currentStep: proj.step_name ?? null,
+      isFinished: proj.is_finished ?? false,
+      lastEventAt: dedup[0]?.date ?? null,
+      events30d,
+      entries: dedup.slice(0, 5).map((e) => ({
+        id: e.id,
+        date: e.date!,
+        text: e.text,
+        author: e.author,
+        eventType: e.eventType,
+      })),
+    });
+  }
+
+  // Reihenfolge laut topIds wiederherstellen (nach Last-Event-Date desc)
+  const orderMap = new Map(topIds.map((id, i) => [id, i]));
+  result.sort(
+    (a, b) =>
+      (orderMap.get(a.projectId) ?? 0) - (orderMap.get(b.projectId) ?? 0),
   );
 
-  return activities.filter((a): a is ProjectActivity => a !== null);
+  return result;
 }
