@@ -34,9 +34,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Wenn kein Passwort konfiguriert ist (lokale Entwicklung ohne Env-Var) →
-  // Gate deaktivieren, damit niemand ausgesperrt wird.
-  if (!getDashboardPassword()) {
+  // Wenn kein Passwort konfiguriert ist:
+  //   - Production: HART blocken (lieber 500 als oeffentliches Dashboard)
+  //     — passiert nur wenn die Vercel-Env-Var versehentlich fehlt
+  //   - Dev/Preview: Gate deaktivieren damit lokale Arbeit moeglich ist
+  const password = getDashboardPassword();
+  if (!password) {
+    if (process.env.NODE_ENV === "production") {
+      return new NextResponse(
+        "Dashboard ist nicht korrekt konfiguriert (DASHBOARD_PASSWORD fehlt).",
+        { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+      );
+    }
     return NextResponse.next();
   }
 

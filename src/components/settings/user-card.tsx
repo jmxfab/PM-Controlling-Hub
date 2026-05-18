@@ -19,10 +19,16 @@ async function getHeroUser(): Promise<{ heroUserId: string; email: string | null
   const heroUserId = notifs?.[0]?.hero_user_id as string | undefined;
   if (!heroUserId) return null;
 
+  // hero_user_id ist normalerweise eine Hero-Nummern-ID, aber wir parsen
+  // defensiv: bei nicht-numerischen Werten (Migration-Artefakte) wuerde
+  // parseInt NaN liefern und die Query stumm 0 Treffer liefern.
+  const heroUserIdNum = Number.parseInt(heroUserId, 10);
+  if (!Number.isFinite(heroUserIdNum)) return { heroUserId, email: null };
+
   const { data: histories } = await supabase
     .from("hero_histories")
     .select("user_email")
-    .contains("raw", { user: { id: parseInt(heroUserId, 10) } })
+    .contains("raw", { user: { id: heroUserIdNum } })
     .not("user_email", "is", null)
     .limit(1);
 

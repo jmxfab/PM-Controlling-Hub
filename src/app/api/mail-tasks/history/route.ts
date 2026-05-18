@@ -49,11 +49,11 @@ export async function GET(request: NextRequest) {
     const supabase = supabaseAdmin();
 
     // ILIKE auf description-Prefix. Tasks werden so eingefuegt:
-    //   "Von: <email>\n\n<body>"
-    // daher matcht "Von: <email>%" zuverlaessig.
-    // Sonderzeichen in der Email-Adresse (% _) werden escaped.
+    //   "Von: <email>\n\n<body>"  (deutscher Prefix vom n8n-Workflow)
+    // Defensive: matche auch "From: <email>" falls ein Workflow mal englisch
+    // labelt, oder die Email irgendwo im Text vorkommt (loose match).
+    // Sonderzeichen in der Email-Adresse (% _ \) werden escaped.
     const safeEmail = email.replace(/[%_\\]/g, "\\$&");
-    const pattern = `Von: ${safeEmail}%`;
 
     const { data, error } = await supabase
       .from("tasks")
@@ -61,7 +61,9 @@ export async function GET(request: NextRequest) {
         "id, title, created_at, status, priority, mail_category, thread_message_count, due_date",
       )
       .or("is_automated.eq.true,is_user_created.eq.true")
-      .ilike("description", pattern)
+      .or(
+        `description.ilike.Von: ${safeEmail}%,description.ilike.From: ${safeEmail}%,description.ilike.%<${safeEmail}>%`,
+      )
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(50);

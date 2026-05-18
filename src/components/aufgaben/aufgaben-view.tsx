@@ -370,9 +370,8 @@ export function AufgabenView({
 
   // Server-vorgeladene Daten in den globalen Response-Cache schreiben,
   // damit MailTab sie sofort zeigt ohne erstes Client-Fetch.
-  // useMemo damit das nur einmal beim ersten Render passiert.
-  useMemo(() => {
-    if (typeof window === "undefined") return;
+  // useEffect statt useMemo: React darf useMemo verwerfen, useEffect nicht.
+  useEffect(() => {
     if (initialAufgaben.entries.length === 0) return;
     const k = cacheKey(defaultTab, "", "open", "all");
     if (!RESPONSE_CACHE.has(k)) {
@@ -633,7 +632,6 @@ function MailTab({
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
-  const [hasFetched, setHasFetched] = useState(false);
   /** Wenn gesetzt -> SenderHistoryDialog ist offen mit dieser Mail-Adresse. */
   const [historyEmail, setHistoryEmail] = useState<string | null>(null);
   /** "Erinnerung in Zukunft" = Snooze: Karte versteckt bis Reminder faellig.
@@ -670,7 +668,6 @@ function MailTab({
       // Cache-Hit: sofort anzeigen, im Hintergrund refetchen wenn alt
       if (cached) {
         setData(cached.data);
-        setHasFetched(true);
         const isStale = now - cached.ts > CACHE_TTL_MS;
         if (!isStale) {
           // Frisch genug — kein Refetch noetig
@@ -709,7 +706,6 @@ function MailTab({
         };
         RESPONSE_CACHE.set(key, { data: page, ts: Date.now() });
         setData(page);
-        setHasFetched(true);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
       } finally {
@@ -719,19 +715,10 @@ function MailTab({
     [filter],
   );
 
-  useEffect(() => {
-    if (!hasFetched && initial.entries.length === 0 && initial.total === 0) {
-      fetchData("", 0, statusFilter, prioFilter);
-    }
-  }, [
-    hasFetched,
-    initial.entries.length,
-    initial.total,
-    fetchData,
-    statusFilter,
-    prioFilter,
-  ]);
-
+  // Single source of truth fuer Fetches: debounce auf Filter-Aenderungen.
+  // (Vorher: zwei useEffects feuerten beide gleichzeitig → 2 Requests beim Mount.)
+  // Beim ersten Mount mit search="" und initial.entries=[] feuert das hier
+  // auch — initial.entries dient nur als sofort-sichtbares Vorab-Rendering.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
