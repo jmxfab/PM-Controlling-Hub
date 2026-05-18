@@ -1345,6 +1345,28 @@ function TaskCard({
                 Hero
               </span>
             )}
+            {/* Mail-Thread-Counter: wenn aus der gleichen Konversation mehrere
+             *  Mails reinkamen, wird nicht 5x ein neuer Task angelegt — der
+             *  Workflow inkrementiert nur den Counter. */}
+            {t.source === "mail" && t.thread_message_count > 1 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300"
+                title={
+                  t.thread_last_message_at
+                    ? `${t.thread_message_count} Mails in dieser Konversation · letzte: ${new Date(
+                        t.thread_last_message_at,
+                      ).toLocaleString("de-AT", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`
+                    : `${t.thread_message_count} Mails in dieser Konversation`
+                }
+              >
+                <Mail size={10} /> {t.thread_message_count} Mails
+              </span>
+            )}
             {/* Outlook-Read-Status: zeigt ob Domenic die Mail schon in Outlook
              *  geoeffnet hat. Synct alle 10 Min vom Sync-Workflow. */}
             {t.source === "mail" && t.source_email_is_read === true && (
