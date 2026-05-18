@@ -46,6 +46,13 @@ export interface MailTask {
   hero_is_read?: boolean | null;
   /** Auto-generierte Subtasks (Checkliste) — leer wenn noch nicht generiert. */
   subtasks: Subtask[];
+  /** Wem ist die Aufgabe zugewiesen (delegiert) — Name oder E-Mail. */
+  assigned_to: string | null;
+  /** Erinnerungszeitpunkt — wenn gesetzt, wird die Aufgabe beim Erreichen
+   *  als anstehend markiert. */
+  remind_at: string | null;
+  /** true wenn manuell vom User angelegt (vs. automatisch klassifiziert). */
+  is_user_created: boolean;
 }
 
 export interface MailTasksPage {
@@ -84,7 +91,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     const { count, error } = await supabase
       .from("tasks")
       .select("id", { count: "exact", head: true })
-      .eq("is_automated", true)
+      .or("is_automated.eq.true,is_user_created.eq.true")
       .neq("status", "done")
       .in("mail_category", filter);
     if (error) return 0;
@@ -129,8 +136,8 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category, subtasks", { count: "exact" })
-    .eq("is_automated", true)
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, mail_category, subtasks, assigned_to, remind_at, is_user_created", { count: "exact" })
+    .or("is_automated.eq.true,is_user_created.eq.true")
     .in("mail_category", categories)
     .order("created_at", { ascending: false });
 
@@ -171,6 +178,9 @@ export async function loadMailTasksPage(
       sender,
       body,
       subtasks: Array.isArray(row.subtasks) ? (row.subtasks as Subtask[]) : [],
+      assigned_to: row.assigned_to ?? null,
+      remind_at: row.remind_at ?? null,
+      is_user_created: row.is_user_created ?? false,
     };
   });
 
@@ -206,5 +216,8 @@ export function heroToMailItem(
     hero_project_name: hero.project_name,
     hero_is_read: hero.is_read,
     subtasks: [],
+    assigned_to: null,
+    remind_at: null,
+    is_user_created: false,
   };
 }
