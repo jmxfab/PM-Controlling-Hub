@@ -743,6 +743,7 @@ function MailTab({
       due_date?: string | null;
       mail_category?: MailTask["mail_category"];
       priority?: MailTask["priority"];
+      remind_at?: string | null;
     },
     /** Wenn true: Task aus aktueller Liste entfernen (z.B. nach Kategorie-Wechsel) */
     removeFromList = false,
@@ -775,6 +776,10 @@ function MailTab({
                       update.due_date !== undefined ? update.due_date : t.due_date,
                     mail_category: update.mail_category ?? t.mail_category,
                     priority: update.priority ?? t.priority,
+                    remind_at:
+                      update.remind_at !== undefined
+                        ? update.remind_at
+                        : t.remind_at,
                   }
                 : t,
             ),
@@ -894,8 +899,17 @@ function MailTab({
   }
 
   function snoozeBy(task: MailTask, ms: number) {
-    const due = new Date(Date.now() + ms).toISOString();
-    return patchTask(task.id, { due_date: due, status: "waiting" });
+    const target = new Date(Date.now() + ms).toISOString();
+    // Setzt sowohl remind_at (damit der neue Snooze-Filter greift und die Karte
+    // sofort verschwindet) als auch due_date + status=waiting (preserved alten
+    // Verhalten — Faelligkeit + Status-Pille). Wenn die Karte dann morgen
+    // wieder auftaucht, ist sie automatisch in "Heute" (frisch eingegangen
+    // wirkt so, Reihenfolge ueber created_at sortiert).
+    return patchTask(task.id, {
+      remind_at: target,
+      due_date: target,
+      status: "waiting",
+    });
   }
 
   function buildMailto(task: MailTask): string | null {
