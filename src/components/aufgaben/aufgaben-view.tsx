@@ -324,15 +324,34 @@ export function AufgabenView({
           value="kritisch"
           className={
             counts.kritisch > 0
-              ? "data-[state=active]:bg-red-600 data-[state=active]:text-white text-red-600 dark:text-red-400 font-semibold gap-1.5 rounded-lg data-[state=active]:shadow-sm"
+              ? "group relative gap-1.5 rounded-lg font-semibold text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30 bg-gradient-to-b from-rose-50 to-rose-100/70 hover:from-rose-100 hover:to-rose-200/80 dark:from-rose-500/10 dark:to-rose-600/5 dark:hover:from-rose-500/15 dark:hover:to-rose-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-rose-500 data-[state=active]:via-red-600 data-[state=active]:to-rose-700 data-[state=active]:text-white data-[state=active]:ring-rose-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(0_84%_55%/0.5)] dark:data-[state=active]:shadow-[0_6px_24px_-4px_hsl(0_84%_60%/0.6)] transition-all duration-200"
               : "gap-1.5 rounded-lg data-[state=active]:shadow-sm"
           }
         >
           {counts.kritisch > 0 && (
-            <AlertTriangle size={13} className="animate-pulse" />
+            <span className="relative inline-flex h-4 w-4 items-center justify-center">
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full bg-rose-500/40 dark:bg-rose-400/40 animate-ping group-data-[state=active]:bg-white/30"
+              />
+              <AlertTriangle
+                size={13}
+                className="relative drop-shadow-[0_0_4px_hsl(0_84%_55%/0.4)] group-data-[state=active]:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]"
+              />
+            </span>
           )}
           Kritisch
-          <CountPill value={counts.kritisch} highlight={counts.kritisch > 0} />
+          <CountPill
+            value={counts.kritisch}
+            highlight={counts.kritisch > 0}
+            tone="rose"
+          />
+          {counts.kritisch > 0 && (
+            <span
+              aria-hidden
+              className="hidden group-data-[state=active]:block absolute inset-0 rounded-lg pointer-events-none ring-1 ring-inset ring-white/30 dark:ring-white/15"
+            />
+          )}
         </TabsTrigger>
         <TabsTrigger value="aufgaben" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
           <Mail size={13} />
@@ -401,11 +420,22 @@ export function AufgabenView({
 function CountPill({
   value,
   highlight,
+  tone,
 }: {
   value: number;
   highlight?: boolean;
+  /** Spezial-Variante fuer Kritisch: bei aktivem Tab heller weisser Halo,
+   *  bei inaktivem Tab sattes Rose. */
+  tone?: "rose";
 }) {
   if (!value) return null;
+  if (tone === "rose") {
+    return (
+      <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300 ring-1 ring-rose-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 group-data-[state=active]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-colors">
+        {value}
+      </span>
+    );
+  }
   return (
     <span
       className={`text-[10px] tabular-nums font-medium px-1.5 py-0.5 rounded-full ${
