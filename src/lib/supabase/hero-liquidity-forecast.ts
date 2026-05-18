@@ -58,6 +58,8 @@ export interface LiquidityForecast {
 
 export interface TopOpenInvoice {
   id: string;
+  /** Project_match_id — fuer Cross-Link ins Logbuch / Detail-Drill-Down. */
+  projectMatchId: string | null;
   nr: string | null;
   customerName: string | null;
   projectNumber: string | null;
@@ -66,6 +68,23 @@ export interface TopOpenInvoice {
   dueDate: string | null;
   openAmount: number;
   daysOverdue: number | null;
+  /** Letzter Logbuch-Eintrag des Projekts der zahlungsrelevant aussieht
+   *  (Keywords: bezahlt, rechnung, mahn, geklärt, storno, gutschrift, …).
+   *  NULL wenn nichts gefunden — dann ist die Rechnung im Logbuch nicht
+   *  in den letzten 90 Tagen erwaehnt worden. */
+  recentNote: RecentNote | null;
+}
+
+export interface RecentNote {
+  date: string;
+  author: string | null;
+  /** Kompakter Snippet, max ~140 Zeichen, HTML-Tags entfernt. */
+  snippet: string;
+  /** Klassifikation aus dem Snippet:
+   *   - 'paid' = "bezahlt" / "geklärt" / "ausgeglichen" → vermutlich erledigt
+   *   - 'dunning' = "mahn" / "erinnerung" / "letzte mahnung" → laeuft schon
+   *   - 'other' = generischer Treffer, manuell pruefen */
+  kind: "paid" | "dunning" | "other";
 }
 
 type InvoiceRow = {
@@ -268,66 +287,166 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
   ];
 
   // Top-10 offene Rechnungen — fuer Detail-Liste im Panel.
-  // Resolve customerName aus raw (Hero-API liefert ihn dort) und Projekt
-  // ueber project_match_id einmal in einer Batch-Query (statt N+1).
-  const projectIds = openRows
-    .map((r) => r.project_match_id)
+  // Schritt 1: Vor-Sortieren nach openAmount, top 10 picken (damit nur
+  // 10 Projekte resolved werden muessen, nicht alle).
+  const rankedOpen = openRows
+    .map((r) => ({
+      row: r,
+      openAmt: toNum(r.booking_balance) ?? toNum(r.value) ?? 0,
+    }))
+    .filter((x) => x.openAmt > 0)
+    .sort((a, b) => b.openAmt - a.openAmt)
+    .slice(0, 10);
+
+  // Schritt 2: Batch-Resolve project_match_id -> Projekt-Daten (Number/Name/Kunde).
+  // hero_dashboard_projects ist die richtige Tabelle weil sie customer_name
+  // direkt mitliefert (im Gegensatz zu hero_projects).
+  const projectIds = rankedOpen
+    .map((x) => x.row.project_match_id)
     .filter((id): id is string => Boolean(id));
   const uniqueProjectIds = Array.from(new Set(projectIds));
-  let projectMap: Record<string, { number: string | null; name: string | null }> = {};
+  let projectMap: Record<
+    string,
+    { number: string | null; name: string | null; customerName: string | null }
+  > = {};
   if (uniqueProjectIds.length > 0) {
     const { data: projData } = await supabase
-      .from("hero_projects")
-      .select("id, number, name")
+      .from("hero_dashboard_projects")
+      .select("id, project_number, project_name, customer_name")
       .in("id", uniqueProjectIds)
       .limit(uniqueProjectIds.length);
     if (Array.isArray(projData)) {
       projectMap = Object.fromEntries(
-        projData.map((p: { id: string; number: string | null; name: string | null }) => [
-          p.id,
-          { number: p.number ?? null, name: p.name ?? null },
-        ]),
+        projData.map(
+          (p: {
+            id: string;
+            project_number: string | null;
+            project_name: string | null;
+            customer_name: string | null;
+          }) => [
+            p.id,
+            {
+              number: p.project_number ?? null,
+              name: p.project_name ?? null,
+              customerName: p.customer_name ?? null,
+            },
+          ],
+        ),
       );
     }
   }
 
-  const topOpen: TopOpenInvoice[] = openRows
-    .map((r) => {
-      const openAmt = toNum(r.booking_balance) ?? toNum(r.value) ?? 0;
-      if (openAmt <= 0) return null;
-      const proj = r.project_match_id ? projectMap[r.project_match_id] : null;
-      // Customer-Name aus raw — Hero packt das in unterschiedliche Felder,
-      // wir greifen die zwei haeufigsten ab.
-      const rawAny = r.raw as
-        | { Customer?: { Name?: string }; CustomerName?: string }
-        | null;
-      const customerName =
-        rawAny?.Customer?.Name ?? rawAny?.CustomerName ?? null;
+  // Schritt 3: Batch-Logbuch-Vermerke. Hole alle Histories der Top-10-Projekte
+  // der letzten 90 Tage, sortiere nach Datum DESC, picke je Projekt den
+  // ersten zahlungsrelevanten Eintrag.
+  const ninetyDaysAgo = new Date(today);
+  ninetyDaysAgo.setDate(today.getDate() - 90);
+  const notesByProject: Record<string, RecentNote> = {};
+  if (uniqueProjectIds.length > 0) {
+    const { data: histData } = await supabase
+      .from("hero_histories")
+      .select(
+        "project_match_id, entry_date, custom_text, custom_title, description, author_name",
+      )
+      .in("project_match_id", uniqueProjectIds)
+      .gte("entry_date", ninetyDaysAgo.toISOString())
+      .eq("is_deleted", false)
+      .order("entry_date", { ascending: false, nullsFirst: false })
+      .limit(500);
 
-      let daysOverdue: number | null = null;
-      if (r.booking_due_date) {
-        const due = new Date(r.booking_due_date);
-        if (!Number.isNaN(due.getTime())) {
-          const d = daysBetween(today, due);
-          daysOverdue = d > 0 ? d : 0;
-        }
+    if (Array.isArray(histData)) {
+      for (const h of histData as Array<{
+        project_match_id: string | null;
+        entry_date: string | null;
+        custom_text: string | null;
+        custom_title: string | null;
+        description: string | null;
+        author_name: string | null;
+      }>) {
+        if (!h.project_match_id || !h.entry_date) continue;
+        if (notesByProject[h.project_match_id]) continue; // schon einen Treffer
+        const rawText = [h.custom_title, h.custom_text, h.description]
+          .filter((s): s is string => Boolean(s))
+          .join(" ");
+        if (!rawText) continue;
+        const clean = rawText
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const lower = clean.toLowerCase();
+
+        // Klassifikation per Keyword-Match. Reihenfolge wichtig — "bezahlt"
+        // gewinnt vor "mahn" wenn beides drin steht (Tippreihenfolge).
+        const isPaid = /\b(bezahlt|geklärt|geklaert|ausgeglichen|erledigt|gutschrift)\b/.test(
+          lower,
+        );
+        const isDunning = /\b(mahn|erinnerung|letzte mahnung|inkasso|rsa|verzug)\b/.test(
+          lower,
+        );
+        const isInvoiceMention = /\b(rechnung|zahlung|teilrechnung|storno|teilzahlung)\b/.test(
+          lower,
+        );
+        if (!isPaid && !isDunning && !isInvoiceMention) continue;
+
+        const kind: RecentNote["kind"] = isPaid
+          ? "paid"
+          : isDunning
+            ? "dunning"
+            : "other";
+        const snippet =
+          clean.length > 140 ? clean.slice(0, 137) + "…" : clean;
+        notesByProject[h.project_match_id] = {
+          date: h.entry_date,
+          author: h.author_name ?? null,
+          snippet,
+          kind,
+        };
       }
+    }
+  }
 
-      return {
-        id: r.id,
-        nr: r.nr,
-        customerName,
-        projectNumber: proj?.number ?? null,
-        projectName: proj?.name ?? null,
-        documentDate: r.document_date,
-        dueDate: r.booking_due_date,
-        openAmount: openAmt,
-        daysOverdue,
-      } satisfies TopOpenInvoice;
-    })
-    .filter((x): x is TopOpenInvoice => x !== null)
-    .sort((a, b) => b.openAmount - a.openAmount)
-    .slice(0, 10);
+  // Schritt 4: TopOpenInvoice Objekte bauen
+  const topOpen: TopOpenInvoice[] = rankedOpen.map((x) => {
+    const r = x.row;
+    const proj = r.project_match_id ? projectMap[r.project_match_id] : null;
+    // Customer-Name: hero_dashboard_projects.customer_name als primary,
+    // raw.Customer.Name als Fallback (falls Projekt noch nicht gesynct).
+    const rawAny = r.raw as
+      | { Customer?: { Name?: string }; CustomerName?: string }
+      | null;
+    const customerName =
+      proj?.customerName ??
+      rawAny?.Customer?.Name ??
+      rawAny?.CustomerName ??
+      null;
+
+    let daysOverdue: number | null = null;
+    if (r.booking_due_date) {
+      const due = new Date(r.booking_due_date);
+      if (!Number.isNaN(due.getTime())) {
+        const d = daysBetween(today, due);
+        daysOverdue = d > 0 ? d : 0;
+      }
+    }
+
+    const recentNote = r.project_match_id
+      ? (notesByProject[r.project_match_id] ?? null)
+      : null;
+
+    return {
+      id: r.id,
+      projectMatchId: r.project_match_id,
+      nr: r.nr,
+      customerName,
+      projectNumber: proj?.number ?? null,
+      projectName: proj?.name ?? null,
+      documentDate: r.document_date,
+      dueDate: r.booking_due_date,
+      openAmount: x.openAmt,
+      daysOverdue,
+      recentNote,
+    } satisfies TopOpenInvoice;
+  });
 
   return {
     generatedAt: now.toISOString(),

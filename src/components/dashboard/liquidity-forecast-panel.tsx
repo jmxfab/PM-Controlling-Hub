@@ -1,5 +1,18 @@
-import { AlertTriangle, TrendingUp, Wallet, Info, Building2, CalendarClock } from "lucide-react";
-import type { LiquidityForecast } from "@/lib/supabase/hero-liquidity-forecast";
+import {
+  AlertTriangle,
+  TrendingUp,
+  Wallet,
+  Info,
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  Megaphone,
+  MessageSquare,
+} from "lucide-react";
+import type {
+  LiquidityForecast,
+  RecentNote,
+} from "@/lib/supabase/hero-liquidity-forecast";
 
 interface Props {
   forecast: LiquidityForecast | null;
@@ -273,7 +286,7 @@ export function LiquidityForecastPanel({ forecast, error }: Props) {
               </span>
             </span>
           </div>
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {topOpen.map((t, i) => {
               const widthPct = Math.max(2, (t.openAmount / maxTopAmount) * 100);
               const overdue = (t.daysOverdue ?? 0) > 0;
@@ -310,7 +323,7 @@ export function LiquidityForecastPanel({ forecast, error }: Props) {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">
+                      <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-muted-foreground tabular-nums flex-wrap">
                         {t.nr && <span>Rg. {t.nr}</span>}
                         <span className="inline-flex items-center gap-1">
                           <CalendarClock size={10} className="opacity-60" />
@@ -322,6 +335,7 @@ export function LiquidityForecastPanel({ forecast, error }: Props) {
                           </span>
                         )}
                       </div>
+                      {t.recentNote && <NoteRow note={t.recentNote} />}
                     </div>
                     <div
                       className={`shrink-0 text-[14px] font-bold tabular-nums ${
@@ -395,4 +409,70 @@ function formatGermanDate(iso: string | null): string {
     month: "2-digit",
     year: "2-digit",
   });
+}
+
+/**
+ * Vermerk-Zeile fuer eine Top-10-Rechnung: zeigt den letzten zahlungs-
+ * relevanten Logbuch-Eintrag des zugehoerigen Projekts. Farbcodiert:
+ *  - paid (emerald): Rechnung wirkt erledigt, evtl. kein Mahnaufwand noetig
+ *  - dunning (amber): Mahnung laeuft schon, vorsichtig sein
+ *  - other (slate): nur Erwaehnung, manuell pruefen
+ */
+function NoteRow({ note }: { note: RecentNote }) {
+  const styles =
+    note.kind === "paid"
+      ? {
+          ring: "ring-emerald-200 dark:ring-emerald-900/40",
+          bg: "bg-emerald-50/70 dark:bg-emerald-950/30",
+          text: "text-emerald-800 dark:text-emerald-300",
+          icon: <CheckCircle2 size={11} />,
+          label: "Möglicherweise bereits geklärt",
+        }
+      : note.kind === "dunning"
+        ? {
+            ring: "ring-amber-200 dark:ring-amber-900/40",
+            bg: "bg-amber-50/70 dark:bg-amber-950/30",
+            text: "text-amber-800 dark:text-amber-300",
+            icon: <Megaphone size={11} />,
+            label: "Mahnverfahren läuft",
+          }
+        : {
+            ring: "ring-slate-200 dark:ring-slate-700/50",
+            bg: "bg-slate-50/70 dark:bg-slate-900/40",
+            text: "text-slate-700 dark:text-slate-300",
+            icon: <MessageSquare size={11} />,
+            label: "Logbuch-Vermerk",
+          };
+  const date = new Date(note.date);
+  const dateLabel = Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("de-AT", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+      });
+  return (
+    <div
+      className={`mt-1.5 rounded-md ring-1 ${styles.ring} ${styles.bg} px-2 py-1 text-[11px] leading-snug ${styles.text}`}
+      title={note.author ? `Von ${note.author} am ${dateLabel}` : dateLabel}
+    >
+      <div className="flex items-center gap-1.5 font-semibold">
+        {styles.icon}
+        <span>{styles.label}</span>
+        {dateLabel && (
+          <span className="font-normal opacity-70 tabular-nums">
+            · {dateLabel}
+          </span>
+        )}
+        {note.author && (
+          <span className="font-normal opacity-70 truncate">
+            · {note.author}
+          </span>
+        )}
+      </div>
+      <div className="mt-0.5 font-normal opacity-90 line-clamp-2">
+        {note.snippet}
+      </div>
+    </div>
+  );
 }
