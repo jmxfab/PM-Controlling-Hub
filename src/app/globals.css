@@ -139,6 +139,106 @@
   h1 {
     letter-spacing: -0.025em;
   }
+
+  /* === Date / Datetime / Time Inputs ===
+     Native date inputs sehen auf jedem Browser anders aus und meistens
+     billig. Mit diesen Regeln passen sie zum Theme der App und wirken
+     gleich wie normale Text-Inputs.
+  */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"],
+  input[type="week"] {
+    @apply text-foreground;
+    font-variant-numeric: tabular-nums;
+    color-scheme: light dark; /* Browser-natives Dark-Mode-Picker */
+    font-feature-settings: "tnum";
+  }
+
+  /* Leere Date-Inputs (= zeigen Platzhalter "tt.mm.jjjj --:--"):
+     Platzhalter heller machen damit der Input nicht wie "Fehler"
+     wirkt. Trick: wenn :placeholder-shown matched, der Wert ist leer. */
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-text,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-day-field,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-month-field,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-year-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-text,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-day-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-month-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-year-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-hour-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-minute-field {
+    @apply text-foreground;
+  }
+
+  /* Komplett leere Inputs (kein Wert gesetzt) wirken oft sehr "grau".
+     Mit :invalid (HTML5 setzt das wenn der Date-String leer ist) krieg
+     ich nur die leeren Felder und kann den Text-Color auf muted-foreground
+     setzen — wie ein dezenter Placeholder. */
+  input[type="date"]:invalid::-webkit-datetime-edit,
+  input[type="datetime-local"]:invalid::-webkit-datetime-edit,
+  input[type="time"]:invalid::-webkit-datetime-edit {
+    @apply text-muted-foreground/60;
+  }
+
+  /* Calendar/Clock-Picker-Icon: viel zu blass im Default. Wir setzen
+     einen Filter der das Icon an die Foreground-Farbe anpasst und
+     beim Hover heller wird. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="week"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 150ms ease, transform 150ms ease;
+    padding: 2px;
+    border-radius: 6px;
+  }
+  input[type="date"]:hover::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator,
+  input[type="time"]:hover::-webkit-calendar-picker-indicator,
+  input[type="month"]:hover::-webkit-calendar-picker-indicator,
+  input[type="week"]:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+    background-color: hsl(var(--accent));
+  }
+
+  /* Dark mode: Picker-Icon ist im default fast unsichtbar — invert filter. */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="month"]::-webkit-calendar-picker-indicator,
+  .dark input[type="week"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.9) brightness(1.2);
+  }
+
+  /* Innere Trennzeichen (Punkt, Doppelpunkt) nicht zu fett */
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="datetime-local"]::-webkit-datetime-edit-text,
+  input[type="time"]::-webkit-datetime-edit-text {
+    @apply text-muted-foreground/70;
+    padding: 0 1px;
+  }
+
+  /* Fokus auf einzelnem Feld (Day/Month/Year) — gleicher Look wie
+     ringed buttons: Brand-Blau, kein Default-Hellblau aus Chrome. */
+  input[type="date"]::-webkit-datetime-edit-day-field:focus,
+  input[type="date"]::-webkit-datetime-edit-month-field:focus,
+  input[type="date"]::-webkit-datetime-edit-year-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-day-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-month-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-year-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-hour-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-minute-field:focus,
+  input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+  input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+    background-color: hsl(var(--brand-1) / 0.18);
+    color: hsl(var(--foreground));
+    border-radius: 3px;
+    outline: none;
+  }
 }
 
 /* Refined scrollbar — passt zum Theme */
