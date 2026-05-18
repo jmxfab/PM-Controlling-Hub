@@ -455,16 +455,10 @@ export function AufgabenView({
           }
         >
           {counts.kritisch > 0 && (
-            <span className="relative inline-flex h-4 w-4 items-center justify-center">
-              <span
-                aria-hidden
-                className="absolute inset-0 rounded-full bg-rose-500/40 dark:bg-rose-400/40 animate-ping group-data-[state=active]:bg-white/30"
-              />
-              <AlertTriangle
-                size={13}
-                className="relative drop-shadow-[0_0_4px_hsl(0_84%_55%/0.4)] group-data-[state=active]:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]"
-              />
-            </span>
+            <AlertTriangle
+              size={13}
+              className="drop-shadow-[0_0_4px_hsl(0_84%_55%/0.4)] group-data-[state=active]:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]"
+            />
           )}
           Kritisch
           <CountPill
@@ -636,7 +630,30 @@ function MailTab({
   const [hasFetched, setHasFetched] = useState(false);
   /** Wenn gesetzt -> SenderHistoryDialog ist offen mit dieser Mail-Adresse. */
   const [historyEmail, setHistoryEmail] = useState<string | null>(null);
+  /** "Erinnerung in Zukunft" = Snooze: Karte versteckt bis Reminder faellig.
+   *  Toggle macht sie wieder sichtbar zum manuellen Eingriff. */
+  const [showSnoozed, setShowSnoozed] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Trennen in sichtbar / snoozed: Tasks deren remind_at > jetzt sind
+  // werden ausgeblendet. Recompute jede Minute via Date.now() Tick reicht
+  // — bei Page-Reload sowieso. Memoiziert auf data.entries.
+  const { visibleEntries, snoozedCount } = useMemo(() => {
+    const nowMs = Date.now();
+    const visible: MailTask[] = [];
+    let snoozed = 0;
+    for (const t of data.entries) {
+      if (t.status !== "done" && t.remind_at) {
+        const remindMs = new Date(t.remind_at).getTime();
+        if (Number.isFinite(remindMs) && remindMs > nowMs) {
+          snoozed += 1;
+          if (!showSnoozed) continue;
+        }
+      }
+      visible.push(t);
+    }
+    return { visibleEntries: visible, snoozedCount: snoozed };
+  }, [data.entries, showSnoozed]);
 
   const fetchData = useCallback(
     async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
@@ -969,7 +986,7 @@ function MailTab({
         />
       ) : loading && data.entries.length === 0 ? (
         <SkeletonList />
-      ) : data.entries.length === 0 ? (
+      ) : visibleEntries.length === 0 && snoozedCount === 0 ? (
         <EmptyState
           icon={meta.icon}
           title={meta.emptyTitle}
@@ -981,7 +998,16 @@ function MailTab({
         />
       ) : (
         <div className="space-y-6">
-          {groupByDate(data.entries).map((group) => (
+          {visibleEntries.length === 0 && snoozedCount > 0 && !showSnoozed && (
+            <EmptyState
+              icon={Bell}
+              title="Alles aufgeschoben"
+              hint={`${snoozedCount} Aufgabe${
+                snoozedCount === 1 ? "" : "n"
+              } warten auf ihre Erinnerung. Klick auf den Button unten um sie trotzdem zu sehen.`}
+            />
+          )}
+          {groupByDate(visibleEntries).map((group) => (
             <section key={group.bucket} className="space-y-2">
               <div className="flex items-baseline gap-2 px-1">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1017,9 +1043,32 @@ function MailTab({
               </div>
             </section>
           ))}
+          {snoozedCount > 0 && (
+            <div className="flex justify-center pt-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowSnoozed((s) => !s)}
+                className="h-8 gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                title={
+                  showSnoozed
+                    ? "Aufgaben mit zukünftiger Erinnerung wieder verstecken"
+                    : "Aufgaben mit zukünftiger Erinnerung trotzdem zeigen"
+                }
+              >
+                <Bell size={12} />
+                {showSnoozed
+                  ? `${snoozedCount} aufgeschoben${snoozedCount === 1 ? "" : "e"} wieder verstecken`
+                  : `${snoozedCount} aufgeschoben${snoozedCount === 1 ? "" : "e"} anzeigen`}
+              </Button>
+            </div>
+          )}
           {data.total > 0 && (
             <p className="text-[11px] text-muted-foreground text-center pt-2">
-              {data.entries.length} von {data.total.toLocaleString("de-AT")} Einträgen
+              {visibleEntries.length} von {data.total.toLocaleString("de-AT")} Einträgen
+              {snoozedCount > 0 && !showSnoozed
+                ? ` · ${snoozedCount} bis zur Erinnerung versteckt`
+                : ""}
               {data.entries.length < data.total ? " — verfeinere die Suche um mehr zu sehen" : ""}
             </p>
           )}
