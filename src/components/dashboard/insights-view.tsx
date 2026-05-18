@@ -121,12 +121,40 @@ export function InsightsView({
       }));
   const chartTitle = useDaily ? "Täglicher Flow" : "Wöchentlicher Flow";
 
-  const top10Durations = stepDurations.slice(0, 10).map((s) => ({
-    name: s.stepName.length > 28 ? s.stepName.slice(0, 26) + "…" : s.stepName,
-    avg: s.avgDays,
-    median: s.medianDays,
-    n: s.sampleSize,
-  }));
+  // Operativ irrelevante Steps rausfiltern: alles was bedeutet "Projekt
+  // ist durch / pausiert / wegparkiert" verzerrt die Durchlaufzeit-Top10
+  // weil dort die Liegezeit kumuliert wird. Was uns wirklich interessiert
+  // sind die Bottlenecks IM laufenden Prozess (Detailgespraech, Montage,
+  // Umsetzungsbeginn etc.).
+  function isNonOperationalStep(name: string): boolean {
+    const lower = name.toLowerCase().trim();
+    // Endzustaende (Projekt abgeschlossen oder weg)
+    if (/\babgeschlossen\b/.test(lower)) return true;
+    if (/\barchiviert?\b/.test(lower)) return true;
+    if (/\barchiv\b/.test(lower)) return true;
+    if (/\bfertig\b/.test(lower) && !/montage/.test(lower)) return true;
+    if (/\bgeloescht\b|\bgelöscht\b/.test(lower)) return true;
+    if (/\bstorno\b/.test(lower)) return true;
+    if (/\bbewertungspool\b/.test(lower)) return true;
+    // Wegparkiert (kein aktiver Prozess)
+    if (/\bspaetere?\b|\bspätere?\b/.test(lower)) return true;
+    if (/\bauf eis\b|\beingefroren\b|\bpausiert\b|\bpark\b/.test(lower)) return true;
+    if (/\bwarteschleife\b|\bwartet\b/.test(lower)) return true;
+    // Reine Symbol-Steps (Emoji ohne Worte, wie das ♟-Step oben im Chart)
+    const letters = name.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
+    if (letters.length < 3) return true;
+    return false;
+  }
+
+  const top10Durations = stepDurations
+    .filter((s) => !isNonOperationalStep(s.stepName))
+    .slice(0, 10)
+    .map((s) => ({
+      name: s.stepName.length > 28 ? s.stepName.slice(0, 26) + "…" : s.stepName,
+      avg: s.avgDays,
+      median: s.medianDays,
+      n: s.sampleSize,
+    }));
 
   const buildHeroHref = (projectId: string | null): string | null => {
     if (!heroProjectLinkTemplate || !projectId) return null;
@@ -266,8 +294,11 @@ export function InsightsView({
             Durchlaufzeit pro Step (Tage) — {deptName}{rangeSuffix}
           </CardTitle>
           <CardDescription>
-            Ø + Median Tage die ein Projekt im jeweiligen Step verbringt. Top
-            10. Bei „Jetzt&ldquo; werden die letzten 12 Monate zugrunde gelegt.
+            Ø + Median Tage die ein Projekt im jeweiligen Step verbringt. Top 10
+            der <strong>operativ relevanten</strong> Steps — End-Stati
+            (Abgeschlossen, Archiviert, Spätere Projekte, Auf Eis) werden
+            ausgeblendet, weil dort nur Liegezeit kumuliert. Bei „Jetzt&ldquo;
+            werden die letzten 12 Monate zugrunde gelegt.
           </CardDescription>
         </CardHeader>
         <CardContent>
