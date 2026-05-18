@@ -99,33 +99,33 @@ export interface MailTaskCounts {
 
 export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   const supabase = supabaseAdmin();
-  async function countMail(filter: string[]): Promise<number> {
-    const { count, error } = await supabase
-      .from("tasks")
-      .select("id", { count: "exact", head: true })
-      .or("is_automated.eq.true,is_user_created.eq.true")
-      .neq("status", "done")
-      .in("mail_category", filter);
-    if (error) return 0;
-    return count ?? 0;
-  }
-  // Hero-Comments mit Domenic-Bezug -> Aufgaben, Rest -> Infos
-  // countHeroCommentsBoth() macht 1 Roundtrip fuer BEIDE Tabs statt 2 separate
   const { countHeroCommentsBoth } = await import("./hero-comments-queries");
-  const [kritisch, aufgabenMail, infosMail, inbox, rechnungen, heroCounts] = await Promise.all([
-    countMail(CATEGORIES_PER_TAB.kritisch),
-    countMail(CATEGORIES_PER_TAB.aufgaben),
-    countMail(CATEGORIES_PER_TAB.infos),
-    countMail(CATEGORIES_PER_TAB.inbox),
-    countMail(CATEGORIES_PER_TAB.rechnungen),
+  // Vorher: 5 sequentielle count:'exact' Queries (jede ist auf Postgres-Seite
+  // ein Full-Scan + Count). Jetzt: 1 RPC mit FILTER-Aggregaten, parallel zu
+  // den Hero-Counts.
+  const [rpcRes, heroCounts] = await Promise.all([
+    supabase.rpc("compute_mail_task_counts").single<{
+      kritisch: number;
+      aufgaben: number;
+      infos: number;
+      inbox: number;
+      rechnungen: number;
+    }>(),
     countHeroCommentsBoth().catch(() => ({ aufgaben: 0, infos: 0 })),
   ]);
+  const mailCounts = rpcRes.data ?? {
+    kritisch: 0,
+    aufgaben: 0,
+    infos: 0,
+    inbox: 0,
+    rechnungen: 0,
+  };
   return {
-    kritisch,
-    aufgaben: aufgabenMail + heroCounts.aufgaben,
-    infos: infosMail + heroCounts.infos,
-    inbox,
-    rechnungen,
+    kritisch: Number(mailCounts.kritisch) || 0,
+    aufgaben: (Number(mailCounts.aufgaben) || 0) + heroCounts.aufgaben,
+    infos: (Number(mailCounts.infos) || 0) + heroCounts.infos,
+    inbox: Number(mailCounts.inbox) || 0,
+    rechnungen: Number(mailCounts.rechnungen) || 0,
   };
 }
 
