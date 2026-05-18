@@ -37,6 +37,10 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Brand accent stops — used by gradient utilities below */
+    --brand-1: 217 91% 60%; /* blue-500 */
+    --brand-2: 262 83% 58%; /* violet-500 */
   }
 
   .dark {
@@ -75,6 +79,9 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --brand-1: 217 91% 65%;
+    --brand-2: 262 83% 65%;
   }
 }
 
@@ -84,35 +91,53 @@
   }
   html {
     scroll-behavior: smooth;
+    /* Geist Sans / Mono via next/font CSS variables */
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", Roboto, sans-serif;
   }
   body {
     @apply bg-background text-foreground antialiased;
-    /* Subtiles Radialgradient für Tiefe — sehr dezent */
-    background-image:
-      radial-gradient(
-        ellipse 80% 50% at 50% -20%,
-        hsl(var(--primary) / 0.04),
-        transparent
-      ),
-      radial-gradient(
-        ellipse 60% 50% at 100% 110%,
-        hsl(var(--primary) / 0.025),
-        transparent
-      );
-    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
-  .dark body {
-    background-image:
-      radial-gradient(
-        ellipse 80% 50% at 50% -20%,
-        hsl(217 91% 60% / 0.06),
-        transparent
-      ),
-      radial-gradient(
-        ellipse 60% 50% at 100% 110%,
-        hsl(280 65% 60% / 0.04),
-        transparent
-      );
+
+  /* Tabular numerics inside finance/dashboard surfaces — keeps columns aligned */
+  table,
+  [data-numeric],
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "cv11";
+  }
+
+  /* Premium selection color tied to brand */
+  ::selection {
+    background: hsl(var(--brand-1) / 0.25);
+    color: hsl(var(--foreground));
+  }
+
+  /* Refined focus-visible — visible but not chunky */
+  :focus-visible {
+    outline: 2px solid hsl(var(--brand-1) / 0.65);
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) - 2px);
+  }
+  /* shadcn components manage their own ring — don't double up there */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    outline-offset: 3px;
+  }
+
+  /* Headings: slightly tighter tracking for that premium feel */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  h1 {
+    letter-spacing: -0.025em;
   }
 }
 
@@ -128,15 +153,38 @@
   ::-webkit-scrollbar-thumb {
     @apply bg-border rounded-full;
     border: 2px solid hsl(var(--background));
+    transition: background-color 200ms;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/30;
+    @apply bg-muted-foreground/40;
+  }
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  /* Brand gradient text — used for hero numbers + brand badges */
+  .text-gradient-brand {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--brand-1)),
+      hsl(var(--brand-2))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   /* Glow-Animation für wichtige Akzente */
   @keyframes subtle-glow {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
   }
   .animate-subtle-glow {
     animation: subtle-glow 2.5s ease-in-out infinite;
@@ -144,8 +192,12 @@
 
   /* Indeterminate loader bar */
   @keyframes indeterminate {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(200%); }
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(200%);
+    }
   }
   .animate-indeterminate {
     animation: indeterminate 1.4s ease-in-out infinite;
@@ -164,5 +216,75 @@
   }
   .animate-fade-in-up {
     animation: fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Page-level entrance — used by <main> wrapper in root layout */
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+  .animate-page-in {
+    animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Soft pulse for live-data dots (Hero Live etc.) */
+  @keyframes soft-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--brand-1) / 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 6px hsl(var(--brand-1) / 0);
+    }
+  }
+  .animate-soft-pulse {
+    animation: soft-pulse 2s ease-out infinite;
+  }
+
+  /* Shimmer für Skeleton-States */
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.04) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Respect prefers-reduced-motion across all decorative animations */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-subtle-glow,
+    .animate-indeterminate,
+    .animate-fade-in-up,
+    .animate-page-in,
+    .animate-soft-pulse,
+    .shimmer::after {
+      animation: none !important;
+    }
+    html {
+      scroll-behavior: auto;
+    }
   }
 }
