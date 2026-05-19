@@ -388,3 +388,54 @@
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   react-day-picker — Kontrast-Fix fuer Dark-Mode + bessere Hierarchie.
+   Defaults waren auf hellem BG ausgelegt — auf dunkler Popover-Karte sind
+   die Outside-Days und normale Tagesnummern kaum lesbar.
+   ─────────────────────────────────────────────────────────────────────────── */
+.rdp-jumax {
+  --rdp-accent-color: hsl(217 91% 60%);
+  --rdp-background-color: hsl(var(--accent));
+  font-size: 13px;
+}
+.rdp-jumax .rdp-day {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+.rdp-jumax .rdp-day_outside {
+  color: hsl(var(--muted-foreground) / 0.55);
+}
+.rdp-jumax .rdp-day_today:not(.rdp-day_selected) {
+  color: hsl(217 91% 60%);
+  font-weight: 700;
+}
+.rdp-jumax .rdp-head_cell {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  text-transform: none;
+  font-size: 11px;
+}
+.rdp-jumax .rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_disabled) {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.rdp-jumax .rdp-day_selected,
+.rdp-jumax .rdp-day_selected:hover {
+  background-color: hsl(217 91% 60%);
+  color: white;
+  font-weight: 700;
+}
+.rdp-jumax .rdp-caption_label {
+  font-weight: 600;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+.rdp-jumax .rdp-nav_button {
+  color: hsl(var(--foreground));
+  opacity: 0.7;
+}
+.rdp-jumax .rdp-nav_button:hover {
+  opacity: 1;
+  background-color: hsl(var(--accent));
+}
