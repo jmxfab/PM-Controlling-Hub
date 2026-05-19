@@ -61,7 +61,9 @@ import {
   useSensor,
   useSensors,
   closestCenter,
+  useDroppable,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -1132,7 +1134,15 @@ function MailTab({
   }
 
   function toggleMyDay(task: MailTask) {
-    return patchTask(task.id, { in_my_day: !task.in_my_day_at });
+    const adding = !task.in_my_day_at;
+    // Sofort-Feedback fuer User: Karte verschwindet aus der aktuellen Liste,
+    // sobald sie zu Mein Tag wandert (oder umgekehrt). Sonst klickt der User
+    // auf die Sonne und sieht "nichts passieren".
+    //  - non-my_day Tab + Adding   -> Karte verschwindet hier (taucht in Mein Tag auf)
+    //  - my_day Tab + Removing     -> Karte verschwindet hier (taucht wo anders auf)
+    const removeFromCurrentList =
+      (adding && filter !== "my_day") || (!adding && filter === "my_day");
+    return patchTask(task.id, { in_my_day: adding }, removeFromCurrentList);
   }
 
   /** Wichtig-Star toggeln. Optimistisches Update + PATCH.
@@ -1317,7 +1327,65 @@ function MailTab({
     return patchTask(suggestion.id, { in_my_day: true });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // DnD-Setup: einziger DndContext fuer den ganzen MailTab. Behandelt sowohl
+  // Sortable-Reorder innerhalb eines Buckets als auch Drop auf den 'Mein Tag'-
+  // Hover-Banner. Der Banner taucht waehrend des Drags auf — wenn der User
+  // die Karte da rein zieht, wird sie zu Mein Tag hinzugefuegt.
+  // ─────────────────────────────────────────────────────────────────────────
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    // Fall 1: Drop auf Mein-Tag-Drop-Zone
+    if (over.id === "drop:my-day") {
+      const task = data.entries.find((t) => t.id === active.id);
+      if (task && !task.in_my_day_at) {
+        toggleMyDay(task);
+      }
+      return;
+    }
+
+    // Fall 2: Sortable-Reorder innerhalb desselben Buckets
+    if (active.id === over.id) return;
+    // Finde welche Liste (visibleEntries oder ein Date-Bucket) beide
+    // IDs enthaelt — nur dann sortieren.
+    if (filter === "my_day") {
+      const oldIndex = visibleEntries.findIndex((t) => t.id === active.id);
+      const newIndex = visibleEntries.findIndex((t) => t.id === over.id);
+      if (oldIndex >= 0 && newIndex >= 0) {
+        reorderTasks(arrayMove(visibleEntries, oldIndex, newIndex));
+      }
+      return;
+    }
+    for (const group of groupByDate(visibleEntries)) {
+      const oldIndex = group.tasks.findIndex((t) => t.id === active.id);
+      const newIndex = group.tasks.findIndex((t) => t.id === over.id);
+      if (oldIndex >= 0 && newIndex >= 0) {
+        reorderTasks(arrayMove(group.tasks, oldIndex, newIndex));
+        return;
+      }
+    }
+  }
+
   return (
+    <DndContext
+      sensors={dndSensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveDragId(null)}
+    >
     <div className="space-y-4">
       {/* Bulk-Done-Banner fuer Infos: User kann mit 1 Klick alle alten Infos
           archivieren. Wird nur im Infos-Tab gezeigt und nur wenn 'Alle'-
@@ -1406,13 +1474,13 @@ function MailTab({
           {/* Im Mein-Tag Tab: flache Liste mit DnD. In anderen Tabs: nach Datum gruppiert. */}
           {/* DnD in JEDEM Tab — Mein-Tag flach, andere Tabs pro Date-Bucket.
               So koennen Aufgaben innerhalb ihrer Gruppe frei sortiert werden
-              (MS-To-Do-Style). Cross-Bucket-Drag waere kompliziert (muesste
-              due_date aendern) — bewusst weggelassen fuer V1. */}
+              (MS-To-Do-Style). Ausserdem: in nicht-my_day Tabs erscheint
+              waehrend des Drags eine "Zu Mein Tag"-Drop-Zone oben — User
+              kann die Karte einfach dort ablegen statt Sun-Icon zu klicken. */}
           {filter === "my_day" ? (
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-              <DndContextWrapper
+              <SortableBucket
                 tasks={visibleEntries}
-                onReorder={reorderTasks}
                 renderCard={(t) => (
                   <TaskCard
                     key={t.id}
@@ -1462,9 +1530,8 @@ function MailTab({
                 </span>
                 <div className="flex-1 h-px bg-border/60 ml-2" />
               </div>
-              <DndContextWrapper
+              <SortableBucket
                 tasks={group.tasks}
-                onReorder={reorderTasks}
                 renderCard={(t) => (
                   <TaskCard
                     key={t.id}
@@ -1535,6 +1602,15 @@ function MailTab({
         }}
       />
     </div>
+    {/* Drop-Zone fuer 'Zu Mein Tag' — sichtbar waehrend ein Drag laeuft,
+        UND wir nicht schon im my_day-Tab sind (sonst sinnlos). Position
+        fixed unten rechts, damit die Karte beim Drag freie Bahn hat. */}
+    {activeDragId && filter !== "my_day" && (
+      <div className="fixed bottom-6 right-6 z-50 max-w-sm">
+        <MyDayDropZone visible={true} />
+      </div>
+    )}
+    </DndContext>
   );
 }
 
@@ -2497,56 +2573,58 @@ function ErrorBox({
 
 /* Pagination entfernt — alles in einem Stream */
 
-/* ---------------- DnD Wrapper ---------------- */
+/* ---------------- Sortable Bucket (innerhalb gemeinsamer DndContext) ---------------- */
 /**
- * Wrapper-Komponente fuer den Mein-Tag-Tab: macht die TaskCards via
- * @dnd-kit drag-and-drop sortierbar. Drag-Handle ist ein dezentes
- * Grip-Icon links neben jeder Karte — der Rest der Karte bleibt klickbar.
+ * Sortable-Container fuer eine Liste/Bucket — KEIN eigener DndContext mehr
+ * (der ist eine Ebene hoeher in MailTab gemeinsam fuer Sort + Drop-To-My-Day).
  */
-function DndContextWrapper({
+function SortableBucket({
   tasks,
-  onReorder,
   renderCard,
 }: {
   tasks: MailTask[];
-  onReorder: (reordered: MailTask[]) => void;
   renderCard: (task: MailTask) => React.ReactNode;
 }) {
-  // PointerSensor mit 8px Mindest-Distanz damit normale Clicks/Taps
-  // NICHT als Drag interpretiert werden.
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = tasks.findIndex((t) => t.id === active.id);
-    const newIndex = tasks.findIndex((t) => t.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const reordered = arrayMove(tasks, oldIndex, newIndex);
-    onReorder(reordered);
-  }
-
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={handleDragEnd}
+    <SortableContext
+      items={tasks.map((t) => t.id)}
+      strategy={verticalListSortingStrategy}
     >
-      <SortableContext
-        items={tasks.map((t) => t.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div className="space-y-2">
-          {tasks.map((t) => (
-            <SortableTaskCard key={t.id} id={t.id}>
-              {renderCard(t)}
-            </SortableTaskCard>
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+      <div className="space-y-2">
+        {tasks.map((t) => (
+          <SortableTaskCard key={t.id} id={t.id}>
+            {renderCard(t)}
+          </SortableTaskCard>
+        ))}
+      </div>
+    </SortableContext>
+  );
+}
+
+/* ---------------- Floating Drop-Zone "Zu Mein Tag" ---------------- */
+/** Sticky-Banner der WAEHREND eines Drags an der oberen Bildschirmkante
+ *  erscheint. Drop -> Task wandert in Mein Tag. Nur sichtbar wenn aktiv
+ *  gedraggt wird UND wir nicht schon im my_day-Tab sind. */
+function MyDayDropZone({ visible }: { visible: boolean }) {
+  const { isOver, setNodeRef } = useDroppable({ id: "drop:my-day" });
+  if (!visible) return null;
+  return (
+    <div
+      ref={setNodeRef}
+      className={`sticky top-2 z-20 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-3 px-4 transition-all ${
+        isOver
+          ? "border-amber-500 bg-amber-100 dark:bg-amber-950/40 scale-105 shadow-lg"
+          : "border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-700/40"
+      }`}
+    >
+      <Sun
+        size={16}
+        className={`${isOver ? "text-amber-600" : "text-amber-500"} ${isOver ? "animate-spin" : ""}`}
+      />
+      <span className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">
+        {isOver ? "Loslassen zum Hinzufügen" : "Hier ablegen für Mein Tag"}
+      </span>
+    </div>
   );
 }
 
