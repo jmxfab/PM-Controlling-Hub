@@ -6,11 +6,5 @@
     "src/app/api/cron/weekly-digest/route.ts": {
       "maxDuration": 60
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron/weekly-digest",
-      "schedule": "30 5 * * 1"
-    }
-  ]
+  }
 }
