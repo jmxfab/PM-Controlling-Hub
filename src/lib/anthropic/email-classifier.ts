@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAnthropicClient } from "@/lib/anthropic/client";
+import { callClaudeMessage } from "@/lib/anthropic/client";
 
 export type EmailCategory = "info" | "aufgabe" | "dringend";
 
@@ -41,24 +41,17 @@ export async function classifyEmail(params: {
   subject: string;
   body: string;
 }): Promise<ClassificationResult> {
-  const client = createAnthropicClient();
-
   const userPrompt = USER_PROMPT_TEMPLATE.replace("{sender_name}", params.senderName)
     .replace("{sender_email}", params.senderEmail)
     .replace("{subject}", params.subject)
     .replace("{body}", params.body.slice(0, 4000));
 
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
+  const raw = await callClaudeMessage({
+    prompt: userPrompt,
     system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 512,
   });
-
-  const raw = message.content
-    .filter((block) => block.type === "text")
-    .map((block) => (block as { type: "text"; text: string }).text)
-    .join("");
 
   // Strip optional markdown fences Claude sometimes wraps around JSON
   const text = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
