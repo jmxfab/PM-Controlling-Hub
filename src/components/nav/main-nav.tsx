@@ -11,6 +11,7 @@ import {
   Euro,
   ListTodo,
   LogOut,
+  Newspaper,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
   { href: "/projekte", label: "Pulse", icon: Activity },
+  { href: "/digest", label: "Digest", icon: Newspaper },
 ];
 
 export function MainNav() {
