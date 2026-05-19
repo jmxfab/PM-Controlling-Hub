@@ -54,9 +54,13 @@ interface Props {
   /** Bei „Per Outlook antworten" wird dieser Link genutzt — Caller stellt
    *  vorbefuellten mailto-Link bereit oder null wenn kein Sender da. */
   mailto: string | null;
-  /** Nach erfolgreichem Speichern wollen wir die Karte auf 'done' bringen
-   *  (Auto-Erledigung — Item 3.3). Caller entscheidet ob das passiert. */
+  /** Wird aufgerufen wenn der User die Auto-Done-Checkbox aktiviert hat
+   *  UND eine Aktion (Notiz/Outlook) erfolgreich war. Caller PATCHt dann
+   *  status=done. Item 3.3 aus Roadmap. */
   onActionCompleted?: () => void;
+  /** Wird aufgerufen wenn der User auf "An Controlling delegieren" klickt —
+   *  PATCH status='controlling'. */
+  onMarkControlling?: () => void;
 }
 
 type ToneOpt = "freundlich" | "kurz" | "foermlich";
@@ -73,7 +77,12 @@ type ToneOpt = "freundlich" | "kurz" | "foermlich";
  *
  * Status-Badges + auto-clear nach 2s damit's nicht klebt.
  */
-export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
+export function TaskComposer({
+  taskId,
+  mailto,
+  onActionCompleted,
+  onMarkControlling,
+}: Props) {
   const [text, setText] = useState("");
   const [hint, setHint] = useState("");
   const [tone, setTone] = useState<ToneOpt>("freundlich");
@@ -81,6 +90,10 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
   const [busy, setBusy] = useState<"ai" | "note" | "mail" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  /** Wenn gesetzt, nach erfolgreichem Save/Send -> Task auf done.
+   *  Default: true wenn mailto vorhanden (User will dann meist die Mail-Pflicht
+   *  abhaken), false bei reiner Notiz. */
+  const [autoDone, setAutoDone] = useState<boolean>(true);
   // Templates + Variable-State
   const [templates, setTemplates] = useState<TemplateOpt[]>([]);
   const [selectedTplId, setSelectedTplId] = useState<string>("");
@@ -205,9 +218,9 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
         setError(json.error ?? `Fehler ${res.status}`);
         return;
       }
-      flashOk("Notiz gespeichert");
+      flashOk(autoDone ? "Notiz gespeichert + erledigt" : "Notiz gespeichert");
       setText("");
-      onActionCompleted?.();
+      if (autoDone) onActionCompleted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Netzwerk-Fehler");
     } finally {
@@ -239,8 +252,10 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
         body: JSON.stringify({ body, kind: "mailto" }),
       }).catch(() => {});
       window.location.href = finalLink;
-      flashOk("Outlook wird geöffnet");
-      onActionCompleted?.();
+      flashOk(
+        autoDone ? "Outlook wird geöffnet + erledigt" : "Outlook wird geöffnet",
+      );
+      if (autoDone) onActionCompleted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler beim Öffnen");
     } finally {
@@ -448,6 +463,28 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
         )}
       </div>
 
+      <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-border/40">
+        <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoDone}
+            onChange={(e) => setAutoDone(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-border accent-emerald-500"
+          />
+          <span>Aufgabe nach Aktion auf <strong>erledigt</strong> setzen</span>
+        </label>
+        {onMarkControlling && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2 gap-1 text-fuchsia-700 hover:bg-fuchsia-50 dark:text-fuchsia-300 dark:hover:bg-fuchsia-950/40"
+            onClick={onMarkControlling}
+            title="Status auf 'Controlling' setzen — Aufgabe wird nachverfolgt"
+          >
+            → Controlling
+          </Button>
+        )}
+      </div>
       {flash && (
         <div className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
           <Check size={11} /> {flash}

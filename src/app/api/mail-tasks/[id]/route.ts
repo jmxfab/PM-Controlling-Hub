@@ -14,6 +14,7 @@ const VALID_STATUS = new Set([
   "open",
   "in_progress",
   "waiting",
+  "controlling",
   "done",
   "cancelled",
 ]);
