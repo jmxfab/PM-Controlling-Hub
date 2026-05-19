@@ -2484,7 +2484,48 @@ type Suggestion = {
   due_date: string | null;
   created_at: string;
   is_important: boolean;
+  /** Menschenlesbarer Grund warum die Task vorgeschlagen wird, vom Server. */
+  reason: string;
 };
+
+/** Tailwind-Token-Klassen fuer den Grund-Badge — gibt visuell Hinweis WIE
+ *  dringend der Vorschlag ist (red = ueberfaellig, amber = heute, ...). */
+function reasonStyle(reason: string): { className: string } {
+  const r = reason.toLowerCase();
+  if (r.startsWith("überfällig")) {
+    return {
+      className:
+        "text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-950/40",
+    };
+  }
+  if (r === "fällig heute" || r === "dringend") {
+    return {
+      className:
+        "text-orange-700 bg-orange-100 dark:text-orange-300 dark:bg-orange-950/40",
+    };
+  }
+  if (r === "fällig morgen" || r === "hohe priorität" || r === "kritische mail") {
+    return {
+      className:
+        "text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950/40",
+    };
+  }
+  if (r === "wichtig markiert") {
+    return {
+      className:
+        "text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950/40",
+    };
+  }
+  if (r.startsWith("fällig in") || r === "diese woche fällig") {
+    return {
+      className:
+        "text-sky-700 bg-sky-100 dark:text-sky-300 dark:bg-sky-950/40",
+    };
+  }
+  return {
+    className: "text-muted-foreground bg-muted/60",
+  };
+}
 
 /**
  * MS-To-Do-Style "Vorschläge" Panel — laedt offene Tasks die NOCH NICHT in
@@ -2591,22 +2632,26 @@ function MyDaySuggestionsPanel({
                 <div className="text-[12.5px] font-medium leading-snug text-foreground/90 line-clamp-2">
                   {s.title}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-muted-foreground/80">
-                  {s.is_important && (
-                    <Star
-                      size={10}
-                      className="fill-amber-400 text-amber-500"
-                      aria-hidden
-                    />
-                  )}
-                  <span className="capitalize">
-                    {s.mail_category ?? "Aufgabe"}
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {/* Grund-Badge: warum schlagen wir das vor? */}
+                  <span
+                    className={`inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                      reasonStyle(s.reason).className
+                    }`}
+                  >
+                    {s.is_important && (
+                      <Star
+                        size={9}
+                        className="fill-current"
+                        aria-hidden
+                      />
+                    )}
+                    {s.reason}
                   </span>
-                  {s.priority && (
-                    <>
-                      <span className="opacity-40">·</span>
-                      <span className="capitalize">{s.priority}</span>
-                    </>
+                  {s.mail_category && s.mail_category !== "aufgabe" && (
+                    <span className="text-[10px] text-muted-foreground/70 capitalize">
+                      {s.mail_category}
+                    </span>
                   )}
                 </div>
               </div>
