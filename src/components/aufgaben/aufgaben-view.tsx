@@ -825,7 +825,12 @@ function MailTab({
         }
         // stale-while-revalidate: zeige sofort cached, refetch silent
       } else {
-        setLoading(true);
+        // Loading-Skeleton nur zeigen wenn entries komplett leer.
+        // Falls schon was sichtbar ist (optimistic stub, ...), kein Flicker.
+        setData((cur) => {
+          if (cur.entries.length === 0) setLoading(true);
+          return cur;
+        });
       }
       setError(null);
 
@@ -1215,10 +1220,58 @@ function MailTab({
     statusFilter !== tabFilters.defaultStatus ||
     prioFilter !== "all";
 
-  /** Optimistic: Vorschlag in Mein Tag uebernehmen. Verschiebt die Task lokal
-   *  aus der Suggestions-Liste in die My-Day-Liste, PATCH laeuft im Hintergrund. */
-  async function addSuggestionToMyDay(taskId: string) {
-    return patchTask(taskId, { in_my_day: true });
+  /** Optimistic: Vorschlag in Mein Tag uebernehmen. Inseriert die Task sofort
+   *  lokal in die My-Day-Liste (statt auf den Server-Roundtrip zu warten),
+   *  PATCH laeuft im Hintergrund. Damit ist die UI-Reaktion <50ms statt 1-3s. */
+  async function addSuggestionToMyDay(suggestion: {
+    id: string;
+    title: string;
+    description: string | null;
+    mail_category: string | null;
+    priority: string | null;
+    due_date: string | null;
+    created_at: string;
+    is_important: boolean;
+  }) {
+    // 1) Lokal: sofort einen Stub in entries einfuegen (oben in der Liste).
+    //    fetchData danach im Hintergrund laedt die echten Felder nach (Sender,
+    //    source_email_*, subtasks, etc.). Bis dahin sieht der User schon was.
+    const stub: MailTask = {
+      id: suggestion.id,
+      source: "mail",
+      title: suggestion.title,
+      description: suggestion.description,
+      status: "open",
+      priority:
+        (suggestion.priority as MailTask["priority"] | null) ?? null,
+      due_date: suggestion.due_date,
+      created_at: suggestion.created_at,
+      source_email_id: null,
+      source_email_entry_id: null,
+      source_email_web_link: null,
+      source_email_is_read: null,
+      source_email_conversation_id: null,
+      thread_message_count: 1,
+      thread_last_message_at: null,
+      mail_category:
+        (suggestion.mail_category as MailTask["mail_category"] | null) ?? null,
+      sender: null,
+      body: suggestion.description,
+      subtasks: [],
+      assigned_to: null,
+      remind_at: null,
+      is_user_created: false,
+      in_my_day_at: new Date().toISOString(),
+      sort_order: 0,
+      is_important: suggestion.is_important,
+    };
+    setData((prev) =>
+      // Wenn schon irgendwie drin (Race), nichts tun. Sonst oben anfuegen.
+      prev.entries.find((t) => t.id === suggestion.id)
+        ? prev
+        : { ...prev, entries: [stub, ...prev.entries], total: prev.total + 1 },
+    );
+    return patchTask(suggestion.id, { in_my_day: true });
   }
 
   return (
@@ -2550,7 +2603,7 @@ function MyDaySuggestionsPanel({
 }: {
   /** String-Key der sich bei Mutations aendert — triggert Re-Fetch. */
   refreshKey: string;
-  onAdd: (taskId: string) => Promise<void>;
+  onAdd: (suggestion: Suggestion) => Promise<void>;
   busyTaskId: string | null;
 }) {
   const [items, setItems] = useState<Suggestion[]>([]);
@@ -2605,9 +2658,9 @@ function MyDaySuggestionsPanel({
     return null;
   }
 
-  async function handleAdd(id: string) {
-    setDismissed((s) => new Set(s).add(id));
-    await onAdd(id);
+  async function handleAdd(suggestion: Suggestion) {
+    setDismissed((s) => new Set(s).add(suggestion.id));
+    await onAdd(suggestion);
   }
 
   return (
@@ -2630,7 +2683,7 @@ function MyDaySuggestionsPanel({
             >
               <button
                 type="button"
-                onClick={() => handleAdd(s.id)}
+                onClick={() => handleAdd(s)}
                 disabled={isBusy}
                 className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-muted-foreground/40 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 grid place-items-center disabled:opacity-50"
                 title="Zu Mein Tag hinzufügen"
