@@ -46,6 +46,7 @@ export default async function AufgabenPage() {
   const [heizlastProjects, counts] = await Promise.all([
     loadHeizlastProjects().catch(() => []),
     loadMailTaskCounts().catch(() => ({
+      my_day: 0,
       kritisch: 0,
       aufgaben: 0,
       infos: 0,
