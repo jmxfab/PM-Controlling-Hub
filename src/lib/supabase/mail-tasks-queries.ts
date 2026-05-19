@@ -210,7 +210,14 @@ export async function loadMailTasksPage(
   if (filters.status === "done") query = query.eq("status", "done");
   if (filters.priority && filters.priority !== "all") query = query.eq("priority", filters.priority);
   if (filters.search) {
-    query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+    // PostgREST-Filter-Sanitization: Komma trennt OR-Klauseln, Klammern
+    // bilden Subgroups, %/_ sind LIKE-Wildcards, * ist PostgREST-Wildcard.
+    // Diese Zeichen aus dem User-Input rausschmeissen damit der Filter
+    // nicht versehentlich Inhalte aendert.
+    const safe = filters.search.replace(/[,()*%\\]/g, " ").trim();
+    if (safe.length > 0) {
+      query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
+    }
   }
   // Altersfilter (Default 30 Tage, kann auf 90 oder 'alle' umgestellt werden).
   // Wirkt NICHT in Mein Tag (da entscheidet der User explizit).

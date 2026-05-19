@@ -1467,7 +1467,7 @@ function MailTab({
       {error ? (
         <ErrorBox
           error={error}
-          onRetry={() => fetchData(search, 0, statusFilter, prioFilter)}
+          onRetry={() => fetchData(search, 0, statusFilter, prioFilter, ageFilter)}
         />
       ) : loading && data.entries.length === 0 ? (
         <SkeletonList />
@@ -1485,11 +1485,15 @@ function MailTab({
         <div className="space-y-6">
           {visibleEntries.length === 0 && snoozedCount > 0 && !showSnoozed && (
             <EmptyState
-              icon={Bell}
-              title="Alles aufgeschoben"
-              hint={`${snoozedCount} Aufgabe${
-                snoozedCount === 1 ? "" : "n"
-              } warten auf ihre Erinnerung. Klick auf den Button unten um sie trotzdem zu sehen.`}
+              icon={search ? Search : Bell}
+              title={search ? "Keine Treffer" : "Alles aufgeschoben"}
+              hint={
+                search
+                  ? "Deine Suche liefert in dieser Liste keine Treffer. Klick unten um auch aufgeschobene Aufgaben einzubeziehen."
+                  : `${snoozedCount} Aufgabe${
+                      snoozedCount === 1 ? "" : "n"
+                    } warten auf ihre Erinnerung. Klick auf den Button unten um sie trotzdem zu sehen.`
+              }
             />
           )}
           {/* Im Mein-Tag Tab: flache Liste mit DnD. In anderen Tabs: nach Datum gruppiert. */}
@@ -1534,7 +1538,10 @@ function MailTab({
                   Refresh-Trigger: mutationTick (bumpt bei jeder Mutation)
                   + visibleEntries-IDs (Fallback bei Realtime-Sync). */}
               <MyDaySuggestionsPanel
-                refreshKey={`${mutationTick}|${visibleEntries.map((t) => t.id).join(",")}`}
+                /* refreshKey: nur Mutationen + welche IDs in Mein Tag sind,
+                   nicht ihre Reihenfolge (DnD-Sort triggert sonst Refetch).
+                   IDs sortiert verkettet -> stabil bei Reorder. */
+                refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
                 onAdd={addSuggestionToMyDay}
                 busyTaskId={busyTaskId}
               />
