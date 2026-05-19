@@ -1044,12 +1044,17 @@ function MailTab({
     return patchTask(task.id, { in_my_day: !task.in_my_day_at });
   }
 
-  /** Re-Order callback fuer DnD im Mein-Tag-Tab.
+  /** Generischer Re-Order callback fuer DnD. Wird sowohl im Mein-Tag-Tab
+   *  (flache Liste) als auch in den Date-Buckets der anderen Tabs benutzt.
    *  Schritt 1: lokal sofort umsortieren (optimistic UI).
    *  Schritt 2: Parallel-PATCH alle Tasks mit neuen sort_order Werten
    *  (Inkremente von 100, damit spaeter Insert dazwischen leicht moeglich).
+   *
+   *  Hinweis: sort_order wird LOKAL nur in den uebergebenen Tasks (=eine
+   *  Bucket/Liste) gesetzt — global gibt es keine sort_order-Kollision weil
+   *  innerhalb eines Tabs gruppiert wird und Buckets disjunkt sind.
    */
-  async function reorderMyDay(reorderedTasks: MailTask[]) {
+  async function reorderTasks(reorderedTasks: MailTask[]) {
     // Lokal: setze sort_order auf (index+1)*100 und replace die Listen-Reihenfolge.
     const updated = reorderedTasks.map((t, i) => ({
       ...t,
@@ -1064,7 +1069,7 @@ function MailTab({
         entries: [...updated, ...remaining],
       };
     });
-    invalidateCacheForFilter("my_day");
+    invalidateCacheForFilter(filter);
 
     // Server: parallel PATCH. Wir warten nicht im Render-Block (fire-and-forget),
     // aber loggen Fehler.
@@ -1231,10 +1236,14 @@ function MailTab({
             />
           )}
           {/* Im Mein-Tag Tab: flache Liste mit DnD. In anderen Tabs: nach Datum gruppiert. */}
+          {/* DnD in JEDEM Tab — Mein-Tag flach, andere Tabs pro Date-Bucket.
+              So koennen Aufgaben innerhalb ihrer Gruppe frei sortiert werden
+              (MS-To-Do-Style). Cross-Bucket-Drag waere kompliziert (muesste
+              due_date aendern) — bewusst weggelassen fuer V1. */}
           {filter === "my_day" ? (
             <DndContextWrapper
               tasks={visibleEntries}
-              onReorder={reorderMyDay}
+              onReorder={reorderTasks}
               renderCard={(t) => (
                 <TaskCard
                   key={t.id}
@@ -1271,8 +1280,10 @@ function MailTab({
                 </span>
                 <div className="flex-1 h-px bg-border/60 ml-2" />
               </div>
-              <div className="space-y-2">
-                {group.tasks.map((t) => (
+              <DndContextWrapper
+                tasks={group.tasks}
+                onReorder={reorderTasks}
+                renderCard={(t) => (
                   <TaskCard
                     key={t.id}
                     task={t}
@@ -1294,8 +1305,8 @@ function MailTab({
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
                   />
-                ))}
-              </div>
+                )}
+              />
             </section>
           ))
           )}
