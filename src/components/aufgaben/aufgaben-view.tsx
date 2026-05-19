@@ -151,6 +151,20 @@ function formatRelative(iso: string): string {
   });
 }
 
+/** Keywords die eine Task ins Prio-Panel oben heben. Case-insensitive,
+ *  Umlaut-tolerant. Items 4.3 + 4.4 aus Roadmap. */
+const PRIO_KEYWORD_PATTERNS = [
+  /angebotspr[üu]fung/i,
+  /bitte pr[üu]fen/i,
+  /\bfreigabe\b/i,
+  /auftragsbest[äa]tigung/i,
+] as const;
+
+function isPrioTask(t: MailTask): boolean {
+  const haystack = `${t.title} ${t.body ?? ""}`;
+  return PRIO_KEYWORD_PATTERNS.some((re) => re.test(haystack));
+}
+
 type DateBucket = "heute" | "gestern" | "woche" | "aelter";
 
 function bucketOf(iso: string): DateBucket {
@@ -643,13 +657,13 @@ function MailTab({
   // Trennen in sichtbar / snoozed: Tasks deren remind_at > jetzt sind
   // werden ausgeblendet. Recompute jede Minute via Date.now() Tick reicht
   // — bei Page-Reload sowieso. Memoiziert auf data.entries.
-  const { visibleEntries, snoozedCount } = useMemo(() => {
+  const { visibleEntries, snoozedCount, prioEntries } = useMemo(() => {
     const nowMs = Date.now();
     const visible: MailTask[] = [];
+    const prio: MailTask[] = [];
     let snoozed = 0;
     for (const t of data.entries) {
       // 1) Erledigte raus — Item 3.1 (sofortiges Ausblenden nach Mark-Done)
-      //    Beim 'done' Statusfilter werden sie ueber den API-Filter wieder reingeholt.
       if (t.status === "done" && statusFilter !== "done") continue;
       // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt
       if (t.status !== "done" && t.remind_at) {
@@ -659,10 +673,21 @@ function MailTab({
           if (!showSnoozed) continue;
         }
       }
+      // 3) Prio-Panel-Trigger: Items 4.3 + 4.4
+      //    Keywords im Titel ODER Body -> aus regulaerer Liste loesen + oben
+      //    hervorgehoben anzeigen. Nur auf aufgaben/kritisch-Tab sinnvoll.
+      if (isPrioTask(t) && filter !== "infos") {
+        prio.push(t);
+        continue;
+      }
       visible.push(t);
     }
-    return { visibleEntries: visible, snoozedCount: snoozed };
-  }, [data.entries, showSnoozed, statusFilter]);
+    return {
+      visibleEntries: visible,
+      snoozedCount: snoozed,
+      prioEntries: prio,
+    };
+  }, [data.entries, showSnoozed, statusFilter, filter]);
 
   const fetchData = useCallback(
     async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
@@ -991,6 +1016,28 @@ function MailTab({
         tab={filter}
       />
 
+      {/* Prio-Panel oben — Item 4.3+4.4. Loest Tasks mit Keywords
+       *  (Angebotsprüfung, Freigabe, Auftragsbestätigung, Bitte prüfen)
+       *  aus der regulären Liste und zeigt sie hervorgehoben. */}
+      {prioEntries.length > 0 && !loading && (
+        <PrioPanel
+          tasks={prioEntries}
+          expanded={expanded}
+          busyTaskId={busyTaskId}
+          onToggle={setExpanded}
+          onMarkDone={markDone}
+          onMarkAsRead={markAsRead}
+          onMoveToAufgaben={moveToAufgaben}
+          onSnooze={snoozeBy}
+          onSubtasksChange={updateTaskSubtasks}
+          onDelegationChange={updateTaskDelegation}
+          onSenderClick={setHistoryEmail}
+          buildMailto={buildMailto}
+          buildOutlookDesktopLink={buildOutlookDesktopLink}
+          tab={filter}
+        />
+      )}
+
       {error ? (
         <ErrorBox
           error={error}
@@ -998,7 +1045,7 @@ function MailTab({
         />
       ) : loading && data.entries.length === 0 ? (
         <SkeletonList />
-      ) : visibleEntries.length === 0 && snoozedCount === 0 ? (
+      ) : visibleEntries.length === 0 && snoozedCount === 0 && prioEntries.length === 0 ? (
         <EmptyState
           icon={meta.icon}
           title={meta.emptyTitle}
@@ -1938,3 +1985,82 @@ function ErrorBox({
 }
 
 /* Pagination entfernt — alles in einem Stream */
+
+/* ---------------- Prio-Panel ---------------- */
+/**
+ * Hervorgehobenes Panel oben fuer Tasks mit Prio-Keywords
+ * (Angebotsprüfung / Freigabe / Auftragsbestätigung / Bitte prüfen).
+ * Wird nur gerendert wenn solche Tasks da sind — kein Empty-State.
+ */
+function PrioPanel({
+  tasks,
+  expanded,
+  busyTaskId,
+  onToggle,
+  onMarkDone,
+  onMarkAsRead,
+  onMoveToAufgaben,
+  onSnooze,
+  onSubtasksChange,
+  onDelegationChange,
+  onSenderClick,
+  buildMailto,
+  buildOutlookDesktopLink,
+  tab,
+}: {
+  tasks: MailTask[];
+  expanded: string | null;
+  busyTaskId: string | null;
+  onToggle: (next: string | null | ((cur: string | null) => string | null)) => void;
+  onMarkDone: (t: MailTask) => void;
+  onMarkAsRead: (t: MailTask) => void;
+  onMoveToAufgaben: (t: MailTask) => void;
+  onSnooze: (t: MailTask, ms: number) => void;
+  onSubtasksChange: (taskId: string, next: Subtask[]) => void;
+  onDelegationChange: (
+    taskId: string,
+    next: { assigned_to: string | null; remind_at: string | null },
+  ) => void;
+  onSenderClick: (email: string) => void;
+  buildMailto: (task: MailTask) => string | null;
+  buildOutlookDesktopLink: (task: MailTask) => string | null;
+  tab: MailTabFilter;
+}) {
+  return (
+    <section className="relative rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-amber-950/30 dark:via-orange-950/20 dark:to-card/40 dark:border-amber-700/40 p-3 space-y-2 shadow-[0_4px_24px_-4px_hsl(35_95%_55%/0.25)]">
+      <div className="flex items-center gap-2 px-1">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+          <AlertTriangle size={12} /> Prio
+        </span>
+        <span className="text-[10px] text-muted-foreground/70 font-medium">
+          {tasks.length} {tasks.length === 1 ? "Vorgang" : "Vorgänge"} mit
+          „Angebotsprüfung", „Freigabe", „Bitte prüfen" oder „Auftragsbestätigung"
+        </span>
+        <div className="flex-1 h-px bg-amber-300/40 dark:bg-amber-700/30 ml-2" />
+      </div>
+      <div className="space-y-2">
+        {tasks.map((t) => (
+          <TaskCard
+            key={t.id}
+            task={t}
+            tab={tab}
+            expanded={expanded === t.id}
+            busy={busyTaskId === t.id}
+            onToggle={() =>
+              onToggle((cur) => (cur === t.id ? null : t.id))
+            }
+            onMarkDone={() => onMarkDone(t)}
+            onMarkAsRead={() => onMarkAsRead(t)}
+            onMoveToAufgaben={() => onMoveToAufgaben(t)}
+            onSnooze={(ms) => onSnooze(t, ms)}
+            onSubtasksChange={(next) => onSubtasksChange(t.id, next)}
+            onDelegationChange={(next) => onDelegationChange(t.id, next)}
+            onSenderClick={onSenderClick}
+            buildMailto={buildMailto}
+            buildOutlookDesktopLink={buildOutlookDesktopLink}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
