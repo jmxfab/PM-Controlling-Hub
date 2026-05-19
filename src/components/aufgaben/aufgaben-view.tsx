@@ -1203,6 +1203,12 @@ function MailTab({
     statusFilter !== tabFilters.defaultStatus ||
     prioFilter !== "all";
 
+  /** Optimistic: Vorschlag in Mein Tag uebernehmen. Verschiebt die Task lokal
+   *  aus der Suggestions-Liste in die My-Day-Liste, PATCH laeuft im Hintergrund. */
+  async function addSuggestionToMyDay(taskId: string) {
+    return patchTask(taskId, { in_my_day: true });
+  }
+
   return (
     <div className="space-y-4">
       <FilterBar
@@ -1279,34 +1285,45 @@ function MailTab({
               (MS-To-Do-Style). Cross-Bucket-Drag waere kompliziert (muesste
               due_date aendern) — bewusst weggelassen fuer V1. */}
           {filter === "my_day" ? (
-            <DndContextWrapper
-              tasks={visibleEntries}
-              onReorder={reorderTasks}
-              renderCard={(t) => (
-                <TaskCard
-                  key={t.id}
-                  task={t}
-                  tab={filter}
-                  expanded={expanded === t.id}
-                  busy={busyTaskId === t.id}
-                  onToggle={() =>
-                    setExpanded((cur) => (cur === t.id ? null : t.id))
-                  }
-                  onMarkDone={() => markDone(t)}
-                  onMarkAsRead={() => markAsRead(t)}
-                  onMoveToAufgaben={() => moveToAufgaben(t)}
-                  onSnooze={(ms) => snoozeBy(t, ms)}
-                  onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
-                  onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
-                  onSenderClick={(email) => setHistoryEmail(email)}
-                  onToggleMyDay={() => toggleMyDay(t)}
-                  onToggleImportant={() => toggleImportant(t)}
-                  buildMailto={buildMailto}
-                  buildOutlookDesktopLink={buildOutlookDesktopLink}
-                  heroProjectLinkTemplate={heroProjectLinkTemplate}
-                />
-              )}
-            />
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+              <DndContextWrapper
+                tasks={visibleEntries}
+                onReorder={reorderTasks}
+                renderCard={(t) => (
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    tab={filter}
+                    expanded={expanded === t.id}
+                    busy={busyTaskId === t.id}
+                    onToggle={() =>
+                      setExpanded((cur) => (cur === t.id ? null : t.id))
+                    }
+                    onMarkDone={() => markDone(t)}
+                    onMarkAsRead={() => markAsRead(t)}
+                    onMoveToAufgaben={() => moveToAufgaben(t)}
+                    onSnooze={(ms) => snoozeBy(t, ms)}
+                    onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
+                    onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
+                    onSenderClick={(email) => setHistoryEmail(email)}
+                    onToggleMyDay={() => toggleMyDay(t)}
+                    onToggleImportant={() => toggleImportant(t)}
+                    buildMailto={buildMailto}
+                    buildOutlookDesktopLink={buildOutlookDesktopLink}
+                    heroProjectLinkTemplate={heroProjectLinkTemplate}
+                  />
+                )}
+              />
+              {/* MS-To-Do-Style Vorschläge-Panel rechts.
+                  Zeigt offene Tasks die noch NICHT in Mein Tag sind.
+                  Refresh-Trigger: data.entries.length (jedes Mal wenn ein Task
+                  dazukommt/rausfliegt, gibt's einen neuen Stand). */}
+              <MyDaySuggestionsPanel
+                refreshKey={visibleEntries.map((t) => t.id).join(",")}
+                onAdd={addSuggestionToMyDay}
+                busyTaskId={busyTaskId}
+              />
+            </div>
           ) : (
           groupByDate(visibleEntries).map((group) => (
             <section key={group.bucket} className="space-y-2">
@@ -2454,5 +2471,149 @@ function PrioPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------- Mein-Tag Vorschläge-Panel ---------------- */
+type Suggestion = {
+  id: string;
+  title: string;
+  description: string | null;
+  mail_category: string | null;
+  priority: string | null;
+  due_date: string | null;
+  created_at: string;
+  is_important: boolean;
+};
+
+/**
+ * MS-To-Do-Style "Vorschläge" Panel — laedt offene Tasks die NOCH NICHT in
+ * Mein Tag sind und bietet Quick-Add via +-Button. Nur sichtbar im Mein-Tag-Tab.
+ */
+function MyDaySuggestionsPanel({
+  refreshKey,
+  onAdd,
+  busyTaskId,
+}: {
+  /** String-Key der sich bei Mutations aendert — triggert Re-Fetch. */
+  refreshKey: string;
+  onAdd: (taskId: string) => Promise<void>;
+  busyTaskId: string | null;
+}) {
+  const [items, setItems] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    window
+      .fetch("/api/mail-tasks/my-day-suggestions")
+      .then((r) => (r.ok ? r.json() : { suggestions: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const list: Suggestion[] = Array.isArray(data?.suggestions)
+          ? data.suggestions
+          : [];
+        setItems(list);
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  const visible = items.filter((s) => !dismissed.has(s.id));
+
+  if (loading && visible.length === 0) {
+    return (
+      <aside className="rounded-2xl border bg-card/60 p-4 space-y-2 sticky top-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Vorschläge
+        </div>
+        <div className="space-y-1.5">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-12 rounded-lg bg-muted/40 animate-pulse"
+            />
+          ))}
+        </div>
+      </aside>
+    );
+  }
+
+  if (visible.length === 0) {
+    return null;
+  }
+
+  async function handleAdd(id: string) {
+    setDismissed((s) => new Set(s).add(id));
+    await onAdd(id);
+  }
+
+  return (
+    <aside className="rounded-2xl border bg-card/60 p-3 space-y-2 sticky top-4">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Vorschläge
+        </div>
+        <div className="text-[10px] text-muted-foreground/60 tabular-nums">
+          {visible.length} {visible.length === 1 ? "Vorschlag" : "Vorschläge"}
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {visible.map((s) => {
+          const isBusy = busyTaskId === s.id;
+          return (
+            <div
+              key={s.id}
+              className="group flex items-start gap-2 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 hover:border-foreground/15 hover:bg-background/80 transition-colors"
+            >
+              <button
+                type="button"
+                onClick={() => handleAdd(s.id)}
+                disabled={isBusy}
+                className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-muted-foreground/40 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 grid place-items-center disabled:opacity-50"
+                title="Zu Mein Tag hinzufügen"
+                aria-label="Zu Mein Tag hinzufügen"
+              >
+                <span className="text-amber-600 dark:text-amber-400 text-[14px] leading-none font-bold">
+                  +
+                </span>
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12.5px] font-medium leading-snug text-foreground/90 line-clamp-2">
+                  {s.title}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-muted-foreground/80">
+                  {s.is_important && (
+                    <Star
+                      size={10}
+                      className="fill-amber-400 text-amber-500"
+                      aria-hidden
+                    />
+                  )}
+                  <span className="capitalize">
+                    {s.mail_category ?? "Aufgabe"}
+                  </span>
+                  {s.priority && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span className="capitalize">{s.priority}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
