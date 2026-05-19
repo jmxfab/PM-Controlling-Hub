@@ -41,6 +41,7 @@ import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
 import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-strip";
+import { TaskComposer } from "@/components/aufgaben/task-composer";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -1549,6 +1550,19 @@ function TaskCard({
                 currentAssignedTo={t.assigned_to}
                 currentRemindAt={t.remind_at}
                 onUpdated={onDelegationChange}
+              />
+            )}
+            {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern / Outlook-Reply.
+             *  Item 1.1 + 1.3 + 2.1 aus Feature-Roadmap. Nur fuer Mail-Tasks,
+             *  nicht Infos (lesen) und nicht Hero (read-only). */}
+            {t.source === "mail" && tab !== "infos" && (
+              <TaskComposer
+                taskId={t.id}
+                mailto={mailto}
+                onActionCompleted={() => {
+                  /* spaeter: auto-done. Aktuell nicht — User soll selbst entscheiden
+                   *  ob nach Notiz-Speichern / Outlook-Reply die Aufgabe erledigt ist. */
+                }}
               />
             )}
             <ActionButtons
