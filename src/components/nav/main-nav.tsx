@@ -35,8 +35,8 @@ const navItems: NavItem[] = [
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
-  { href: "/projekte", label: "Pulse", icon: Activity },
-  { href: "/digest", label: "Digest", icon: Newspaper },
+  // /projekte (Pulse) und /digest temporaer ausgeblendet — Pages
+  // existieren noch und sind ueber direkte URL erreichbar.
 ];
 
 export function MainNav() {
