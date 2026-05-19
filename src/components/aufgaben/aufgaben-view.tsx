@@ -2016,14 +2016,28 @@ function TaskCard({
 
           {/* Meta row: prio + due + status */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            {prio && (
+            {/* Prio-Badge ist KLICKBAR fuer mail-source Tasks — Popover-Menu
+                aendert die Priorität direkt (kein Expand noetig). Hero-Items
+                sind read-only, dann bleibt's ein normales Span. */}
+            {prio && t.source === "mail" ? (
+              <PrioPickerInline
+                currentPriority={t.priority}
+                onChange={onChangePriority}
+              />
+            ) : prio ? (
               <span
                 className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full ${prio.badge}`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${prio.dot}`} />
                 {prio.label}
               </span>
-            )}
+            ) : t.source === "mail" ? (
+              // Auch wenn keine Prio gesetzt: User kann eine vergeben.
+              <PrioPickerInline
+                currentPriority={null}
+                onChange={onChangePriority}
+              />
+            ) : null}
             {due && (
               <span
                 className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
@@ -2855,6 +2869,71 @@ function BulkCleanupBanner({
  * als Buttons. Klick aufs Pill = Pop-Menu mit Auswahl-Optionen.
  * Optimistic Update via Parent-Callback.
  */
+/** Inline Prio-Badge mit Popover-Menu — wird in der COLLAPSED Karte
+ *  in der Meta-Row angezeigt. Klick = Popover mit den 4 Prio-Optionen.
+ *  Sieht aus wie ein Badge, verhaelt sich wie ein Dropdown. */
+function PrioPickerInline({
+  currentPriority,
+  onChange,
+}: {
+  currentPriority: MailTask["priority"];
+  onChange: (p: MailTask["priority"]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const cur = currentPriority ? PRIORITY_CONFIG[currentPriority] : null;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full transition-opacity hover:opacity-80 ${
+            cur
+              ? cur.badge
+              : "bg-muted/60 text-muted-foreground ring-1 ring-border"
+          }`}
+          title="Priorität ändern"
+        >
+          {cur ? (
+            <>
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${cur.dot}`}
+              />
+              {cur.label}
+            </>
+          ) : (
+            <span className="opacity-70">Priorität setzen</span>
+          )}
+          <ChevronDown size={10} className="ml-1 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-44 p-1"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {PRIO_OPTIONS.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange(p.value);
+              setOpen(false);
+            }}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[12.5px] hover:bg-muted ${
+              p.value === currentPriority ? "bg-muted/60 font-medium" : ""
+            }`}
+          >
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.dot}`} />
+            {p.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 const PRIO_OPTIONS: Array<{
   value: NonNullable<MailTask["priority"]>;
   label: string;
