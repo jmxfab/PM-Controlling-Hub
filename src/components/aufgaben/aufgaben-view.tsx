@@ -876,7 +876,28 @@ function MailTab({
           total: json.total ?? 0,
         };
         RESPONSE_CACHE.set(key, { data: page, ts: Date.now() });
-        setData(page);
+        // Stub-Preserving-Merge: wenn lokal soeben ein Task adden wurde
+        // (optimistic-insert, z.B. via Vorschlag-+-Button), aber der Server
+        // ihn noch nicht zurueckgibt (Replica-Lag oder Race), behalten wir
+        // den lokalen Stub fuer max 10s — sonst flackert die Karte
+        // (verschwindet kurz, taucht beim naechsten Refresh wieder auf).
+        setData((prev) => {
+          const serverIds = new Set(page.entries.map((t) => t.id));
+          const TEN_SECONDS = 10_000;
+          const nowMs = Date.now();
+          const recentlyAdded = prev.entries.filter((t) => {
+            if (serverIds.has(t.id)) return false;
+            // Nur Stubs mit frischem in_my_day_at gelten als "recently added"
+            if (!t.in_my_day_at) return false;
+            const addedMs = new Date(t.in_my_day_at).getTime();
+            return Number.isFinite(addedMs) && nowMs - addedMs < TEN_SECONDS;
+          });
+          if (recentlyAdded.length === 0) return page;
+          return {
+            entries: [...recentlyAdded, ...page.entries],
+            total: page.total + recentlyAdded.length,
+          };
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
       } finally {
