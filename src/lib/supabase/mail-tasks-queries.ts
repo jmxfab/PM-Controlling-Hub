@@ -80,6 +80,11 @@ export interface MailTask {
   remind_at: string | null;
   /** true wenn manuell vom User angelegt (vs. automatisch klassifiziert). */
   is_user_created: boolean;
+  /** Microsoft-To-Do-Style 'Mein Tag': NULL = nicht in Mein Tag.
+   *  Sonst Timestamp wann hinzugefuegt. */
+  in_my_day_at: string | null;
+  /** Manueller Sortier-Wert fuer Drag-and-Drop. 0 = kein manueller Sort. */
+  sort_order: number;
 }
 
 export interface MailTasksPage {
@@ -94,9 +99,16 @@ function parseSenderAndBody(description: string | null): { sender: string | null
   return { sender: null, body: description };
 }
 
-export type MailTabFilter = "kritisch" | "aufgaben" | "infos" | "inbox" | "rechnungen";
+export type MailTabFilter =
+  | "my_day"
+  | "kritisch"
+  | "aufgaben"
+  | "infos"
+  | "inbox"
+  | "rechnungen";
 
 const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
+  my_day: [], // Mein Tag filtert NICHT nach Kategorie sondern in_my_day_at IS NOT NULL
   kritisch: ["kritisch"],
   aufgaben: ["aufgabe", "dringend"],
   infos: ["info"],
@@ -105,6 +117,8 @@ const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
 };
 
 export interface MailTaskCounts {
+  /** Wie viele Tasks aktuell in Mein Tag stehen (alle Kategorien). */
+  my_day: number;
   kritisch: number;
   aufgaben: number;
   infos: number;
@@ -120,6 +134,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   // den Hero-Counts.
   const [rpcRes, heroCounts] = await Promise.all([
     supabase.rpc("compute_mail_task_counts").single<{
+      my_day: number;
       kritisch: number;
       aufgaben: number;
       infos: number;
@@ -129,6 +144,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     countHeroCommentsBoth().catch(() => ({ aufgaben: 0, infos: 0 })),
   ]);
   const mailCounts = rpcRes.data ?? {
+    my_day: 0,
     kritisch: 0,
     aufgaben: 0,
     infos: 0,
@@ -136,6 +152,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     rechnungen: 0,
   };
   return {
+    my_day: Number(mailCounts.my_day) || 0,
     kritisch: Number(mailCounts.kritisch) || 0,
     aufgaben: (Number(mailCounts.aufgaben) || 0) + heroCounts.aufgaben,
     infos: (Number(mailCounts.infos) || 0) + heroCounts.infos,
@@ -163,15 +180,24 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created", { count: "exact" })
-    .or("is_automated.eq.true,is_user_created.eq.true")
-    .in("mail_category", categories)
-    // Sort by thread_last_message_at (juengste Antwort in der Konversation) wenn vorhanden,
-    // sonst created_at. So bubbeln Threads mit neuer Mail wieder nach oben.
-    // PostgREST: nullsfirst:false bedeutet NULLs ans Ende → fuer ASC waere das wrong,
-    // hier DESC + nullslast = thread_last_message_at-DESC-Tasks zuerst, dann created_at.
-    .order("thread_last_message_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order", { count: "exact" })
+    .or("is_automated.eq.true,is_user_created.eq.true");
+
+  if (filter === "my_day") {
+    // Mein Tag: alle Tasks mit in_my_day_at IS NOT NULL, unabhaengig von Kategorie.
+    // Sort: sort_order (manuell via DnD), dann in_my_day_at DESC.
+    query = query
+      .not("in_my_day_at", "is", null)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("in_my_day_at", { ascending: false, nullsFirst: false });
+  } else {
+    // Standard Tabs nach Kategorie. Sort wie bisher.
+    query = query
+      .in("mail_category", categories)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("thread_last_message_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+  }
 
   if (filters.status === "open") query = query.neq("status", "done");
   if (filters.status === "done") query = query.eq("status", "done");
@@ -223,6 +249,8 @@ export async function loadMailTasksPage(
       assigned_to: row.assigned_to ?? null,
       remind_at: row.remind_at ?? null,
       is_user_created: row.is_user_created ?? false,
+      in_my_day_at: row.in_my_day_at ?? null,
+      sort_order: typeof row.sort_order === "number" ? row.sort_order : 0,
     };
   });
 
@@ -255,6 +283,8 @@ export function heroToMailItem(
     source_email_conversation_id: null,
     thread_message_count: 1,
     thread_last_message_at: null,
+    in_my_day_at: null,
+    sort_order: 0,
     mail_category: category,
     sender: null,
     body: hero.body,

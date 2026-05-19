@@ -20,6 +20,7 @@ import {
   Inbox,
   Search,
   Sparkles,
+  Sun,
   Flame,
   ArrowRight,
   Eye,
@@ -97,6 +98,13 @@ const TAB_META: Record<
   MailTabFilter,
   { label: string; emptyTitle: string; emptyHint: string; icon: typeof Mail }
 > = {
+  my_day: {
+    label: "Mein Tag",
+    emptyTitle: "Mein Tag ist leer",
+    emptyHint:
+      "Klicke das Sonne-Icon auf einer Aufgabe um sie für heute zu kuratieren.",
+    icon: Sun,
+  },
   kritisch: {
     label: "Kritisch",
     emptyTitle: "Keine kritischen Eskalationen",
@@ -461,6 +469,20 @@ export function AufgabenView({
   return (
     <Tabs defaultValue={defaultTab} className="space-y-5">
       <TabsList className="h-auto p-1.5 bg-muted/40 rounded-xl gap-1 flex-wrap">
+        {/* Mein Tag — Microsoft-To-Do-Style "My Day". Manuell kuratierte
+         *  Liste der Aufgaben fuer heute. Sonnen-Icon ist das MS-Symbol. */}
+        <TabsTrigger
+          value="my_day"
+          className="group gap-1.5 rounded-lg font-semibold text-amber-700 dark:text-amber-300 ring-1 ring-amber-400/40 bg-gradient-to-b from-amber-50 to-amber-100/60 hover:from-amber-100 hover:to-amber-200/70 dark:from-amber-500/10 dark:to-amber-600/5 dark:hover:from-amber-500/15 dark:hover:to-amber-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-400 data-[state=active]:via-orange-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:ring-amber-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(35_95%_55%/0.5)] transition-all duration-200"
+          title="Mein Tag — manuell kuratierte Liste für heute"
+        >
+          <Sun
+            size={13}
+            className="transition-transform group-data-[state=active]:rotate-180 duration-500"
+          />
+          Mein Tag
+          <CountPill value={counts.my_day} />
+        </TabsTrigger>
         <TabsTrigger
           value="kritisch"
           className={
@@ -516,6 +538,13 @@ export function AufgabenView({
           <CountPill value={heizlastProjects.length} />
         </TabsTrigger>
       </TabsList>
+      <TabsContent value="my_day">
+        <MailTab
+          initial={defaultTab === "my_day" ? initialAufgaben : { entries: [], total: 0 }}
+          filter="my_day"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      </TabsContent>
       <TabsContent value="kritisch">
         <MailTab
           initial={defaultTab === "kritisch" ? initialAufgaben : { entries: [], total: 0 }}
@@ -600,6 +629,7 @@ const TAB_FILTERS: Record<
   MailTabFilter,
   { status: boolean; priority: boolean; defaultStatus: StatusFilter }
 > = {
+  my_day:     { status: false, priority: false, defaultStatus: "open" },
   kritisch:   { status: false, priority: false, defaultStatus: "open" },
   aufgaben:   { status: true,  priority: true,  defaultStatus: "open" },
   infos:      { status: true,  priority: false, defaultStatus: "open" }, // Default ungelesene, "Gelesen"-Filter erreichbar
@@ -780,6 +810,8 @@ function MailTab({
       mail_category?: MailTask["mail_category"];
       priority?: MailTask["priority"];
       remind_at?: string | null;
+      in_my_day?: boolean;
+      sort_order?: number;
     },
     /** Wenn true: Task aus aktueller Liste entfernen (z.B. nach Kategorie-Wechsel) */
     removeFromList = false,
@@ -816,6 +848,16 @@ function MailTab({
                       update.remind_at !== undefined
                         ? update.remind_at
                         : t.remind_at,
+                    in_my_day_at:
+                      update.in_my_day !== undefined
+                        ? update.in_my_day
+                          ? new Date().toISOString()
+                          : null
+                        : t.in_my_day_at,
+                    sort_order:
+                      update.sort_order !== undefined
+                        ? update.sort_order
+                        : t.sort_order,
                   }
                 : t,
             ),
@@ -824,6 +866,11 @@ function MailTab({
       // Cache fuer diesen Filter (und ggf. Ziel-Filter bei category change)
       // invalidieren, damit der naechste Tab-Wechsel frische Daten holt.
       invalidateCacheForFilter(filter);
+      // 'Mein Tag' Cache invalidieren wenn in_my_day toggled wurde,
+      // damit der Tab-Wechsel das aktuelle Bild zeigt.
+      if (update.in_my_day !== undefined) {
+        invalidateCacheForFilter("my_day");
+      }
       if (update.mail_category) {
         // Task wechselt Tab -> auch dort Cache leeren
         if (update.mail_category === "aufgabe" || update.mail_category === "dringend") {
@@ -932,6 +979,10 @@ function MailTab({
     return patchTask(task.id, {
       status: task.status === "done" ? "open" : "done",
     });
+  }
+
+  function toggleMyDay(task: MailTask) {
+    return patchTask(task.id, { in_my_day: !task.in_my_day_at });
   }
 
   function snoozeBy(task: MailTask, ms: number) {
@@ -1045,6 +1096,7 @@ function MailTab({
           onSubtasksChange={updateTaskSubtasks}
           onDelegationChange={updateTaskDelegation}
           onSenderClick={setHistoryEmail}
+          onToggleMyDay={toggleMyDay}
           buildMailto={buildMailto}
           buildOutlookDesktopLink={buildOutlookDesktopLink}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1109,6 +1161,7 @@ function MailTab({
                     onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
                     onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
                     onSenderClick={(email) => setHistoryEmail(email)}
+                    onToggleMyDay={() => toggleMyDay(t)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1341,6 +1394,7 @@ function TaskCard({
   onSubtasksChange,
   onDelegationChange,
   onSenderClick,
+  onToggleMyDay,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -1360,6 +1414,7 @@ function TaskCard({
     remind_at: string | null;
   }) => void;
   onSenderClick: (email: string) => void;
+  onToggleMyDay: () => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -1424,18 +1479,52 @@ function TaskCard({
             >
               {t.title}
             </h3>
-            <span
-              className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap shrink-0"
-              title={`Eingegangen ${new Date(t.created_at).toLocaleString("de-AT", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}`}
-            >
-              {formatRelative(t.created_at)}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Sun-Toggle (Microsoft-To-Do-Style 'Mein Tag').
+               *  Nur fuer echte mail-source Tasks (Hero-Items sind in unserer
+               *  DB nicht persistent, kein in_my_day_at moeglich). */}
+              {t.source === "mail" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleMyDay();
+                  }}
+                  title={
+                    t.in_my_day_at
+                      ? "Aus 'Mein Tag' entfernen"
+                      : "Zu 'Mein Tag' hinzufügen"
+                  }
+                  className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
+                    t.in_my_day_at
+                      ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-0 group-hover:opacity-100"
+                  }`}
+                  aria-label={
+                    t.in_my_day_at
+                      ? "Aus Mein Tag entfernen"
+                      : "Zu Mein Tag hinzufügen"
+                  }
+                >
+                  <Sun
+                    size={14}
+                    className={t.in_my_day_at ? "fill-amber-400/60" : ""}
+                  />
+                </button>
+              )}
+              <span
+                className="text-[11px] tabular-nums text-muted-foreground whitespace-nowrap"
+                title={`Eingegangen ${new Date(t.created_at).toLocaleString("de-AT", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}`}
+              >
+                {formatRelative(t.created_at)}
+              </span>
+            </div>
           </div>
 
           {/* Sender / project line */}
@@ -2033,6 +2122,7 @@ function PrioPanel({
   onSubtasksChange,
   onDelegationChange,
   onSenderClick,
+  onToggleMyDay,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -2052,6 +2142,7 @@ function PrioPanel({
     next: { assigned_to: string | null; remind_at: string | null },
   ) => void;
   onSenderClick: (email: string) => void;
+  onToggleMyDay: (task: MailTask) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -2087,6 +2178,7 @@ function PrioPanel({
             onSubtasksChange={(next) => onSubtasksChange(t.id, next)}
             onDelegationChange={(next) => onDelegationChange(t.id, next)}
             onSenderClick={onSenderClick}
+            onToggleMyDay={() => onToggleMyDay(t)}
             buildMailto={buildMailto}
             buildOutlookDesktopLink={buildOutlookDesktopLink}
             heroProjectLinkTemplate={heroProjectLinkTemplate}

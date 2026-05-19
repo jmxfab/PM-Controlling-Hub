@@ -35,7 +35,14 @@ export const maxDuration = 30;
 const COMBINED_LIMIT = 500;
 
 function parseTab(v: string | null): MailTabFilter {
-  if (v === "kritisch" || v === "infos" || v === "inbox" || v === "rechnungen") return v;
+  if (
+    v === "my_day" ||
+    v === "kritisch" ||
+    v === "infos" ||
+    v === "inbox" ||
+    v === "rechnungen"
+  )
+    return v;
   return "aufgaben";
 }
 

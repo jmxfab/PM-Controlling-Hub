@@ -59,6 +59,10 @@ export async function PATCH(
       remind_at?: string | null;
       title?: string;
       description?: string;
+      /** true/false: in Mein Tag stellen oder rausnehmen. Server setzt Timestamp. */
+      in_my_day?: boolean;
+      /** Manuelle Drag-and-Drop Sortierung. */
+      sort_order?: number;
     };
 
     const update: Record<string, unknown> = {};
@@ -128,6 +132,17 @@ export async function PATCH(
 
     if (body.description !== undefined && typeof body.description === "string") {
       update.description = body.description.slice(0, 4000);
+    }
+
+    if (body.in_my_day !== undefined) {
+      update.in_my_day_at = body.in_my_day ? new Date().toISOString() : null;
+    }
+
+    if (body.sort_order !== undefined && typeof body.sort_order === "number") {
+      // Clamp gegen NaN / extreme Werte
+      const n = Math.round(body.sort_order);
+      update.sort_order =
+        Number.isFinite(n) ? Math.min(1_000_000, Math.max(-1_000_000, n)) : 0;
     }
 
     if (Object.keys(update).length === 0) {
