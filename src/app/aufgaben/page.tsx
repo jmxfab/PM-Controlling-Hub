@@ -10,6 +10,7 @@ import {
 import { loadHeroComments } from "@/lib/supabase/hero-comments-queries";
 import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 import { NewTaskDialog } from "@/components/aufgaben/new-task-dialog";
+import { VoiceTaskDialog } from "@/components/aufgaben/voice-task-dialog";
 
 export const metadata: Metadata = {
   title: "Aufgaben | JMX",
@@ -71,7 +72,10 @@ export default async function AufgabenPage() {
             E-Mail-Aufgaben automatisch klassifiziert von Claude · Hero-Kommentare · Heizlast-Projekte
           </p>
         </div>
-        <NewTaskDialog />
+        <div className="flex items-center gap-2">
+          <VoiceTaskDialog />
+          <NewTaskDialog />
+        </div>
       </header>
       <AufgabenView
         heizlastProjects={heizlastProjects}
