@@ -506,37 +506,47 @@ export function AufgabenView({
   }, [counts.inbox]);
 
   return (
-    <Tabs defaultValue={defaultTab} className="space-y-5">
-      <TabsList className="h-auto p-1.5 bg-muted/40 rounded-xl gap-1 flex-wrap">
+    <Tabs
+      defaultValue={defaultTab}
+      orientation="vertical"
+      // MS-To-Do-Style Sidebar-Layout: links Liste der Tabs, rechts Content.
+      // Auf Mobile bricht das Grid auf eine einzige Spalte um, Sidebar landet oben.
+      className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start"
+    >
+      <TabsList
+        className="h-auto p-2 bg-muted/40 rounded-xl gap-1 flex md:flex-col md:items-stretch w-full overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap"
+      >
         {/* Mein Tag — Microsoft-To-Do-Style "My Day". Manuell kuratierte
          *  Liste der Aufgaben fuer heute. Sonnen-Icon ist das MS-Symbol. */}
         <TabsTrigger
           value="my_day"
-          className="group gap-1.5 rounded-lg font-semibold text-amber-700 dark:text-amber-300 ring-1 ring-amber-400/40 bg-gradient-to-b from-amber-50 to-amber-100/60 hover:from-amber-100 hover:to-amber-200/70 dark:from-amber-500/10 dark:to-amber-600/5 dark:hover:from-amber-500/15 dark:hover:to-amber-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-400 data-[state=active]:via-orange-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:ring-amber-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(35_95%_55%/0.5)] transition-all duration-200"
+          className="group justify-start gap-2 rounded-lg font-semibold text-amber-700 dark:text-amber-300 ring-1 ring-amber-400/40 bg-gradient-to-b from-amber-50 to-amber-100/60 hover:from-amber-100 hover:to-amber-200/70 dark:from-amber-500/10 dark:to-amber-600/5 dark:hover:from-amber-500/15 dark:hover:to-amber-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-400 data-[state=active]:via-orange-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:ring-amber-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(35_95%_55%/0.5)] transition-all duration-200"
           title="Mein Tag — manuell kuratierte Liste für heute"
         >
           <Sun
-            size={13}
+            size={14}
             className="transition-transform group-data-[state=active]:rotate-180 duration-500"
           />
-          Mein Tag
+          <span className="flex-1 text-left">Mein Tag</span>
           <CountPill value={counts.my_day} />
         </TabsTrigger>
         <TabsTrigger
           value="kritisch"
           className={
             counts.kritisch > 0
-              ? "group relative gap-1.5 rounded-lg font-semibold text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30 bg-gradient-to-b from-rose-50 to-rose-100/70 hover:from-rose-100 hover:to-rose-200/80 dark:from-rose-500/10 dark:to-rose-600/5 dark:hover:from-rose-500/15 dark:hover:to-rose-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-rose-500 data-[state=active]:via-red-600 data-[state=active]:to-rose-700 data-[state=active]:text-white data-[state=active]:ring-rose-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(0_84%_55%/0.5)] dark:data-[state=active]:shadow-[0_6px_24px_-4px_hsl(0_84%_60%/0.6)] transition-all duration-200"
-              : "gap-1.5 rounded-lg data-[state=active]:shadow-sm"
+              ? "group relative justify-start gap-2 rounded-lg font-semibold text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30 bg-gradient-to-b from-rose-50 to-rose-100/70 hover:from-rose-100 hover:to-rose-200/80 dark:from-rose-500/10 dark:to-rose-600/5 dark:hover:from-rose-500/15 dark:hover:to-rose-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-rose-500 data-[state=active]:via-red-600 data-[state=active]:to-rose-700 data-[state=active]:text-white data-[state=active]:ring-rose-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(0_84%_55%/0.5)] dark:data-[state=active]:shadow-[0_6px_24px_-4px_hsl(0_84%_60%/0.6)] transition-all duration-200"
+              : "justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
           }
         >
-          {counts.kritisch > 0 && (
+          {counts.kritisch > 0 ? (
             <AlertTriangle
-              size={13}
+              size={14}
               className="drop-shadow-[0_0_4px_hsl(0_84%_55%/0.4)] group-data-[state=active]:drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]"
             />
+          ) : (
+            <AlertTriangle size={14} className="text-muted-foreground" />
           )}
-          Kritisch
+          <span className="flex-1 text-left">Kritisch</span>
           <CountPill
             value={counts.kritisch}
             highlight={counts.kritisch > 0}
@@ -549,31 +559,46 @@ export function AufgabenView({
             />
           )}
         </TabsTrigger>
-        <TabsTrigger value="aufgaben" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-          <Mail size={13} />
-          Aufgaben
+        <TabsTrigger
+          value="aufgaben"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Mail size={14} />
+          <span className="flex-1 text-left">Aufgaben</span>
           <CountPill value={counts.aufgaben} />
         </TabsTrigger>
-        <TabsTrigger value="infos" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-          <Sparkles size={13} />
-          Infos
+        <TabsTrigger
+          value="infos"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Sparkles size={14} />
+          <span className="flex-1 text-left">Infos</span>
           <CountPill value={counts.infos} />
         </TabsTrigger>
         {counts.inbox > 0 && (
-          <TabsTrigger value="inbox" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-            <Inbox size={13} />
-            Inbox
+          <TabsTrigger
+            value="inbox"
+            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          >
+            <Inbox size={14} />
+            <span className="flex-1 text-left">Inbox</span>
             <CountPill value={counts.inbox} highlight />
           </TabsTrigger>
         )}
-        <TabsTrigger value="rechnungen" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-          <Euro size={13} />
-          Bestellungen & Rechnungen
+        <TabsTrigger
+          value="rechnungen"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Euro size={14} />
+          <span className="flex-1 text-left">Rechnungen</span>
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
-        <TabsTrigger value="heizlast" className="gap-1.5 rounded-lg data-[state=active]:shadow-sm">
-          <Flame size={13} />
-          Heizlast
+        <TabsTrigger
+          value="heizlast"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Flame size={14} />
+          <span className="flex-1 text-left">Heizlast</span>
           <CountPill value={heizlastProjects.length} />
         </TabsTrigger>
       </TabsList>
