@@ -2877,7 +2877,17 @@ function MyDaySuggestionsPanel({
   }
 
   if (visible.length === 0) {
-    return null;
+    return (
+      <aside className="rounded-2xl border bg-card/60 p-4 space-y-2 sticky top-4">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Vorschläge
+        </div>
+        <p className="text-[12px] text-muted-foreground/70">
+          Keine offenen Aufgaben passen gerade als Vorschlag. Wichtige neue Mails
+          oder Aufgaben mit Fälligkeit landen automatisch hier.
+        </p>
+      </aside>
+    );
   }
 
   async function handleAdd(suggestion: Suggestion) {
