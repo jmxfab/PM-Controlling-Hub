@@ -31,8 +31,12 @@ export function RealtimeRefresh({
 }: Props) {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Stabile Key fuer tables-Array, damit useEffect nicht bei jedem
+  // router.refresh() den Realtime-Channel neu aufbaut (= teurer WS-Handshake).
+  const tablesKey = tables.join(",");
 
   useEffect(() => {
+    const tableList = tablesKey.split(",").filter(Boolean);
     function refresh() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
@@ -42,9 +46,9 @@ export function RealtimeRefresh({
 
     // 1) Realtime-Subscriber pro Tabelle
     const channel = supabase.channel(
-      `rt-refresh-${tables.join("-").slice(0, 50)}`,
+      `rt-refresh-${tableList.join("-").slice(0, 50)}`,
     );
-    for (const table of tables) {
+    for (const table of tableList) {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
@@ -73,7 +77,7 @@ export function RealtimeRefresh({
       window.removeEventListener("focus", onFocus);
       supabase.removeChannel(channel);
     };
-  }, [router, tables, debounceMs, pollMs]);
+  }, [router, tablesKey, debounceMs, pollMs]);
 
   return null;
 }
