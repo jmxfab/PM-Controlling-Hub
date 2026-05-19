@@ -38,7 +38,7 @@ export function useTaskRealtime({ onChange, enabled = true }: UseTaskRealtimeOpt
       debounceRef.current = setTimeout(() => {
         const ev = lastEventRef.current;
         if (ev) onChangeRef.current(ev.kind, ev.table);
-      }, 1500);
+      }, 400);
     }
 
     const channel = supabase

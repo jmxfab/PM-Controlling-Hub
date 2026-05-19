@@ -9,9 +9,10 @@ interface Props {
    *  wird router.refresh() debounced gerufen — Next.js re-rendert die
    *  Server-Components und der User sieht die neuen Daten. */
   tables: string[];
-  /** Debounce-Fenster in ms (Default 2000) — Burst-Schutz. */
+  /** Debounce-Fenster in ms (Default 600) — Burst-Schutz, fuehlt sich aber
+   *  bei einzelnen Aktionen noch "live" an. */
   debounceMs?: number;
-  /** Polling-Intervall in ms (Default 90000) — Fallback wenn Realtime hakt. */
+  /** Polling-Intervall in ms (Default 60000) — Fallback wenn Realtime hakt. */
   pollMs?: number;
 }
 
@@ -26,8 +27,8 @@ interface Props {
  */
 export function RealtimeRefresh({
   tables,
-  debounceMs = 2000,
-  pollMs = 90_000,
+  debounceMs = 600,
+  pollMs = 60_000,
 }: Props) {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
