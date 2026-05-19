@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { DashboardInitialLoader } from "@/components/dashboard/dashboard-initial-loader";
 import { CashflowView } from "@/components/dashboard/cashflow-view";
 import { LiquidityForecastPanel } from "@/components/dashboard/liquidity-forecast-panel";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { loadLiquidityForecast } from "@/lib/supabase/hero-liquidity-forecast";
 import { loadCashflow } from "@/lib/supabase/hero-insights-queries";
 import {
@@ -88,6 +89,7 @@ export default async function CashPage({ searchParams }: PageProps) {
           Rechnungs- und Zahlungsfluss · Cashflow-Übersicht je Abteilung
         </p>
       </header>
+      <RealtimeRefresh tables={["hero_customer_documents", "tasks"]} />
       <DashboardShell
         department={department}
         departments={DASHBOARD_DEPARTMENTS}

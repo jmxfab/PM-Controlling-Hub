@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Activity, ArrowRight, Building2, Clock3, CheckCircle2 } from "lucide-react";
 import { loadProjectPulse } from "@/lib/supabase/hero-project-activity";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 export const metadata: Metadata = {
   title: "Projekt-Pulse | JMX",
@@ -66,6 +67,8 @@ export default async function ProjektePage() {
           Aktivste Projekte der letzten 60 Tage · sortiert nach letzter Bewegung
         </p>
       </header>
+      <RealtimeRefresh tables={["hero_histories"]} />
+
 
       {pulses.length === 0 ? (
         <div className="rounded-2xl border bg-card/40 p-12 text-center text-sm text-muted-foreground">
