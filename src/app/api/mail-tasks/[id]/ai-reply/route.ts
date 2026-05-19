@@ -20,12 +20,63 @@ type TaskCtx = {
   title: string;
   description: string | null;
   mail_category: string | null;
+  hero_project_id?: string | null;
+  hero_project_number?: string | null;
+  hero_project_name?: string | null;
 };
+
+type HeroHistoryEntry = {
+  entry_date: string | null;
+  custom_title: string | null;
+  custom_text: string | null;
+  description: string | null;
+  author_name: string | null;
+  event_type: string | null;
+};
+
+/** Letzte N Logbuch-Eintraege fuer ein Hero-Projekt laden + als Plain-Text
+ *  formatieren, damit die KI den Stand des Projekts kennt bevor sie antwortet. */
+function formatHeroHistory(entries: HeroHistoryEntry[]): string {
+  if (entries.length === 0) return "";
+  const lines = entries.map((h) => {
+    const rawText = [h.custom_title, h.custom_text, h.description]
+      .filter((s): s is string => Boolean(s))
+      .join(" — ");
+    const clean = rawText
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 400);
+    const date = h.entry_date ? h.entry_date.slice(0, 10) : "?";
+    const author = h.author_name ? ` [${h.author_name}]` : "";
+    const evt = h.event_type ? ` (${h.event_type})` : "";
+    return `- ${date}${author}${evt}: ${clean || "—"}`;
+  });
+  return lines.join("\n");
+}
+
+async function loadHeroHistory(
+  supabase: ReturnType<typeof supabaseAdmin>,
+  heroProjectId: string,
+  limit = 8,
+): Promise<HeroHistoryEntry[]> {
+  const { data } = await supabase
+    .from("hero_histories")
+    .select(
+      "entry_date, custom_title, custom_text, description, author_name, event_type",
+    )
+    .eq("project_match_id", heroProjectId)
+    .eq("is_deleted", false)
+    .order("entry_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+  return (data ?? []) as HeroHistoryEntry[];
+}
 
 function buildEmailReplyPrompt(
   task: TaskCtx,
   hint: string,
   tone: "kurz" | "freundlich" | "foermlich",
+  heroHistoryFormatted: string,
 ): string {
   const toneInstruction =
     tone === "kurz"
@@ -47,14 +98,20 @@ WICHTIG:
 Mail-Aufgabe — Kontext:
 Titel: ${task.title}
 Klassifikation: ${task.mail_category ?? "unbekannt"}
+${task.hero_project_number ? `Hero-Projekt: ${task.hero_project_number}${task.hero_project_name ? ` (${task.hero_project_name})` : ""}` : ""}
 Inhalt:
 ${(task.description ?? "").slice(0, 2000)}
 
+${heroHistoryFormatted ? `LETZTE LOGBUCH-EINTRAEGE im Hero-Projekt (chronologisch absteigend) — NUTZE diese als Kontext, beziehe dich darauf wenn relevant, aber wiederhole sie nicht 1:1:\n${heroHistoryFormatted}\n` : ""}
 ${hint ? `Stichworte vom User (UNBEDINGT einbauen):\n${hint}\n` : ""}
 Schreib jetzt die Antwort:`;
 }
 
-function buildHeroLogPrompt(task: TaskCtx, hint: string): string {
+function buildHeroLogPrompt(
+  task: TaskCtx,
+  hint: string,
+  heroHistoryFormatted: string,
+): string {
   return `Du bist Assistent fuer Domenic Wagenleitner (Geschaeftsfuehrer Jumax Elektrotechnik GmbH).
 Du formulierst eine INTERNE NOTIZ die als Kommentar in den Hero-Projekt-Logbuch-Verlauf eingetragen wird.
 
@@ -68,9 +125,11 @@ STIL:
 
 Hero-Aufgabe — Kontext:
 Titel: ${task.title}
+${task.hero_project_number ? `Hero-Projekt: ${task.hero_project_number}${task.hero_project_name ? ` (${task.hero_project_name})` : ""}` : ""}
 Inhalt:
 ${(task.description ?? "").slice(0, 2000)}
 
+${heroHistoryFormatted ? `BISHERIGE LOGBUCH-EINTRAEGE des Projekts (chronologisch absteigend) — KEINE Wiederholung dieser Inhalte, nur Bezug nehmen wenn naturgemaess noetig (z.B. "wie am 12.05. besprochen"):\n${heroHistoryFormatted}\n` : ""}
 ${hint ? `Stichworte vom User (UNBEDINGT einbauen):\n${hint}\n` : ""}
 Schreib jetzt die interne Logbuch-Notiz:`;
 }
@@ -93,10 +152,7 @@ export async function POST(
 
   if (!hasAnthropicCreds()) {
     return NextResponse.json(
-      {
-        error:
-          "Anthropic-Auth fehlt (ANTHROPIC_OAUTH_TOKEN oder ANTHROPIC_API_KEY in Vercel setzen)",
-      },
+      { error: "AI-Route nicht verfuegbar (n8n-Webhook + Anthropic-Fallback beide fehlen)" },
       { status: 503 },
     );
   }
@@ -110,21 +166,33 @@ export async function POST(
   const tone = body.tone ?? "freundlich";
   const mode = body.mode === "hero_log" ? "hero_log" : "email";
 
-  // Task aus DB laden — wir brauchen title + description (= Mail-Inhalt) fuer den Kontext
+  // Task aus DB laden — inkl. Hero-Projekt-Info, damit wir bei vorhandener
+  // hero_project_id die letzten Logbuch-Eintraege als KI-Kontext mitliefern.
   const supabase = supabaseAdmin();
   const { data: task, error } = await supabase
     .from("tasks")
-    .select("title, description, mail_category")
+    .select(
+      "title, description, mail_category, hero_project_id, hero_project_number, hero_project_name",
+    )
     .eq("id", id)
     .single();
   if (error || !task) {
     return NextResponse.json({ error: "task not found" }, { status: 404 });
   }
 
+  // Letzte 8 Logbuch-Eintraege laden — nur wenn Task an Hero-Projekt haengt.
+  // Wir wollen, dass die KI weiss was zuletzt im Projekt-Verlauf stand,
+  // damit sie kontextbezogen antworten kann statt generisch.
+  const heroHistory =
+    task.hero_project_id != null
+      ? await loadHeroHistory(supabase, task.hero_project_id, 8)
+      : [];
+  const heroHistoryFormatted = formatHeroHistory(heroHistory);
+
   const prompt =
     mode === "hero_log"
-      ? buildHeroLogPrompt(task, hint)
-      : buildEmailReplyPrompt(task, hint, tone);
+      ? buildHeroLogPrompt(task, hint, heroHistoryFormatted)
+      : buildEmailReplyPrompt(task, hint, tone, heroHistoryFormatted);
 
   try {
     const draft = await callClaudeMessage({
@@ -146,7 +214,11 @@ export async function POST(
     } catch {
       // silent — Draft ist primary, History ist nice-to-have
     }
-    return NextResponse.json({ draft, route: activeAnthropicRoute() });
+    return NextResponse.json({
+      draft,
+      route: activeAnthropicRoute(),
+      heroHistoryCount: heroHistory.length,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
