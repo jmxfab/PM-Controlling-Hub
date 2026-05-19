@@ -38,10 +38,10 @@ const CATEGORIES = [
 ] as const;
 
 const PRIORITIES = [
-  { value: "urgent", label: "Dringend (rot)" },
-  { value: "high", label: "Hoch (orange)" },
-  { value: "medium", label: "Mittel (amber)" },
-  { value: "low", label: "Niedrig (grau)" },
+  { value: "urgent", label: "Dringend", dotClass: "bg-red-500" },
+  { value: "high", label: "Hoch", dotClass: "bg-orange-500" },
+  { value: "medium", label: "Mittel", dotClass: "bg-amber-400" },
+  { value: "low", label: "Niedrig", dotClass: "bg-zinc-400" },
 ] as const;
 
 /**
@@ -214,12 +214,32 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
                 onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(() => {
+                      const cur = PRIORITIES.find((p) => p.value === form.priority);
+                      if (!cur) return null;
+                      return (
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className={`inline-block w-2.5 h-2.5 rounded-full ${cur.dotClass}`}
+                            aria-hidden
+                          />
+                          {cur.label}
+                        </span>
+                      );
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {PRIORITIES.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
-                      {p.label}
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className={`inline-block w-2.5 h-2.5 rounded-full ${p.dotClass}`}
+                          aria-hidden
+                        />
+                        {p.label}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
