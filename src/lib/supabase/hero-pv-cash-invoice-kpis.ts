@@ -171,32 +171,40 @@ export async function loadCashInvoiceKpisForDept(
   const INVOICE_SELECT =
     "id, nr, document_date, value, status_code, status_name, document_type_name, project_match_id, raw, booking_is_open, booking_paid_date, booking_due_date, booking_balance";
 
-  // Schritt 1a: Versendete Rechnungen IM ZEITRAUM — fuer Tile "Gesamt im
-  // Zeitraum". KEIN booking-Filter hier, weil die Kachel zeigt was im
-  // Zeitraum gestellt wurde, egal ob inzwischen bezahlt oder noch offen.
-  const { data: periodInvoicesData } = await supabase
-    .from("hero_customer_documents")
-    .select(INVOICE_SELECT)
-    .eq("type", "invoice")
-    .eq("is_deleted", false)
-    .eq("status_code", 200)
-    .gte("document_date", fromIso)
-    .lt("document_date", toIso)
-    .limit(5000);
+  const todayIso = new Date().toISOString().slice(0, 10);
 
-  // Schritt 1b: AKTUELL OFFENE versendete Rechnungen — KEIN Period-Filter.
-  // Fuer Tiles "Offen & nicht ueberfaellig" + "Offen & ueberfaellig":
-  // egal ob die Rechnung diese Woche oder vor 3 Monaten verschickt wurde —
-  // wenn sie heute noch offen ist, soll sie hier auftauchen.
-  // booking_is_open IS NULL = Fallback fuer noch nicht gesyncte Rechnungen.
-  const { data: openInvoicesData } = await supabase
-    .from("hero_customer_documents")
-    .select(INVOICE_SELECT)
-    .eq("type", "invoice")
-    .eq("is_deleted", false)
-    .eq("status_code", 200)
-    .or("booking_is_open.eq.true,booking_is_open.is.null")
-    .limit(5000);
+  // Perf: 3 unabhaengige Queries parallel statt seriell (~150-300ms Ersparnis).
+  // - periodInvoices: Rechnungen IM ZEITRAUM (Tile "Gesamt im Zeitraum")
+  // - openInvoices: AKTUELL OFFENE Rechnungen (Tiles "Offen ..." — kein Period-Filter)
+  // - activeSnoozes: Invoice-Snoozes die User ausgeblendet hat
+  const [periodInvoicesRes, openInvoicesRes, activeSnoozesRes] =
+    await Promise.all([
+      supabase
+        .from("hero_customer_documents")
+        .select(INVOICE_SELECT)
+        .eq("type", "invoice")
+        .eq("is_deleted", false)
+        .eq("status_code", 200)
+        .gte("document_date", fromIso)
+        .lt("document_date", toIso)
+        .limit(5000),
+      supabase
+        .from("hero_customer_documents")
+        .select(INVOICE_SELECT)
+        .eq("type", "invoice")
+        .eq("is_deleted", false)
+        .eq("status_code", 200)
+        .or("booking_is_open.eq.true,booking_is_open.is.null")
+        .limit(5000),
+      supabase
+        .from("invoice_snoozes")
+        .select("invoice_id, snoozed_until, note")
+        .gt("snoozed_until", todayIso)
+        .limit(5000),
+    ]);
+  const periodInvoicesData = periodInvoicesRes.data;
+  const openInvoicesData = openInvoicesRes.data;
+  const activeSnoozesData = activeSnoozesRes.data;
 
   type Invoice = {
     id: string;
@@ -217,15 +225,7 @@ export async function loadCashInvoiceKpisForDept(
   const periodInvoiceList = (periodInvoicesData ?? []) as Invoice[];
   const openInvoiceList = (openInvoicesData ?? []) as Invoice[];
 
-  // Aktive Snoozes laden — Rechnungen die der User per "in 7 Tagen erinnern"
-  // ausgeblendet hat. Erst wenn snoozed_until <= heute taucht die Rechnung
-  // wieder auf.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const { data: activeSnoozesData } = await supabase
-    .from("invoice_snoozes")
-    .select("invoice_id, snoozed_until, note")
-    .gt("snoozed_until", todayIso)
-    .limit(5000);
+  // Snoozes-Map bauen (Query lief bereits oben in Promise.all parallel)
   const snoozeMap = new Map<
     string,
     { snoozedUntil: string | null; note: string | null }

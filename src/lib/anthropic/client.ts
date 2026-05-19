@@ -29,39 +29,56 @@ export interface CallClaudeOpts {
  *
  * Wirft wenn keine der drei Options konfiguriert ist.
  */
+// Default-Fallback: existing n8n-Webhook auf Hostinger mit OAuth-Anthropic-Credential
+// → so funktioniert es out-of-the-box ohne neue Env-Vars in Vercel.
+// Override via N8N_AI_WEBHOOK_URL falls jemals noetig.
+const DEFAULT_N8N_WEBHOOK_URL =
+  "https://n8n-eree.srv1603751.hstgr.cloud/webhook/ai-claude";
+
+function n8nWebhookUrl(): string {
+  return process.env.N8N_AI_WEBHOOK_URL || DEFAULT_N8N_WEBHOOK_URL;
+}
+
 export async function callClaudeMessage(
   opts: CallClaudeOpts,
 ): Promise<string> {
-  if (process.env.N8N_AI_WEBHOOK_URL) {
+  // Erste Option immer n8n — Default-URL ist hardcoded, also IMMER verfuegbar
+  // sofern nicht explizit eine andere Auth-Methode bevorzugt wird.
+  if (process.env.ANTHROPIC_PREFER_DIRECT === "1") {
+    if (process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN) {
+      return await callViaOAuth(opts);
+    }
+    if (process.env.ANTHROPIC_API_KEY) {
+      return await callViaApiKey(opts);
+    }
+  }
+  try {
     return await callViaN8n(opts);
+  } catch (e) {
+    // Fallback wenn n8n down: probiere direkt
+    if (process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN) {
+      return await callViaOAuth(opts);
+    }
+    if (process.env.ANTHROPIC_API_KEY) {
+      return await callViaApiKey(opts);
+    }
+    throw e;
   }
-  if (process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN) {
-    return await callViaOAuth(opts);
-  }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return await callViaApiKey(opts);
-  }
-  throw new Error(
-    "Keine Anthropic-Auth konfiguriert. Setze eine von: N8N_AI_WEBHOOK_URL, ANTHROPIC_OAUTH_TOKEN, ANTHROPIC_API_KEY",
-  );
 }
 
 export function hasAnthropicCreds(): boolean {
-  return Boolean(
-    process.env.N8N_AI_WEBHOOK_URL ??
-      process.env.ANTHROPIC_OAUTH_TOKEN ??
-      process.env.ANTHROPIC_AUTH_TOKEN ??
-      process.env.ANTHROPIC_API_KEY,
-  );
+  // n8n-Default ist immer verfuegbar → wir haben immer Auth.
+  return true;
 }
 
 /** Aktive Route fuer Debug/Logging — hilfreich um zu sehen wo der Call hingeht. */
 export function activeAnthropicRoute(): "n8n" | "oauth" | "api_key" | "none" {
-  if (process.env.N8N_AI_WEBHOOK_URL) return "n8n";
-  if (process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN)
-    return "oauth";
-  if (process.env.ANTHROPIC_API_KEY) return "api_key";
-  return "none";
+  if (process.env.ANTHROPIC_PREFER_DIRECT === "1") {
+    if (process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN)
+      return "oauth";
+    if (process.env.ANTHROPIC_API_KEY) return "api_key";
+  }
+  return "n8n";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,7 +86,7 @@ export function activeAnthropicRoute(): "n8n" | "oauth" | "api_key" | "none" {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function callViaN8n(opts: CallClaudeOpts): Promise<string> {
-  const url = process.env.N8N_AI_WEBHOOK_URL!;
+  const url = n8nWebhookUrl();
   const secret = process.env.N8N_AI_WEBHOOK_SECRET; // optional shared secret
 
   const res = await fetch(url, {

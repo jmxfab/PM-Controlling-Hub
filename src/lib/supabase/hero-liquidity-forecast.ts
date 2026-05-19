@@ -117,35 +117,34 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
   const twelveMonthsAgo = new Date(now);
   twelveMonthsAgo.setMonth(now.getMonth() - 12);
 
-  // 1) Offene Rechnungen — OHNE raw JSONB (Performance: spart MB-Payload
-  //    bei 10k Zeilen, raw brauchen wir nur fuer die Top-10).
-  const { data: openRowsData, error: openErr } = await supabase
-    .from("hero_customer_documents")
-    .select(
-      "id, nr, document_date, value, booking_balance, booking_due_date, booking_paid_date, booking_is_open, project_match_id",
-    )
-    .eq("type", "invoice")
-    .eq("is_deleted", false)
-    .eq("status_code", 200)
-    .eq("booking_is_open", true)
-    .limit(10_000);
-  if (openErr) throw openErr;
-  const openRows: InvoiceRow[] = (openRowsData ?? []) as InvoiceRow[];
-
-  // 2) Bezahlte Rechnungen der letzten 12 Monate fuer Zahlungsverhalten
-  const { data: paidRowsData, error: paidErr } = await supabase
-    .from("hero_customer_documents")
-    .select("booking_due_date, booking_paid_date")
-    .eq("type", "invoice")
-    .eq("is_deleted", false)
-    .eq("status_code", 200)
-    .eq("booking_is_open", false)
-    .not("booking_paid_date", "is", null)
-    .not("booking_due_date", "is", null)
-    .gte("booking_paid_date", twelveMonthsAgo.toISOString().slice(0, 10))
-    .limit(10_000);
-  if (paidErr) throw paidErr;
-  const paidRows = paidRowsData ?? [];
+  // Perf: 1) Offene + 2) Bezahlte Rechnungen sind unabhaengig — parallel laden.
+  const [openRes, paidRes] = await Promise.all([
+    supabase
+      .from("hero_customer_documents")
+      .select(
+        "id, nr, document_date, value, booking_balance, booking_due_date, booking_paid_date, booking_is_open, project_match_id",
+      )
+      .eq("type", "invoice")
+      .eq("is_deleted", false)
+      .eq("status_code", 200)
+      .eq("booking_is_open", true)
+      .limit(10_000),
+    supabase
+      .from("hero_customer_documents")
+      .select("booking_due_date, booking_paid_date")
+      .eq("type", "invoice")
+      .eq("is_deleted", false)
+      .eq("status_code", 200)
+      .eq("booking_is_open", false)
+      .not("booking_paid_date", "is", null)
+      .not("booking_due_date", "is", null)
+      .gte("booking_paid_date", twelveMonthsAgo.toISOString().slice(0, 10))
+      .limit(10_000),
+  ]);
+  if (openRes.error) throw openRes.error;
+  if (paidRes.error) throw paidRes.error;
+  const openRows: InvoiceRow[] = (openRes.data ?? []) as InvoiceRow[];
+  const paidRows = paidRes.data ?? [];
 
   // 3) Mean + Median des Zahlungsverzugs berechnen
   const delays: number[] = [];
@@ -299,85 +298,91 @@ export async function loadLiquidityForecast(): Promise<LiquidityForecast> {
     .sort((a, b) => b.openAmt - a.openAmt)
     .slice(0, 10);
 
-  // Schritt 1b: raw-JSONB NUR fuer die Top-10 nachladen (Fallback fuer
-  // Customer-Name wenn hero_dashboard_projects.customer_name fehlt).
+  // Perf: rawData (Top-10 Invoices), projData (Projekte) und histData (Logbuch)
+  // sind alle unabhaengig — parallel laden statt seriell.
   const topIds = rankedOpen.map((x) => x.row.id);
-  let rawById: Record<
-    string,
-    { Customer?: { Name?: string }; CustomerName?: string } | null
-  > = {};
-  if (topIds.length > 0) {
-    const { data: rawData } = await supabase
-      .from("hero_customer_documents")
-      .select("id, raw")
-      .in("id", topIds)
-      .limit(topIds.length);
-    if (Array.isArray(rawData)) {
-      rawById = Object.fromEntries(
-        rawData.map((r: { id: string; raw: unknown }) => [
-          r.id,
-          (r.raw as { Customer?: { Name?: string }; CustomerName?: string }) ??
-            null,
-        ]),
-      );
-    }
-  }
-
-  // Schritt 2: Batch-Resolve project_match_id -> Projekt-Daten (Number/Name/Kunde).
-  // hero_dashboard_projects ist die richtige Tabelle weil sie customer_name
-  // direkt mitliefert (im Gegensatz zu hero_projects).
   const projectIds = rankedOpen
     .map((x) => x.row.project_match_id)
     .filter((id): id is string => Boolean(id));
   const uniqueProjectIds = Array.from(new Set(projectIds));
+  const ninetyDaysAgo = new Date(today);
+  ninetyDaysAgo.setDate(today.getDate() - 90);
+
+  const [rawRes, projRes, histRes] = await Promise.all([
+    topIds.length > 0
+      ? supabase
+          .from("hero_customer_documents")
+          .select("id, raw")
+          .in("id", topIds)
+          .limit(topIds.length)
+      : Promise.resolve({ data: null as unknown }),
+    uniqueProjectIds.length > 0
+      ? supabase
+          .from("hero_dashboard_projects")
+          .select("id, project_number, project_name, customer_name")
+          .in("id", uniqueProjectIds)
+          .limit(uniqueProjectIds.length)
+      : Promise.resolve({ data: null as unknown }),
+    uniqueProjectIds.length > 0
+      ? supabase
+          .from("hero_histories")
+          .select(
+            "project_match_id, entry_date, custom_text, custom_title, description, author_name",
+          )
+          .in("project_match_id", uniqueProjectIds)
+          .gte("entry_date", ninetyDaysAgo.toISOString())
+          .eq("is_deleted", false)
+          .order("entry_date", { ascending: false, nullsFirst: false })
+          .limit(500)
+      : Promise.resolve({ data: null as unknown }),
+  ]);
+
+  let rawById: Record<
+    string,
+    { Customer?: { Name?: string }; CustomerName?: string } | null
+  > = {};
+  if (Array.isArray((rawRes as { data: unknown }).data)) {
+    const rawData = (rawRes as { data: Array<{ id: string; raw: unknown }> })
+      .data;
+    rawById = Object.fromEntries(
+      rawData.map((r) => [
+        r.id,
+        (r.raw as { Customer?: { Name?: string }; CustomerName?: string }) ??
+          null,
+      ]),
+    );
+  }
+
   let projectMap: Record<
     string,
     { number: string | null; name: string | null; customerName: string | null }
   > = {};
-  if (uniqueProjectIds.length > 0) {
-    const { data: projData } = await supabase
-      .from("hero_dashboard_projects")
-      .select("id, project_number, project_name, customer_name")
-      .in("id", uniqueProjectIds)
-      .limit(uniqueProjectIds.length);
-    if (Array.isArray(projData)) {
-      projectMap = Object.fromEntries(
-        projData.map(
-          (p: {
-            id: string;
-            project_number: string | null;
-            project_name: string | null;
-            customer_name: string | null;
-          }) => [
-            p.id,
-            {
-              number: p.project_number ?? null,
-              name: cleanProjectName(p.project_name),
-              customerName: p.customer_name ?? null,
-            },
-          ],
-        ),
-      );
-    }
+  if (Array.isArray((projRes as { data: unknown }).data)) {
+    const projData = (
+      projRes as {
+        data: Array<{
+          id: string;
+          project_number: string | null;
+          project_name: string | null;
+          customer_name: string | null;
+        }>;
+      }
+    ).data;
+    projectMap = Object.fromEntries(
+      projData.map((p) => [
+        p.id,
+        {
+          number: p.project_number ?? null,
+          name: cleanProjectName(p.project_name),
+          customerName: p.customer_name ?? null,
+        },
+      ]),
+    );
   }
 
-  // Schritt 3: Batch-Logbuch-Vermerke. Hole alle Histories der Top-10-Projekte
-  // der letzten 90 Tage, sortiere nach Datum DESC, picke je Projekt den
-  // ersten zahlungsrelevanten Eintrag.
-  const ninetyDaysAgo = new Date(today);
-  ninetyDaysAgo.setDate(today.getDate() - 90);
   const notesByProject: Record<string, RecentNote> = {};
-  if (uniqueProjectIds.length > 0) {
-    const { data: histData } = await supabase
-      .from("hero_histories")
-      .select(
-        "project_match_id, entry_date, custom_text, custom_title, description, author_name",
-      )
-      .in("project_match_id", uniqueProjectIds)
-      .gte("entry_date", ninetyDaysAgo.toISOString())
-      .eq("is_deleted", false)
-      .order("entry_date", { ascending: false, nullsFirst: false })
-      .limit(500);
+  if (Array.isArray((histRes as { data: unknown }).data)) {
+    const histData = (histRes as { data: unknown[] }).data;
 
     if (Array.isArray(histData)) {
       for (const h of histData as Array<{

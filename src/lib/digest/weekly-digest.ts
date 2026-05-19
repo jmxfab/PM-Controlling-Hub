@@ -108,15 +108,84 @@ export async function loadWeeklyDigest(): Promise<WeeklyDigest> {
   const supabase = supabaseAdmin();
   const { fromIso, toIso, rangeLabel } = getLastJumaxWeek();
 
-  // 1) Hero-Histories der Woche fuer People+Events
-  const { data: histData } = await supabase
-    .from("hero_histories")
-    .select("user_email, author_name, event_type, project_match_id, entry_date")
-    .gte("entry_date", fromIso)
-    .lt("entry_date", toIso)
-    .eq("is_deleted", false)
-    .limit(20_000);
-  const hist = histData ?? [];
+  // Perf: alle 6 unabhaengigen Queries parallel feuern statt seriell
+  // (~400-800ms Ersparnis bei kaltem Render).
+  const fourWeeksAgoIso = new Date(
+    new Date(fromIso).getTime() - 28 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const [
+    histRes,
+    prevRes,
+    newProjRes,
+    doneProjRes,
+    openInvRes,
+    newTasksRes,
+    doneTasksRes,
+    openTasksRes,
+    kritischRes,
+  ] = await Promise.all([
+    supabase
+      .from("hero_histories")
+      .select("user_email, author_name, event_type, project_match_id, entry_date")
+      .gte("entry_date", fromIso)
+      .lt("entry_date", toIso)
+      .eq("is_deleted", false)
+      .limit(20_000),
+    supabase
+      .from("hero_histories")
+      .select("user_email")
+      .gte("entry_date", fourWeeksAgoIso)
+      .lt("entry_date", fromIso)
+      .eq("is_deleted", false)
+      .limit(50_000),
+    supabase
+      .from("hero_dashboard_projects")
+      .select("id, project_number, project_name, customer_name, created_at_hero")
+      .gte("created_at_hero", fromIso)
+      .lt("created_at_hero", toIso)
+      .order("created_at_hero", { ascending: false })
+      .limit(50),
+    supabase
+      .from("hero_dashboard_projects")
+      .select("id, project_number, project_name, customer_name, last_finish_at")
+      .gte("last_finish_at", fromIso)
+      .lt("last_finish_at", toIso)
+      .order("last_finish_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("hero_customer_documents")
+      .select("value, booking_balance, booking_due_date")
+      .eq("type", "invoice")
+      .eq("is_deleted", false)
+      .eq("status_code", 200)
+      .eq("booking_is_open", true)
+      .limit(10_000),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .gte("created_at", fromIso)
+      .lt("created_at", toIso),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .eq("status", "done")
+      .gte("completed_at", fromIso)
+      .lt("completed_at", toIso),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .neq("status", "done"),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .eq("mail_category", "kritisch")
+      .neq("status", "done"),
+  ]);
+  const hist = histRes.data ?? [];
 
   // Top-Mitarbeiter
   const peopleMap = new Map<
@@ -153,18 +222,8 @@ export async function loadWeeklyDigest(): Promise<WeeklyDigest> {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  // 2) Anomalien: 4-Wochen-Schnitt vs diese Woche
-  // Vergleichszeitraum: 4 Wochen VOR der Berichtswoche.
-  const fourWeeksAgo = new Date(
-    new Date(fromIso).getTime() - 28 * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const { data: prevData } = await supabase
-    .from("hero_histories")
-    .select("user_email")
-    .gte("entry_date", fourWeeksAgo)
-    .lt("entry_date", fromIso)
-    .eq("is_deleted", false)
-    .limit(50_000);
+  // 2) Anomalien: 4-Wochen-Schnitt vs diese Woche (prevRes lief in Promise.all)
+  const prevData = prevRes.data;
   const prevPerEmail = new Map<string, number>();
   for (const r of prevData ?? []) {
     const email = (r.user_email as string | null) ?? null;
@@ -200,14 +259,8 @@ export async function loadWeeklyDigest(): Promise<WeeklyDigest> {
   }
   anomalies.sort((a, b) => a.deltaPct - b.deltaPct);
 
-  // 3) Neue Projekte (created_at_hero in Woche)
-  const { data: newProj } = await supabase
-    .from("hero_dashboard_projects")
-    .select("id, project_number, project_name, customer_name, created_at_hero")
-    .gte("created_at_hero", fromIso)
-    .lt("created_at_hero", toIso)
-    .order("created_at_hero", { ascending: false })
-    .limit(50);
+  // 3) Neue Projekte (created_at_hero in Woche) — lief parallel oben
+  const newProj = newProjRes.data;
   const newProjects = (newProj ?? []).map(
     (p: {
       id: string;
@@ -224,14 +277,8 @@ export async function loadWeeklyDigest(): Promise<WeeklyDigest> {
     }),
   );
 
-  // 4) Abgeschlossene Projekte (last_finish_at in Woche)
-  const { data: doneProj } = await supabase
-    .from("hero_dashboard_projects")
-    .select("id, project_number, project_name, customer_name, last_finish_at")
-    .gte("last_finish_at", fromIso)
-    .lt("last_finish_at", toIso)
-    .order("last_finish_at", { ascending: false })
-    .limit(50);
+  // 4) Abgeschlossene Projekte (last_finish_at in Woche) — lief parallel oben
+  const doneProj = doneProjRes.data;
   const completedProjects = (doneProj ?? []).map(
     (p: {
       id: string;
@@ -248,44 +295,8 @@ export async function loadWeeklyDigest(): Promise<WeeklyDigest> {
     }),
   );
 
-  // 5) Mail-Aufgaben-Pipeline
-  const [newTasksRes, doneTasksRes, openTasksRes, kritischRes] =
-    await Promise.all([
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .or("is_automated.eq.true,is_user_created.eq.true")
-        .gte("created_at", fromIso)
-        .lt("created_at", toIso),
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .or("is_automated.eq.true,is_user_created.eq.true")
-        .eq("status", "done")
-        .gte("completed_at", fromIso)
-        .lt("completed_at", toIso),
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .or("is_automated.eq.true,is_user_created.eq.true")
-        .neq("status", "done"),
-      supabase
-        .from("tasks")
-        .select("id", { count: "exact", head: true })
-        .or("is_automated.eq.true,is_user_created.eq.true")
-        .eq("mail_category", "kritisch")
-        .neq("status", "done"),
-    ]);
-
-  // 6) Cash-Snapshot
-  const { data: openInv } = await supabase
-    .from("hero_customer_documents")
-    .select("value, booking_balance, booking_due_date")
-    .eq("type", "invoice")
-    .eq("is_deleted", false)
-    .eq("status_code", 200)
-    .eq("booking_is_open", true)
-    .limit(10_000);
+  // 5) + 6) Mail-Tasks-Pipeline + Cash-Snapshot — alles lief parallel oben
+  const openInv = openInvRes.data;
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   let totalOpenEur = 0;
