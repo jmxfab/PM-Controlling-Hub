@@ -767,6 +767,9 @@ function MailTab({
   /** "Erinnerung in Zukunft" = Snooze: Karte versteckt bis Reminder faellig.
    *  Toggle macht sie wieder sichtbar zum manuellen Eingriff. */
   const [showSnoozed, setShowSnoozed] = useState(false);
+  /** Bumpt bei jeder Task-Mutation — triggert Re-Fetch des Vorschläge-Panels
+   *  und anderer abhaengiger Sub-Panels, ohne auf Realtime-Debounce zu warten. */
+  const [mutationTick, setMutationTick] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trennen in sichtbar / snoozed: Tasks deren remind_at > jetzt sind
@@ -974,6 +977,15 @@ function MailTab({
         } else if (update.mail_category === "inbox") {
           invalidateCacheForFilter("inbox");
         }
+      }
+      // Mutation-Tick bumpen -> Vorschläge-Panel und andere Sub-Panels
+      // re-fetchen sofort (ohne auf den Realtime-Debounce zu warten).
+      setMutationTick((n) => n + 1);
+      // Bei in_my_day-Aenderung: explizit den aktuellen Filter neu laden,
+      // damit die neu hinzugefuegte Task im Mein-Tag-Tab sofort erscheint
+      // (oder die entfernte sofort verschwindet) — ohne 400ms Realtime-Lag.
+      if (update.in_my_day !== undefined) {
+        fetchData(search, 0, statusFilter, prioFilter);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
@@ -1316,10 +1328,10 @@ function MailTab({
               />
               {/* MS-To-Do-Style Vorschläge-Panel rechts.
                   Zeigt offene Tasks die noch NICHT in Mein Tag sind.
-                  Refresh-Trigger: data.entries.length (jedes Mal wenn ein Task
-                  dazukommt/rausfliegt, gibt's einen neuen Stand). */}
+                  Refresh-Trigger: mutationTick (bumpt bei jeder Mutation)
+                  + visibleEntries-IDs (Fallback bei Realtime-Sync). */}
               <MyDaySuggestionsPanel
-                refreshKey={visibleEntries.map((t) => t.id).join(",")}
+                refreshKey={`${mutationTick}|${visibleEntries.map((t) => t.id).join(",")}`}
                 onAdd={addSuggestionToMyDay}
                 busyTaskId={busyTaskId}
               />
