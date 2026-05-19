@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
+import { createAnthropicClient, hasAnthropicCreds } from "@/lib/anthropic/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -28,10 +28,12 @@ export async function POST(
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  if (!hasAnthropicCreds()) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY nicht konfiguriert" },
+      {
+        error:
+          "Anthropic-Auth fehlt (ANTHROPIC_OAUTH_TOKEN oder ANTHROPIC_API_KEY in Vercel setzen)",
+      },
       { status: 503 },
     );
   }
@@ -81,7 +83,7 @@ ${hint ? `Stichworte vom User (UNBEDINGT einbauen):\n${hint}\n` : ""}
 Schreib jetzt die Antwort:`;
 
   try {
-    const client = new Anthropic({ apiKey });
+    const client = createAnthropicClient();
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 600,
