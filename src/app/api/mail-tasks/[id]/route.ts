@@ -63,6 +63,8 @@ export async function PATCH(
       in_my_day?: boolean;
       /** Manuelle Drag-and-Drop Sortierung. */
       sort_order?: number;
+      /** MS-To-Do-Style Wichtig-Star — pinnt Task oben + visuell hervor. */
+      is_important?: boolean;
     };
 
     const update: Record<string, unknown> = {};
@@ -136,6 +138,10 @@ export async function PATCH(
 
     if (body.in_my_day !== undefined) {
       update.in_my_day_at = body.in_my_day ? new Date().toISOString() : null;
+    }
+
+    if (body.is_important !== undefined && typeof body.is_important === "boolean") {
+      update.is_important = body.is_important;
     }
 
     if (body.sort_order !== undefined && typeof body.sort_order === "number") {
