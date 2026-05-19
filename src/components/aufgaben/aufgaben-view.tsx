@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -712,12 +713,20 @@ function MailTab({
 }) {
   const meta = TAB_META[filter];
   const tabFilters = TAB_FILTERS[filter];
-  // URL-Param ?search=... unterstuetzen — wird beim Mount in den Filter
-  // uebernommen damit Cross-Links vom Logbuch funktionieren.
-  const [search, setSearch] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("search") ?? "";
-  });
+  // URL-Param ?search=... unterstuetzen — wird beim Mount UND bei Navigation
+  // dazwischen in den Filter uebernommen. So funktionieren Cross-Links vom
+  // Logbuch auch wenn der User schon auf /aufgaben ist.
+  const urlSearchParams = useSearchParams();
+  const urlSearchTerm = urlSearchParams.get("search") ?? "";
+  const [search, setSearch] = useState(urlSearchTerm);
+  useEffect(() => {
+    if (urlSearchTerm !== "" && urlSearchTerm !== search) {
+      setSearch(urlSearchTerm);
+    }
+    // Bewusst NICHT auf search reagieren — wenn User selber tippt soll URL
+    // nicht ihn ueberschreiben.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSearchTerm]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
     tabFilters.defaultStatus,
   );
