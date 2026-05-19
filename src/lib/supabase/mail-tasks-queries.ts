@@ -6,7 +6,22 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
-export type MailTaskStatus = "open" | "in_progress" | "waiting" | "done" | "cancelled";
+/**
+ * Status-Werte fuer Mail-Tasks.
+ * - open         : Standard, action required
+ * - in_progress  : User arbeitet dran
+ * - waiting      : Ball liegt beim Kunden / Externen (incl. Snooze)
+ * - controlling  : Delegiert oder zur Kontrolle/Pruefung — nachzuverfolgen
+ * - done         : Abgeschlossen
+ * - cancelled    : Verworfen
+ */
+export type MailTaskStatus =
+  | "open"
+  | "in_progress"
+  | "waiting"
+  | "controlling"
+  | "done"
+  | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
 export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung" | "bestellung";
 export type ItemSource = "mail" | "hero";

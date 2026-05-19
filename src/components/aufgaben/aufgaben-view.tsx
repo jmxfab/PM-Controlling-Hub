@@ -648,6 +648,10 @@ function MailTab({
     const visible: MailTask[] = [];
     let snoozed = 0;
     for (const t of data.entries) {
+      // 1) Erledigte raus — Item 3.1 (sofortiges Ausblenden nach Mark-Done)
+      //    Beim 'done' Statusfilter werden sie ueber den API-Filter wieder reingeholt.
+      if (t.status === "done" && statusFilter !== "done") continue;
+      // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt
       if (t.status !== "done" && t.remind_at) {
         const remindMs = new Date(t.remind_at).getTime();
         if (Number.isFinite(remindMs) && remindMs > nowMs) {
@@ -658,7 +662,7 @@ function MailTab({
       visible.push(t);
     }
     return { visibleEntries: visible, snoozedCount: snoozed };
-  }, [data.entries, showSnoozed]);
+  }, [data.entries, showSnoozed, statusFilter]);
 
   const fetchData = useCallback(
     async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
@@ -1412,6 +1416,22 @@ function TaskCard({
                 <Check size={10} /> erledigt
               </span>
             )}
+            {t.status === "controlling" && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200 dark:bg-fuchsia-950/40 dark:text-fuchsia-300"
+                title="Delegiert / zur Kontrolle — wird nachverfolgt"
+              >
+                ✓ Controlling
+              </span>
+            )}
+            {t.status === "waiting" && !isDone && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300"
+                title="Wartet auf Antwort (vom Kunden oder Snooze)"
+              >
+                <Clock3 size={10} /> wartet
+              </span>
+            )}
             {t.source === "hero" && (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 ring-1 ring-purple-200 dark:bg-purple-950/40 dark:text-purple-300">
                 Hero
@@ -1559,10 +1579,7 @@ function TaskCard({
               <TaskComposer
                 taskId={t.id}
                 mailto={mailto}
-                onActionCompleted={() => {
-                  /* spaeter: auto-done. Aktuell nicht — User soll selbst entscheiden
-                   *  ob nach Notiz-Speichern / Outlook-Reply die Aufgabe erledigt ist. */
-                }}
+                onActionCompleted={onMarkDone}
               />
             )}
             <ActionButtons
