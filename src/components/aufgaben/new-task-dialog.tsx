@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Select,
   SelectContent,
@@ -246,13 +247,10 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
               <Label htmlFor="task-remind" className="text-xs font-medium">
                 Erinnern am
               </Label>
-              <Input
-                id="task-remind"
-                type="datetime-local"
+              <DateTimePicker
                 value={form.remind_at}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, remind_at: e.target.value }))
-                }
+                onChange={(v) => setForm((f) => ({ ...f, remind_at: v }))}
+                placeholder="z. B. morgen 9:00"
               />
             </div>
           </div>
@@ -262,13 +260,10 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
             <Label htmlFor="task-due" className="text-xs font-medium">
               Fälligkeitsdatum
             </Label>
-            <Input
-              id="task-due"
-              type="datetime-local"
+            <DateTimePicker
               value={form.due_date}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, due_date: e.target.value }))
-              }
+              onChange={(v) => setForm((f) => ({ ...f, due_date: v }))}
+              placeholder="Fälligkeitsdatum"
             />
           </div>
 
