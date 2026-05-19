@@ -48,7 +48,11 @@ export async function loadAufgabenPage(
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.onlyUnread) query = query.eq("is_read", false);
   if (filters.search) {
-    query = query.or(`title.ilike.%${filters.search}%,body.ilike.%${filters.search}%`);
+    // PostgREST-OR-Filter Sanitization — Komma/Klammern/Wildcards strippen
+    const safe = filters.search.replace(/[,()*%\\]/g, " ").trim();
+    if (safe.length > 0) {
+      query = query.or(`title.ilike.%${safe}%,body.ilike.%${safe}%`);
+    }
   }
 
   const { data, count, error } = await query;

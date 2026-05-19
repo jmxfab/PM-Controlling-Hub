@@ -781,6 +781,14 @@ function MailTab({
   /** Bumpt bei jeder Task-Mutation — triggert Re-Fetch des Vorschläge-Panels
    *  und anderer abhaengiger Sub-Panels, ohne auf Realtime-Debounce zu warten. */
   const [mutationTick, setMutationTick] = useState(0);
+  /** IDs die wir gerade lokal entfernt haben (z.B. Sun-Klick raus aus Mein Tag).
+   *  Werden aus jeder kommenden Server-Response gefiltert bis 10s rum sind.
+   *  Verhindert das "Karte verschwindet, kommt wieder"-Flackern wegen
+   *  Supabase Read-Replica-Lag. */
+  const recentlyRemovedRef = useRef<Map<string, number>>(new Map());
+  const markRecentlyRemoved = useCallback((taskId: string) => {
+    recentlyRemovedRef.current.set(taskId, Date.now());
+  }, []);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trennen in sichtbar / snoozed: Tasks deren remind_at > jetzt sind
@@ -871,9 +879,22 @@ function MailTab({
           return;
         }
         const json = await res.json();
+        const rawEntries = (json.entries ?? []) as MailTask[];
+        // Recently-removed-Filter: Tasks die wir SOEBEN lokal entfernt haben
+        // (z.B. via Sun-Klick) NICHT zurueck reinmappen, auch wenn Server-
+        // Response sie noch enthaelt (Replica-Lag). 10s-Fenster.
+        const nowMs = Date.now();
+        const recentlyRemoved = recentlyRemovedRef.current;
+        // Expired Eintraege wegputzen
+        for (const [id, ts] of recentlyRemoved) {
+          if (nowMs - ts > 10_000) recentlyRemoved.delete(id);
+        }
+        const filteredEntries = rawEntries.filter(
+          (t) => !recentlyRemoved.has(t.id),
+        );
         const page: MailTasksPage = {
-          entries: json.entries ?? [],
-          total: json.total ?? 0,
+          entries: filteredEntries,
+          total: Math.max(0, (json.total ?? 0) - (rawEntries.length - filteredEntries.length)),
         };
         RESPONSE_CACHE.set(key, { data: page, ts: Date.now() });
         // Stub-Preserving-Merge: wenn lokal soeben ein Task adden wurde
@@ -963,6 +984,9 @@ function MailTab({
             `Fehler ${res.status} beim Aktualisieren`,
         );
         return;
+      }
+      if (removeFromList) {
+        markRecentlyRemoved(taskId);
       }
       setData((prev) => ({
         ...prev,
