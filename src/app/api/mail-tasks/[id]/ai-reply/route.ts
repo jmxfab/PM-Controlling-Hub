@@ -166,18 +166,58 @@ export async function POST(
   const tone = body.tone ?? "freundlich";
   const mode = body.mode === "hero_log" ? "hero_log" : "email";
 
-  // Task aus DB laden — inkl. Hero-Projekt-Info, damit wir bei vorhandener
-  // hero_project_id die letzten Logbuch-Eintraege als KI-Kontext mitliefern.
+  // Task laden — unterschiedlich je nach Source:
+  //  - Mail-Task (normale UUID): aus tasks-Tabelle
+  //  - Hero-Task (Praefix 'hero-'): aus hero_notifications, dann hero_projects
+  //    fuer Project-Namen + hero_histories fuer Logbuch-Kontext
   const supabase = supabaseAdmin();
-  const { data: task, error } = await supabase
-    .from("tasks")
-    .select(
-      "title, description, mail_category, hero_project_id, hero_project_number, hero_project_name",
-    )
-    .eq("id", id)
-    .single();
-  if (error || !task) {
-    return NextResponse.json({ error: "task not found" }, { status: 404 });
+  const isHero = id.startsWith("hero-");
+  let task: TaskCtx | null = null;
+
+  if (isHero) {
+    const heroId = id.slice("hero-".length);
+    const { data: note, error: nErr } = await supabase
+      .from("hero_notifications")
+      .select("title, body, target_id")
+      .eq("id", heroId)
+      .single();
+    if (nErr || !note) {
+      return NextResponse.json(
+        { error: "hero notification not found" },
+        { status: 404 },
+      );
+    }
+    let projectNumber: string | null = null;
+    let projectName: string | null = null;
+    if (note.target_id) {
+      const { data: proj } = await supabase
+        .from("hero_projects")
+        .select("project_number, project_name")
+        .eq("id", note.target_id)
+        .single();
+      projectNumber = (proj?.project_number as string | null) ?? null;
+      projectName = (proj?.project_name as string | null) ?? null;
+    }
+    task = {
+      title: note.title ?? "(ohne Titel)",
+      description: note.body ?? null,
+      mail_category: "aufgabe",
+      hero_project_id: note.target_id ?? null,
+      hero_project_number: projectNumber,
+      hero_project_name: projectName,
+    };
+  } else {
+    const { data: row, error } = await supabase
+      .from("tasks")
+      .select(
+        "title, description, mail_category, hero_project_id, hero_project_number, hero_project_name",
+      )
+      .eq("id", id)
+      .single();
+    if (error || !row) {
+      return NextResponse.json({ error: "task not found" }, { status: 404 });
+    }
+    task = row as TaskCtx;
   }
 
   // Letzte 8 Logbuch-Eintraege laden — nur wenn Task an Hero-Projekt haengt.
@@ -206,13 +246,16 @@ export async function POST(
         { status: 502 },
       );
     }
-    // Optional: Draft als note speichern damit man die History sieht
-    try {
-      await supabase
-        .from("task_notes")
-        .insert({ task_id: id, body: draft, kind: "ai-draft" });
-    } catch {
-      // silent — Draft ist primary, History ist nice-to-have
+    // Optional: Draft als note speichern damit man die History sieht.
+    // Nur fuer echte Mail-Tasks (Hero-IDs sind synthetisch + waeren FK-Verstoss).
+    if (!isHero) {
+      try {
+        await supabase
+          .from("task_notes")
+          .insert({ task_id: id, body: draft, kind: "ai-draft" });
+      } catch {
+        // silent — Draft ist primary, History ist nice-to-have
+      }
     }
     return NextResponse.json({
       draft,
