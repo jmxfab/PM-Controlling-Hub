@@ -6,6 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   X,
   Mail,
   ChevronDown,
@@ -999,6 +1004,33 @@ function MailTab({
     }
   }
 
+  /** Prioritaet eines Tasks aendern. Bleibt im aktuellen Tab,
+   *  aber sortiert sich um (sort_order respektiert is_important + Prio). */
+  function changePriority(task: MailTask, priority: MailTask["priority"]) {
+    if (task.source === "hero") return Promise.resolve();
+    return patchTask(task.id, { priority });
+  }
+
+  /** Kategorie eines Tasks aendern (z.B. von 'aufgabe' zu 'kritisch').
+   *  Task verschwindet aus dem aktuellen Tab wenn neue Kategorie da
+   *  nicht hingehoert — daher removeFromList=true. */
+  function changeCategory(task: MailTask, category: MailTask["mail_category"]) {
+    if (task.source === "hero" || !category) return Promise.resolve();
+    // Map: welche Kategorien gehoeren in welchen Tab? Wenn Task in eine
+    // andere Kategorie wechselt -> aus aktueller Liste entfernen.
+    const tabCategories: Partial<Record<MailTabFilter, string[]>> = {
+      my_day: [],
+      kritisch: ["kritisch"],
+      aufgaben: ["aufgabe", "dringend"],
+      infos: ["info"],
+      inbox: ["inbox"],
+      rechnungen: ["rechnung", "bestellung"],
+    };
+    const leavingCurrentTab =
+      filter !== "my_day" && !tabCategories[filter]?.includes(category);
+    return patchTask(task.id, { mail_category: category }, leavingCurrentTab);
+  }
+
   /** Verschiebt eine Info in den Aufgaben-Tab (mail_category = 'aufgabe'). */
   function moveToAufgaben(task: MailTask) {
     return patchTask(
@@ -1309,6 +1341,8 @@ function MailTab({
           onSenderClick={setHistoryEmail}
           onToggleMyDay={toggleMyDay}
           onToggleImportant={toggleImportant}
+          onChangePriority={changePriority}
+          onChangeCategory={changeCategory}
           buildMailto={buildMailto}
           buildOutlookDesktopLink={buildOutlookDesktopLink}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1373,6 +1407,8 @@ function MailTab({
                     onSenderClick={(email) => setHistoryEmail(email)}
                     onToggleMyDay={() => toggleMyDay(t)}
                     onToggleImportant={() => toggleImportant(t)}
+                    onChangePriority={(p) => changePriority(t, p)}
+                    onChangeCategory={(c) => changeCategory(t, c)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1423,6 +1459,8 @@ function MailTab({
                     onSenderClick={(email) => setHistoryEmail(email)}
                     onToggleMyDay={() => toggleMyDay(t)}
                     onToggleImportant={() => toggleImportant(t)}
+                    onChangePriority={(p) => changePriority(t, p)}
+                    onChangeCategory={(c) => changeCategory(t, c)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1658,6 +1696,8 @@ function TaskCard({
   onSenderClick,
   onToggleMyDay,
   onToggleImportant,
+  onChangePriority,
+  onChangeCategory,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -1679,6 +1719,8 @@ function TaskCard({
   onSenderClick: (email: string) => void;
   onToggleMyDay: () => void;
   onToggleImportant: () => void;
+  onChangePriority: (p: MailTask["priority"]) => void;
+  onChangeCategory: (c: MailTask["mail_category"]) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -1993,6 +2035,15 @@ function TaskCard({
       >
         <div className="overflow-hidden">
           <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-5 py-4 space-y-4">
+            {/* Schnell-Edit: Priorität + Kategorie. Nur fuer mail-source-Tasks,
+                Hero-Items sind read-only. */}
+            {t.source === "mail" && (
+              <TaskQuickEditBar
+                task={t}
+                onChangePriority={onChangePriority}
+                onChangeCategory={onChangeCategory}
+              />
+            )}
             {t.body && <DescriptionBody text={t.body} />}
             {/* Projekt-Pulse: zeigt letzte 5 Logbuch-Eintraege des Hero-Projekts,
              *  falls verknuepft. Nur fuer Hero-source-Tasks aktiv (da haben wir
@@ -2471,6 +2522,8 @@ function PrioPanel({
   onSenderClick,
   onToggleMyDay,
   onToggleImportant,
+  onChangePriority,
+  onChangeCategory,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -2492,6 +2545,8 @@ function PrioPanel({
   onSenderClick: (email: string) => void;
   onToggleMyDay: (task: MailTask) => void;
   onToggleImportant: (task: MailTask) => void;
+  onChangePriority: (task: MailTask, p: MailTask["priority"]) => void;
+  onChangeCategory: (task: MailTask, c: MailTask["mail_category"]) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -2529,6 +2584,8 @@ function PrioPanel({
             onSenderClick={onSenderClick}
             onToggleMyDay={() => onToggleMyDay(t)}
             onToggleImportant={() => onToggleImportant(t)}
+            onChangePriority={(p) => onChangePriority(t, p)}
+            onChangeCategory={(c) => onChangeCategory(t, c)}
             buildMailto={buildMailto}
             buildOutlookDesktopLink={buildOutlookDesktopLink}
             heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -2536,6 +2593,171 @@ function PrioPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------- Quick-Edit Bar (Prio + Kategorie) ---------------- */
+/**
+ * Kleine Bar im expandierten TaskCard, zeigt die aktuelle Prio + Kategorie
+ * als Buttons. Klick aufs Pill = Pop-Menu mit Auswahl-Optionen.
+ * Optimistic Update via Parent-Callback.
+ */
+const PRIO_OPTIONS: Array<{
+  value: NonNullable<MailTask["priority"]>;
+  label: string;
+  dot: string;
+}> = [
+  { value: "urgent", label: "Dringend", dot: "bg-red-500" },
+  { value: "high", label: "Hoch", dot: "bg-orange-500" },
+  { value: "medium", label: "Mittel", dot: "bg-amber-400" },
+  { value: "low", label: "Niedrig", dot: "bg-zinc-400" },
+];
+
+const CATEGORY_OPTIONS: Array<{
+  value: NonNullable<MailTask["mail_category"]>;
+  label: string;
+  className: string;
+}> = [
+  {
+    value: "kritisch",
+    label: "Kritisch",
+    className:
+      "text-rose-700 bg-rose-50 ring-rose-200 dark:text-rose-300 dark:bg-rose-950/40 dark:ring-rose-900/40",
+  },
+  {
+    value: "dringend",
+    label: "Dringend",
+    className:
+      "text-orange-700 bg-orange-50 ring-orange-200 dark:text-orange-300 dark:bg-orange-950/40 dark:ring-orange-900/40",
+  },
+  {
+    value: "aufgabe",
+    label: "Aufgabe",
+    className:
+      "text-blue-700 bg-blue-50 ring-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:ring-blue-900/40",
+  },
+  {
+    value: "info",
+    label: "Info",
+    className:
+      "text-slate-600 bg-slate-100 ring-slate-200 dark:text-slate-400 dark:bg-slate-800 dark:ring-slate-700",
+  },
+  {
+    value: "rechnung",
+    label: "Rechnung",
+    className:
+      "text-emerald-700 bg-emerald-50 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:ring-emerald-900/40",
+  },
+  {
+    value: "bestellung",
+    label: "Bestellung",
+    className:
+      "text-emerald-700 bg-emerald-50 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:ring-emerald-900/40",
+  },
+  {
+    value: "inbox",
+    label: "Inbox",
+    className:
+      "text-zinc-600 bg-zinc-100 ring-zinc-200 dark:text-zinc-400 dark:bg-zinc-800 dark:ring-zinc-700",
+  },
+];
+
+function TaskQuickEditBar({
+  task,
+  onChangePriority,
+  onChangeCategory,
+}: {
+  task: MailTask;
+  onChangePriority: (p: MailTask["priority"]) => void;
+  onChangeCategory: (c: MailTask["mail_category"]) => void;
+}) {
+  const [prioOpen, setPrioOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
+  const currentPrio = PRIO_OPTIONS.find((p) => p.value === task.priority);
+  const currentCat = CATEGORY_OPTIONS.find(
+    (c) => c.value === task.mail_category,
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[12px]">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+        Klassifikation:
+      </span>
+      {/* Prio-Pill */}
+      <Popover open={prioOpen} onOpenChange={setPrioOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium border hover:bg-muted/60 transition-colors"
+            title="Priorität ändern"
+          >
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${currentPrio?.dot ?? "bg-muted-foreground/40"}`}
+              aria-hidden
+            />
+            {currentPrio?.label ?? "Keine Prio"}
+            <ChevronDown size={12} className="opacity-60" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-44 p-1">
+          {PRIO_OPTIONS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => {
+                onChangePriority(p.value);
+                setPrioOpen(false);
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[12.5px] hover:bg-muted ${
+                p.value === task.priority ? "bg-muted/60 font-medium" : ""
+              }`}
+            >
+              <span
+                className={`inline-block w-2.5 h-2.5 rounded-full ${p.dot}`}
+                aria-hidden
+              />
+              {p.label}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
+      {/* Kategorie-Pill */}
+      <Popover open={catOpen} onOpenChange={setCatOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium ring-1 hover:opacity-90 transition-opacity ${
+              currentCat?.className ?? "bg-muted/50 ring-border"
+            }`}
+            title="Kategorie ändern"
+          >
+            {currentCat?.label ?? "Keine Kategorie"}
+            <ChevronDown size={12} className="opacity-60" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-48 p-1">
+          {CATEGORY_OPTIONS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => {
+                onChangeCategory(c.value);
+                setCatOpen(false);
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[12.5px] hover:bg-muted ${
+                c.value === task.mail_category ? "bg-muted/60 font-medium" : ""
+              }`}
+            >
+              <span
+                className={`inline-block w-2.5 h-2.5 rounded-full ring-1 ${c.className.split(" ").filter((cl) => cl.startsWith("bg-")).join(" ")}`}
+                aria-hidden
+              />
+              {c.label}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
