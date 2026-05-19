@@ -45,6 +45,10 @@ import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-str
 import { TaskComposer } from "@/components/aufgaben/task-composer";
 import { SortableTaskCard } from "@/components/aufgaben/sortable-task-card";
 import {
+  useTaskRealtime,
+  useVisibilityPoll,
+} from "@/hooks/use-task-realtime";
+import {
   DndContext,
   PointerSensor,
   useSensor,
@@ -400,10 +404,29 @@ export function AufgabenView({
   heroProjectLinkTemplate,
   initialAufgaben,
   initialTab,
-  counts,
+  counts: initialCounts,
 }: Props) {
+  // Counts werden live aktualisiert (Realtime + Polling), Initial vom Server
+  const [counts, setCounts] = useState<MailTaskCounts>(initialCounts);
   const defaultTab: MailTabFilter =
-    initialTab ?? (counts.kritisch > 0 ? "kritisch" : "aufgaben");
+    initialTab ?? (initialCounts.kritisch > 0 ? "kritisch" : "aufgaben");
+
+  // Realtime-Subscriber: bei jeder DB-Aenderung an tasks oder task_notes
+  // re-fetchen wir die Counts. MailTab subscribed sich separat und
+  // invalidiert seinen eigenen Cache.
+  const refetchCounts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/mail-tasks/counts", { cache: "no-store" });
+      if (!res.ok) return;
+      const json = (await res.json()) as MailTaskCounts;
+      setCounts(json);
+    } catch {
+      // silent — naechstes Polling-Intervall versucht es wieder
+    }
+  }, []);
+
+  useTaskRealtime({ onChange: refetchCounts });
+  useVisibilityPoll(refetchCounts, 60_000);
 
   // Server-vorgeladene Daten in den globalen Response-Cache schreiben,
   // damit MailTab sie sofort zeigt ohne erstes Client-Fetch.
@@ -815,6 +838,19 @@ function MailTab({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [search, statusFilter, prioFilter, fetchData]);
+
+  // Realtime: wenn die Aufgaben-Tabelle veraendert wurde (n8n hat klassifiziert,
+  // andere User haben was geandert) -> Cache invalidieren + sofort refetchen.
+  const realtimeRefetch = useCallback(() => {
+    invalidateCacheForFilter(filter);
+    fetchData(search, 0, statusFilter, prioFilter);
+  }, [filter, search, statusFilter, prioFilter, fetchData]);
+
+  useTaskRealtime({ onChange: realtimeRefetch });
+
+  // Polling-Fallback bei Tab-Focus + 90s-Intervall (vermeidet Stale-Daten
+  // falls Realtime mal nicht durchkommt — z.B. nach Sleep).
+  useVisibilityPoll(realtimeRefetch, 90_000);
 
   async function patchTask(
     taskId: string,
