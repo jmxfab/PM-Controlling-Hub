@@ -85,6 +85,8 @@ export interface MailTask {
   in_my_day_at: string | null;
   /** Manueller Sortier-Wert fuer Drag-and-Drop. 0 = kein manueller Sort. */
   sort_order: number;
+  /** MS-To-Do-Style Wichtig-Star: gepinnt nach oben + visuell hervorgehoben. */
+  is_important: boolean;
 }
 
 export interface MailTasksPage {
@@ -180,20 +182,23 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order, is_important", { count: "exact" })
     .or("is_automated.eq.true,is_user_created.eq.true");
 
   if (filter === "my_day") {
     // Mein Tag: alle Tasks mit in_my_day_at IS NOT NULL, unabhaengig von Kategorie.
-    // Sort: sort_order (manuell via DnD), dann in_my_day_at DESC.
+    // Sort: is_important DESC (Wichtig-Star oben), dann sort_order (manuell via DnD),
+    // dann in_my_day_at DESC.
     query = query
       .not("in_my_day_at", "is", null)
+      .order("is_important", { ascending: false })
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("in_my_day_at", { ascending: false, nullsFirst: false });
   } else {
-    // Standard Tabs nach Kategorie. Sort wie bisher.
+    // Standard Tabs nach Kategorie. is_important wins always.
     query = query
       .in("mail_category", categories)
+      .order("is_important", { ascending: false })
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("thread_last_message_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
@@ -251,6 +256,7 @@ export async function loadMailTasksPage(
       is_user_created: row.is_user_created ?? false,
       in_my_day_at: row.in_my_day_at ?? null,
       sort_order: typeof row.sort_order === "number" ? row.sort_order : 0,
+      is_important: Boolean(row.is_important),
     };
   });
 
@@ -285,6 +291,7 @@ export function heroToMailItem(
     thread_last_message_at: null,
     in_my_day_at: null,
     sort_order: 0,
+    is_important: false,
     mail_category: category,
     sender: null,
     body: hero.body,

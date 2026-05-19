@@ -29,6 +29,7 @@ import {
   UserCheck,
   Bell,
   History,
+  Star,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -871,6 +872,7 @@ function MailTab({
       remind_at?: string | null;
       in_my_day?: boolean;
       sort_order?: number;
+      is_important?: boolean;
     },
     /** Wenn true: Task aus aktueller Liste entfernen (z.B. nach Kategorie-Wechsel) */
     removeFromList = false,
@@ -917,6 +919,10 @@ function MailTab({
                       update.sort_order !== undefined
                         ? update.sort_order
                         : t.sort_order,
+                    is_important:
+                      update.is_important !== undefined
+                        ? update.is_important
+                        : t.is_important,
                   }
                 : t,
             ),
@@ -1042,6 +1048,12 @@ function MailTab({
 
   function toggleMyDay(task: MailTask) {
     return patchTask(task.id, { in_my_day: !task.in_my_day_at });
+  }
+
+  /** Wichtig-Star toggeln. Optimistisches Update + PATCH.
+   *  Task wird durch die Sortierung dann oben in seinem Bucket gepinnt. */
+  function toggleImportant(task: MailTask) {
+    return patchTask(task.id, { is_important: !task.is_important });
   }
 
   /** Generischer Re-Order callback fuer DnD. Wird sowohl im Mein-Tag-Tab
@@ -1200,6 +1212,7 @@ function MailTab({
           onDelegationChange={updateTaskDelegation}
           onSenderClick={setHistoryEmail}
           onToggleMyDay={toggleMyDay}
+          onToggleImportant={toggleImportant}
           buildMailto={buildMailto}
           buildOutlookDesktopLink={buildOutlookDesktopLink}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1262,6 +1275,7 @@ function MailTab({
                   onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
                   onSenderClick={(email) => setHistoryEmail(email)}
                   onToggleMyDay={() => toggleMyDay(t)}
+                  onToggleImportant={() => toggleImportant(t)}
                   buildMailto={buildMailto}
                   buildOutlookDesktopLink={buildOutlookDesktopLink}
                   heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1301,6 +1315,7 @@ function MailTab({
                     onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
                     onSenderClick={(email) => setHistoryEmail(email)}
                     onToggleMyDay={() => toggleMyDay(t)}
+                    onToggleImportant={() => toggleImportant(t)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
@@ -1535,6 +1550,7 @@ function TaskCard({
   onDelegationChange,
   onSenderClick,
   onToggleMyDay,
+  onToggleImportant,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -1555,6 +1571,7 @@ function TaskCard({
   }) => void;
   onSenderClick: (email: string) => void;
   onToggleMyDay: () => void;
+  onToggleImportant: () => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -1620,6 +1637,36 @@ function TaskCard({
               {t.title}
             </h3>
             <div className="flex items-center gap-2 shrink-0">
+              {/* Wichtig-Star (Microsoft-To-Do-Style).
+               *  Pinnt Task oben in der Liste + Visual-Highlight. Nur fuer
+               *  mail-source Tasks (Hero ist read-only). */}
+              {t.source === "mail" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleImportant();
+                  }}
+                  title={
+                    t.is_important
+                      ? "Wichtig-Markierung entfernen"
+                      : "Als wichtig markieren"
+                  }
+                  className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
+                    t.is_important
+                      ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-0 group-hover:opacity-100"
+                  }`}
+                  aria-label={
+                    t.is_important ? "Nicht mehr wichtig" : "Wichtig markieren"
+                  }
+                >
+                  <Star
+                    size={14}
+                    className={t.is_important ? "fill-amber-400" : ""}
+                  />
+                </button>
+              )}
               {/* Sun-Toggle (Microsoft-To-Do-Style 'Mein Tag').
                *  Nur fuer echte mail-source Tasks (Hero-Items sind in unserer
                *  DB nicht persistent, kein in_my_day_at moeglich). */}
@@ -2316,6 +2363,7 @@ function PrioPanel({
   onDelegationChange,
   onSenderClick,
   onToggleMyDay,
+  onToggleImportant,
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
@@ -2336,6 +2384,7 @@ function PrioPanel({
   ) => void;
   onSenderClick: (email: string) => void;
   onToggleMyDay: (task: MailTask) => void;
+  onToggleImportant: (task: MailTask) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
@@ -2372,6 +2421,7 @@ function PrioPanel({
             onDelegationChange={(next) => onDelegationChange(t.id, next)}
             onSenderClick={onSenderClick}
             onToggleMyDay={() => onToggleMyDay(t)}
+            onToggleImportant={() => onToggleImportant(t)}
             buildMailto={buildMailto}
             buildOutlookDesktopLink={buildOutlookDesktopLink}
             heroProjectLinkTemplate={heroProjectLinkTemplate}
