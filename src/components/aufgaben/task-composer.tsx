@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
+  Clipboard,
+  ClipboardCheck,
+  ExternalLink,
   FileText,
   Loader2,
   Mail,
@@ -51,15 +56,17 @@ function substitute(text: string, values: Record<string, string>): string {
 
 interface Props {
   taskId: string;
-  /** Bei „Per Outlook antworten" wird dieser Link genutzt — Caller stellt
-   *  vorbefuellten mailto-Link bereit oder null wenn kein Sender da. */
+  /** 'mail' = E-Mail-Aufgabe → Outlook-Reply als Hauptaktion.
+   *  'hero' = Hero-Logbuch-Eintrag → KI generiert internen Notiztext,
+   *  User kann kopieren oder direkt in Hero oeffnen. */
+  source: "mail" | "hero";
+  /** Bei „Per Outlook antworten" (nur source='mail'). Null wenn kein Sender. */
   mailto: string | null;
-  /** Wird aufgerufen wenn der User die Auto-Done-Checkbox aktiviert hat
-   *  UND eine Aktion (Notiz/Outlook) erfolgreich war. Caller PATCHt dann
-   *  status=done. Item 3.3 aus Roadmap. */
+  /** Bei „In Hero oeffnen" (nur source='hero'). Deep-Link zum Projekt. */
+  heroProjectHref?: string | null;
+  /** Auto-Done-Hook nach erfolgreicher Aktion. */
   onActionCompleted?: () => void;
-  /** Wird aufgerufen wenn der User auf "An Controlling delegieren" klickt —
-   *  PATCH status='controlling'. */
+  /** Status auf 'controlling' setzen. */
   onMarkControlling?: () => void;
 }
 
@@ -79,7 +86,9 @@ type ToneOpt = "freundlich" | "kurz" | "foermlich";
  */
 export function TaskComposer({
   taskId,
+  source,
   mailto,
+  heroProjectHref,
   onActionCompleted,
   onMarkControlling,
 }: Props) {
@@ -87,12 +96,13 @@ export function TaskComposer({
   const [hint, setHint] = useState("");
   const [tone, setTone] = useState<ToneOpt>("freundlich");
   const [showHint, setShowHint] = useState(false);
-  const [busy, setBusy] = useState<"ai" | "note" | "mail" | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [busy, setBusy] = useState<
+    "ai" | "note" | "mail" | "clip" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  /** Wenn gesetzt, nach erfolgreichem Save/Send -> Task auf done.
-   *  Default: true wenn mailto vorhanden (User will dann meist die Mail-Pflicht
-   *  abhaken), false bei reiner Notiz. */
+  /** Wenn gesetzt, nach erfolgreichem Save/Send -> Task auf done. */
   const [autoDone, setAutoDone] = useState<boolean>(true);
   // Templates + Variable-State
   const [templates, setTemplates] = useState<TemplateOpt[]>([]);
@@ -177,7 +187,13 @@ export function TaskComposer({
       const res = await fetch(`/api/mail-tasks/${taskId}/ai-reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hint: hint.trim(), tone }),
+        body: JSON.stringify({
+          hint: hint.trim(),
+          tone,
+          // Hero-Tasks: kompakte interne Notiz fuer Logbuch.
+          // Mail-Tasks: voll formulierte Email-Antwort.
+          mode: source === "hero" ? "hero_log" : "email",
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -223,6 +239,57 @@ export function TaskComposer({
       if (autoDone) onActionCompleted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Netzwerk-Fehler");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copyToClipboard() {
+    const body = text.trim();
+    if (!body) {
+      setError("Text ist leer");
+      return;
+    }
+    setBusy("clip");
+    setError(null);
+    try {
+      // Modern Clipboard API. Faellt auf execCommand zurueck wenn z.B.
+      // iframe ohne permission. Mobile-Safari: HTTPS noetig.
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(body);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = body;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      // Als Notiz archivieren — kind 'hero-log' wenn fuer Hero gedacht
+      await fetch(`/api/mail-tasks/${taskId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body,
+          kind: source === "hero" ? "hero-log" : "note",
+        }),
+      }).catch(() => {});
+      flashOk(
+        source === "hero"
+          ? autoDone
+            ? "In Zwischenablage + erledigt"
+            : "In Zwischenablage — jetzt in Hero einfügen"
+          : "In Zwischenablage kopiert",
+      );
+      if (autoDone) onActionCompleted?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kopieren fehlgeschlagen");
     } finally {
       setBusy(null);
     }
@@ -306,18 +373,35 @@ export function TaskComposer({
         />
       )}
 
-      {/* Template-Picker (Item 2.2 + 2.3) */}
+      {/* Template-Picker (Item 2.2 + 2.3) — eingeklappt by default,
+       *  KI-Kontext-Antwort ist Hauptweg. Templates fuer Standard-Faelle
+       *  wie 'Zahlungserinnerung' wo der Wortlaut bewusst gleich sein soll. */}
       {templates.length > 0 && (
         <div className="space-y-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2 gap-1 text-muted-foreground hover:text-foreground"
+            onClick={() => setShowTemplates((s) => !s)}
+          >
+            {showTemplates ? (
+              <ChevronUp size={11} />
+            ) : (
+              <ChevronDown size={11} />
+            )}
+            <FileText size={11} />
+            Vorlage einfügen {showTemplates ? "" : `(${templates.length})`}
+          </Button>
+
+          {showTemplates && (
           <div className="flex items-center gap-2">
-            <FileText size={11} className="text-muted-foreground/70" />
             <select
               value={selectedTplId}
               onChange={(e) => applyTemplate(e.target.value)}
               className="flex-1 h-7 text-[11px] rounded-md bg-background border border-input px-2"
               title="Vorlage einfügen — Platzhalter werden unten ausfüllbar"
             >
-              <option value="">— Vorlage einfügen —</option>
+              <option value="">— Vorlage wählen —</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.tag ? `[${t.tag}] ` : ""}
@@ -337,8 +421,9 @@ export function TaskComposer({
               </Button>
             )}
           </div>
+          )}
 
-          {placeholders.length > 0 && (
+          {showTemplates && placeholders.length > 0 && (
             <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-2 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
@@ -389,13 +474,19 @@ export function TaskComposer({
       />
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* KI-Entwurf jetzt PRIMARY — generiert kontext-spezifischen Vorschlag
+         *  basierend auf Email-Inhalt (Mail-Mode) oder Hero-Notification (Hero-Mode). */}
         <Button
           size="sm"
-          variant="outline"
+          variant="default"
           className="h-8 gap-1.5"
           onClick={generateAiDraft}
           disabled={busy !== null}
-          title="Claude Haiku schreibt einen Antwort-Entwurf basierend auf dem Task-Inhalt"
+          title={
+            source === "hero"
+              ? "Claude schreibt einen kurzen internen Logbuch-Eintrag basierend auf dem Hero-Inhalt"
+              : "Claude schreibt eine Antwort-Mail basierend auf dem Email-Inhalt"
+          }
         >
           {busy === "ai" ? (
             <>
@@ -403,17 +494,20 @@ export function TaskComposer({
             </>
           ) : (
             <>
-              <Sparkles size={12} /> KI-Entwurf
+              <Sparkles size={12} />
+              {source === "hero" ? "KI-Eintrag" : "KI-Antwort"}
             </>
           )}
         </Button>
+
+        {/* Sekundaer: Notiz in App speichern */}
         <Button
           size="sm"
           variant="outline"
           className="h-8 gap-1.5"
           onClick={saveNote}
           disabled={busy !== null || text.trim().length === 0}
-          title="Als interne Notiz speichern (kein Mail-Versand)"
+          title="Als interne App-Notiz speichern"
         >
           {busy === "note" ? (
             <>
@@ -421,32 +515,79 @@ export function TaskComposer({
             </>
           ) : (
             <>
-              <Save size={12} /> Notiz speichern
+              <Save size={12} /> Notiz
             </>
           )}
         </Button>
-        <Button
-          size="sm"
-          variant="default"
-          className="h-8 gap-1.5 ml-auto"
-          onClick={sendViaOutlook}
-          disabled={busy !== null || !mailto || text.trim().length === 0}
-          title={
-            !mailto
-              ? "Kein Absender — kein Outlook-Reply möglich"
-              : "Öffnet Outlook mit dem Text als Antwort"
-          }
-        >
-          {busy === "mail" ? (
-            <>
-              <Loader2 size={12} className="animate-spin" /> Öffnet…
-            </>
-          ) : (
-            <>
-              <Mail size={12} /> Per Outlook antworten
-            </>
+
+        {/* Versand-Block (kontext-abhaengig) — rechts ausgerichtet */}
+        <div className="flex items-center gap-2 ml-auto flex-wrap">
+          {/* In Zwischenablage — funktioniert immer, auch fuer Hero */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={copyToClipboard}
+            disabled={busy !== null || text.trim().length === 0}
+            title="Text in Zwischenablage kopieren — danach in Hero/Outlook/wo auch immer einfügen"
+          >
+            {busy === "clip" ? (
+              <>
+                <ClipboardCheck size={12} /> Kopiert
+              </>
+            ) : (
+              <>
+                <Clipboard size={12} /> In Zwischenablage
+              </>
+            )}
+          </Button>
+
+          {source === "hero" && heroProjectHref && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() => {
+                // Optional: vorher in Zwischenablage kopieren damit der User
+                // sofort einfuegen kann.
+                if (text.trim().length > 0) {
+                  void copyToClipboard();
+                }
+                window.open(heroProjectHref, "_blank", "noopener,noreferrer");
+              }}
+              disabled={busy !== null}
+              title="Hero-Projekt in neuem Tab öffnen — Text ist in Zwischenablage, dort einfügen"
+            >
+              <ExternalLink size={12} /> In Hero öffnen
+            </Button>
           )}
-        </Button>
+
+          {source === "mail" && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8 gap-1.5"
+              onClick={sendViaOutlook}
+              disabled={busy !== null || !mailto || text.trim().length === 0}
+              title={
+                !mailto
+                  ? "Kein Absender — kein Outlook-Reply möglich"
+                  : "Öffnet Outlook mit dem Text als Antwort"
+              }
+            >
+              {busy === "mail" ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> Öffnet…
+                </>
+              ) : (
+                <>
+                  <Mail size={12} /> Per Outlook antworten
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+
         {text.length > 0 && busy === null && (
           <Button
             size="sm"
