@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { createAnthropicClient } from "@/lib/anthropic/client";
 
 export type EmailCategory = "info" | "aufgabe" | "dringend";
 
@@ -41,12 +41,7 @@ export async function classifyEmail(params: {
   subject: string;
   body: string;
 }): Promise<ClassificationResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY ist nicht gesetzt.");
-  }
-
-  const client = new Anthropic({ apiKey });
+  const client = createAnthropicClient();
 
   const userPrompt = USER_PROMPT_TEMPLATE.replace("{sender_name}", params.senderName)
     .replace("{sender_email}", params.senderEmail)
