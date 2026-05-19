@@ -7,6 +7,27 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
+/**
+ * Altdaten-Cutoff fuer Hero-Notifications (Item 7.1 + 7.2).
+ * Notifications aelter als HERO_NOTIFICATIONS_MAX_AGE_DAYS Tage werden
+ * komplett ignoriert — das raeumt den Aufgaben-/Infos-Tab von April-2025-
+ * Altlasten und alten Checklisten-Pings auf.
+ *
+ * Override per ENV-Var moeglich (HERO_NOTIFICATIONS_MAX_AGE_DAYS=14).
+ * Hartes Floor "8 Tage" weil drunter alles relevant ist.
+ */
+const HERO_NOTIFICATIONS_MAX_AGE_DAYS = (() => {
+  const env = process.env.HERO_NOTIFICATIONS_MAX_AGE_DAYS;
+  const parsed = env ? parseInt(env, 10) : NaN;
+  return Number.isFinite(parsed) && parsed >= 8 ? parsed : 30;
+})();
+
+function heroAgeCutoffIso(): string {
+  return new Date(
+    Date.now() - HERO_NOTIFICATIONS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+}
+
 export interface HeroCommentItem {
   id: string;
   title: string | null;
@@ -57,6 +78,8 @@ export async function loadHeroComments(
     .from("hero_notifications")
     .select("id, title, body, is_read, category, notification_date, target_id")
     .eq("is_deleted", false)
+    // Altdaten-Cutoff (Item 7.1+7.2): keine Notifications aelter als N Tage
+    .gte("notification_date", heroAgeCutoffIso())
     .order("notification_date", { ascending: false, nullsFirst: false })
     .limit(limit);
 
@@ -143,6 +166,8 @@ export async function countHeroCommentsBoth(): Promise<{
     .from("hero_notifications")
     .select("id, title, body, is_read")
     .eq("is_deleted", false)
+    // Altdaten-Cutoff (Item 7.1+7.2): keine Notifications aelter als N Tage
+    .gte("notification_date", heroAgeCutoffIso())
     .order("notification_date", { ascending: false, nullsFirst: false })
     .limit(limit);
 
