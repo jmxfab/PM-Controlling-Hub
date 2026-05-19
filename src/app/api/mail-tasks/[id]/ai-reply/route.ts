@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createAnthropicClient, hasAnthropicCreds } from "@/lib/anthropic/client";
+import {
+  callClaudeMessage,
+  hasAnthropicCreds,
+  activeAnthropicRoute,
+} from "@/lib/anthropic/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -123,15 +127,11 @@ export async function POST(
       : buildEmailReplyPrompt(task, hint, tone);
 
   try {
-    const client = createAnthropicClient();
-    const msg = await client.messages.create({
+    const draft = await callClaudeMessage({
+      prompt,
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
-      messages: [{ role: "user", content: prompt }],
+      maxTokens: 600,
     });
-    const textBlock = msg.content.find((c) => c.type === "text");
-    const draft =
-      textBlock && textBlock.type === "text" ? textBlock.text.trim() : "";
     if (!draft) {
       return NextResponse.json(
         { error: "Leerer Entwurf zurueckgekommen" },
@@ -146,7 +146,7 @@ export async function POST(
     } catch {
       // silent — Draft ist primary, History ist nice-to-have
     }
-    return NextResponse.json({ draft });
+    return NextResponse.json({ draft, route: activeAnthropicRoute() });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json(

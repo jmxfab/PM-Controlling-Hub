@@ -336,7 +336,60 @@ Aus den 3 Docs konsolidiert:
 
 ---
 
-## 10) Referenz-Links
+## 10) Anthropic-Auth — Multi-Routing
+
+Der Controlling-Hub ruft Claude über `callClaudeMessage()` in `src/lib/anthropic/client.ts`. Die Funktion routet automatisch:
+
+| Priorität | Env-Var | Route | Vorteil |
+|---|---|---|---|
+| 1️⃣ | `N8N_AI_WEBHOOK_URL` | n8n-Proxy | Auth zentral in n8n, keine Keys im Vercel |
+| 2️⃣ | `ANTHROPIC_OAUTH_TOKEN` | OAuth-Bearer | Claude Pro/Max Subscription — kein API-Cost |
+| 3️⃣ | `ANTHROPIC_API_KEY` | Standard | Fallback |
+
+### Setup: Route 1 (empfohlen) — via n8n-Webhook
+
+Workflow ist **bereits angelegt**: `🤖 AI Claude Webhook (controlling-hub)` (ID `42pZSPkqQqUgqOy9`)
+
+1. In n8n den Workflow öffnen: https://n8n-eree.srv1603751.hstgr.cloud/workflow/42pZSPkqQqUgqOy9
+2. „Call Claude"-Node anklicken → Credential auf `Anthropic account` setzen
+3. Workflow auf **Active** togglen
+4. URL des Production-Webhooks kopieren (sieht aus wie `https://n8n-eree.srv1603751.hstgr.cloud/webhook/ai-claude`)
+5. In Vercel als Env-Var setzen:
+   ```
+   N8N_AI_WEBHOOK_URL = https://n8n-eree.srv1603751.hstgr.cloud/webhook/ai-claude
+   N8N_AI_WEBHOOK_SECRET = <generiere einen langen Zufalls-String>   # optional
+   ```
+6. In n8n-Settings → Environment Variables `AI_WEBHOOK_SECRET` auf den gleichen Wert setzen (falls genutzt)
+7. Vercel-Redeploy
+
+**Effekt:** Jeder Claude-Call (KI-Entwurf, E-Mail-Klassifikation) geht über n8n, nutzt dort die existierende Anthropic-Credential.
+
+### Setup: Route 2 — OAuth-Token
+
+Wenn du eine Claude Pro/Max Subscription nutzt, kannst du den OAuth-Token von `claude setup-token` (lokal) verwenden:
+
+1. Lokal: `claude setup-token` ausführen, kopiert Token in Zwischenablage
+2. In Vercel: `ANTHROPIC_OAUTH_TOKEN = sk-ant-oat...`
+3. `N8N_AI_WEBHOOK_URL` **NICHT** setzen (sonst gewinnt n8n)
+
+Der Code setzt automatisch die „Claude Code"-Identität im System-Prompt, sonst rejected Anthropic OAuth-Tokens.
+
+### Setup: Route 3 — API-Key (Fallback)
+
+Standard `ANTHROPIC_API_KEY = sk-ant-api...` — wird genutzt wenn weder N8N noch OAuth gesetzt ist.
+
+### Debug
+
+Die `/api/mail-tasks/[id]/ai-reply` Route gibt im Response-Body ein `route` Feld zurück:
+```json
+{ "draft": "...", "route": "n8n" }
+```
+
+Werte: `n8n` / `oauth` / `api_key` / `none`.
+
+---
+
+## 11) Referenz-Links
 
 - Full Schema: `docs/hero-api-schema.md` (3052 Zeilen, alle Types + Fields)
 - Live-Schema-JSON: `~/OneDrive/.../Schobro Dash/hero-api-schema.json` (für Code-Gen)
