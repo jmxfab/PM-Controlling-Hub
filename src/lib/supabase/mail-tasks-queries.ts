@@ -167,6 +167,8 @@ export interface MailTaskFilters {
   search?: string;
   status?: "all" | "open" | "done";
   priority?: "all" | "urgent" | "high" | "medium" | "low";
+  /** Altersfilter: Tasks juenger als N Tage. 'all' = ohne Limit. Default 30. */
+  age?: "30" | "90" | "all";
 }
 
 export async function loadMailTasksPage(
@@ -209,6 +211,17 @@ export async function loadMailTasksPage(
   if (filters.priority && filters.priority !== "all") query = query.eq("priority", filters.priority);
   if (filters.search) {
     query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+  }
+  // Altersfilter (Default 30 Tage, kann auf 90 oder 'alle' umgestellt werden).
+  // Wirkt NICHT in Mein Tag (da entscheidet der User explizit).
+  if (filter !== "my_day") {
+    const ageMode = filters.age ?? "30";
+    if (ageMode === "30" || ageMode === "90") {
+      const cutoff = new Date(
+        Date.now() - parseInt(ageMode, 10) * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      query = query.gte("created_at", cutoff);
+    }
   }
 
   const { data, count, error } = await query.range(offset, offset + pageSize - 1);
