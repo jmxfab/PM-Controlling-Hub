@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bell, BellOff, Check, Loader2, UserCheck, UserX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 
 interface DelegateRemindFormProps {
   taskId: string;
@@ -143,11 +144,11 @@ export function DelegateRemindForm({
           <label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Bell size={10} /> Erinnern am
           </label>
-          <Input
-            type="datetime-local"
+          <DateTimePicker
             value={remindAt}
-            onChange={(e) => setRemindAt(e.target.value)}
-            className="h-8 text-sm"
+            onChange={setRemindAt}
+            placeholder="z. B. morgen 9:00"
+            className="w-full"
           />
         </div>
       </div>
