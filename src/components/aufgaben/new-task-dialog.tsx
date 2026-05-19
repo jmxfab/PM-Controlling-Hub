@@ -58,7 +58,6 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
     description: "",
     mail_category: "aufgabe" as string,
     priority: "medium" as string,
-    due_date: "",
     assigned_to: "",
     remind_at: "",
   });
@@ -69,7 +68,6 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
       description: "",
       mail_category: "aufgabe",
       priority: "medium",
-      due_date: "",
       assigned_to: "",
       remind_at: "",
     });
@@ -90,7 +88,6 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
         mail_category: form.mail_category,
         priority: form.priority,
       };
-      if (form.due_date) payload.due_date = new Date(form.due_date).toISOString();
       if (form.assigned_to.trim()) payload.assigned_to = form.assigned_to.trim();
       if (form.remind_at) payload.remind_at = new Date(form.remind_at).toISOString();
 
@@ -273,18 +270,6 @@ export function NewTaskDialog({ onCreated }: NewTaskDialogProps) {
                 placeholder="z. B. morgen 9:00"
               />
             </div>
-          </div>
-
-          {/* Fälligkeit */}
-          <div className="space-y-1.5">
-            <Label htmlFor="task-due" className="text-xs font-medium">
-              Fälligkeitsdatum
-            </Label>
-            <DateTimePicker
-              value={form.due_date}
-              onChange={(v) => setForm((f) => ({ ...f, due_date: v }))}
-              placeholder="Fälligkeitsdatum"
-            />
           </div>
 
           {error && (
