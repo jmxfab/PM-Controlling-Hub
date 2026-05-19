@@ -2896,8 +2896,8 @@ function MyDaySuggestionsPanel({
   }
 
   return (
-    <aside className="rounded-2xl border bg-card/60 p-3 space-y-2 sticky top-4">
-      <div className="flex items-center justify-between gap-2 px-1">
+    <aside className="rounded-2xl border bg-card/60 p-3 space-y-2 sticky top-4 max-h-[calc(100vh-120px)] flex flex-col">
+      <div className="flex items-center justify-between gap-2 px-1 shrink-0">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Vorschläge
         </div>
@@ -2905,7 +2905,7 @@ function MyDaySuggestionsPanel({
           {visible.length} {visible.length === 1 ? "Vorschlag" : "Vorschläge"}
         </div>
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 -mr-1">
         {visible.map((s) => {
           const isBusy = busyTaskId === s.id;
           return (

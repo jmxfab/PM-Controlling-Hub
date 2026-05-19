@@ -101,7 +101,12 @@ function scoreTask(t: TaskRow, now: Date): { score: number; reason: string } {
   else if (ageDays > 14) score -= 10;
   else if (ageDays > 21) score -= 25;
 
-  if (!reason) reason = "Neu eingegangen";
+  if (!reason) {
+    // Wenn keine spezielle Begruendung greift, je nach Score-Niveau labeln.
+    if (score >= 15) reason = "Neu eingegangen";
+    else if (score >= 5) reason = "Offen";
+    else reason = "Backlog";
+  }
 
   return { score, reason };
 }
@@ -121,12 +126,11 @@ export async function GET() {
   try {
     const supabase = supabaseAdmin();
     const now = new Date();
-    const fortyDaysAgo = new Date(
-      now.getTime() - 40 * 24 * 60 * 60 * 1000,
-    ).toISOString();
     const nowIso = now.toISOString();
 
-    // Ueberholendes Limit (24) — wir scoren clientseitig + behalten Top 8.
+    // ALLE offenen Tasks die nicht in Mein Tag sind. Keine Altersgrenze
+    // (User-Wunsch: 'die ganze liste rein'). Snoozes (remind_at > jetzt)
+    // bleiben ausgeschlossen, sonst landet alles drin was eh versteckt sein soll.
     const { data, error } = await supabase
       .from("tasks")
       .select(
@@ -136,24 +140,23 @@ export async function GET() {
       .neq("status", "done")
       .neq("status", "cancelled")
       .is("in_my_day_at", null)
-      .gte("created_at", fortyDaysAgo)
-      // remind_at: entweder NULL oder bereits vorbei (= nicht mehr snoozed).
       .or(`remind_at.is.null,remind_at.lte.${nowIso}`)
-      .limit(50);
+      .limit(500);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const rows = (data ?? []) as TaskRow[];
+    // KEIN score>0 Filter mehr — wir wollen die ganze Liste. Sortieren
+    // bleibt nach Relevanz (Wichtig/Faellig/Prio oben), Cap auf 30.
     const scored = rows
       .map((t) => ({
         task: t,
         ...scoreTask(t, now),
       }))
-      .filter((x) => x.score > 0) // negative Scores raus (z.B. info + alt)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 8);
+      .slice(0, 30);
 
     return NextResponse.json({
       suggestions: scored.map((x) => ({
