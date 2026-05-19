@@ -23,19 +23,22 @@ type TaskRow = {
   remind_at: string | null;
 };
 
+// Prio ist jetzt das DOMINANTE Sortierkriterium (User-Wunsch).
+// Spread zwischen den Stufen ist gross genug, dass urgent IMMER ueber high
+// rangiert, egal wie alt oder wie unwichtig sonst noch.
 const PRIO_WEIGHT: Record<string, number> = {
-  urgent: 50,
-  high: 35,
-  medium: 15,
-  low: 5,
+  urgent: 400,
+  high: 250,
+  medium: 100,
+  low: 20,
 };
 
 const CATEGORY_WEIGHT: Record<string, number> = {
-  kritisch: 30, // ist eigentlich woanders, aber wenn nicht-snoozed schon relevant
-  dringend: 25,
-  aufgabe: 15,
-  rechnung: 12,
-  bestellung: 10,
+  kritisch: 50,
+  dringend: 40,
+  aufgabe: 20,
+  rechnung: 15,
+  bestellung: 12,
   inbox: 5,
   info: -10, // explizit abwerten — Info ist meist FYI
 };
@@ -50,42 +53,43 @@ function scoreTask(t: TaskRow, now: Date): { score: number; reason: string } {
   let score = 0;
   let reason = "";
 
-  // 1) Faelligkeit — staerkster Boost. Heute > morgen > diese Woche.
+  // 1) Priorität dominiert (User-Wunsch). urgent +400 > high +250 > medium +100 > low +20.
+  if (t.priority && PRIO_WEIGHT[t.priority] !== undefined) {
+    score += PRIO_WEIGHT[t.priority];
+    if (t.priority === "urgent") reason = "Dringend";
+    else if (t.priority === "high") reason = "Hohe Priorität";
+    else if (t.priority === "medium") reason = "Mittel";
+    else if (t.priority === "low") reason = "Niedrig";
+  }
+
+  // 2) Faelligkeit als Sekundaer-Signal (kleinere Werte, weil Prio dominiert).
   if (t.due_date) {
     const due = new Date(t.due_date);
     if (!Number.isNaN(due.getTime())) {
       const days = daysBetween(due, now);
       if (days < 0) {
-        score += 80;
+        score += 50;
         reason = `Überfällig (${Math.abs(days)} Tag${Math.abs(days) === 1 ? "" : "e"})`;
       } else if (days === 0) {
-        score += 70;
+        score += 40;
         reason = "Fällig heute";
       } else if (days === 1) {
-        score += 55;
+        score += 30;
         reason = "Fällig morgen";
       } else if (days <= 3) {
-        score += 35;
-        reason = `Fällig in ${days} Tagen`;
+        score += 20;
+        // Nur ueberschreiben wenn Prio nicht gesetzt
+        if (!t.priority) reason = `Fällig in ${days} Tagen`;
       } else if (days <= 7) {
-        score += 15;
-        reason = "Diese Woche fällig";
+        score += 10;
       }
     }
   }
 
-  // 2) Wichtig-Star — manueller Boost vom User.
+  // 3) Wichtig-Star — manueller Boost (Tiebreaker innerhalb gleicher Prio).
   if (t.is_important) {
-    score += 40;
-    if (!reason) reason = "Wichtig markiert";
-  }
-
-  // 3) Priorität.
-  if (t.priority && PRIO_WEIGHT[t.priority] !== undefined) {
-    score += PRIO_WEIGHT[t.priority];
-    if (!reason && (t.priority === "urgent" || t.priority === "high")) {
-      reason = t.priority === "urgent" ? "Dringend" : "Hohe Priorität";
-    }
+    score += 35;
+    if (!t.priority) reason = "Wichtig markiert";
   }
 
   // 4) Kategorie.
@@ -141,7 +145,7 @@ export async function GET() {
       .neq("status", "cancelled")
       .is("in_my_day_at", null)
       .or(`remind_at.is.null,remind_at.lte.${nowIso}`)
-      .limit(500);
+      .limit(1000);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -156,7 +160,7 @@ export async function GET() {
         ...scoreTask(t, now),
       }))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 30);
+      .slice(0, 100);
 
     return NextResponse.json({
       suggestions: scored.map((x) => ({

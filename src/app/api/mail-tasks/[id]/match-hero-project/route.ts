@@ -71,10 +71,15 @@ async function searchCandidates(
   // ILIKE pro Term gegen customer_name + project_name. PG OR-Liste.
   const orClauses = terms
     .map((t) => {
-      const esc = t.replace(/[%_]/g, "");
+      // Mehr Sonderzeichen weg: Komma/Klammern wuerden die OR-Liste brechen,
+      // %_ sind LIKE-Wildcards aus User-Input.
+      const esc = t.replace(/[,()*%_\\]/g, " ").trim();
+      if (!esc) return null;
       return `customer_name.ilike.%${esc}%,project_name.ilike.%${esc}%`;
     })
+    .filter((c): c is string => c !== null)
     .join(",");
+  if (orClauses.length === 0) return [];
   const { data } = await supabase
     .from("hero_dashboard_projects")
     .select("id, project_number, project_name, customer_name")

@@ -79,8 +79,11 @@ export async function loadLogbuchPage(
     .order("entry_date", { ascending: false, nullsFirst: false })
     .range(offset, offset + pageSize - 1);
 
-  if (filters.userEmail)
-    query = query.ilike("user_email", `%${filters.userEmail}%`);
+  if (filters.userEmail) {
+    // LIKE-Wildcards aus User-Input strippen
+    const safe = filters.userEmail.replace(/[%_\\]/g, " ").trim();
+    if (safe.length > 0) query = query.ilike("user_email", `%${safe}%`);
+  }
   if (filters.projectId)
     query = query.eq("project_match_id", filters.projectId);
   if (filters.eventType) query = query.eq("event_type", filters.eventType);
