@@ -75,6 +75,7 @@ const PAGE_SIZE = 500;
 
 type StatusFilter = "all" | "open" | "done";
 type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
+type AgeFilter = "30" | "90" | "all";
 
 interface Props {
   heizlastProjects: HeizlastProject[];
@@ -762,6 +763,9 @@ function MailTab({
     tabFilters.defaultStatus,
   );
   const [prioFilter, setPrioFilter] = useState<PrioFilter>("all");
+  // Altersfilter (Default 30 Tage) — sorgt dafuer dass alte Karteileichen
+  // standardmaessig nicht stoeren. User kann auf 90 oder 'Alle' umschalten.
+  const [ageFilter, setAgeFilter] = useState<AgeFilter>("30");
   const [data, setData] = useState<MailTasksPage>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -813,8 +817,14 @@ function MailTab({
   }, [data.entries, showSnoozed, statusFilter, filter]);
 
   const fetchData = useCallback(
-    async (q: string, p: number, st: StatusFilter, pr: PrioFilter) => {
-      const key = cacheKey(filter, q, st, pr);
+    async (
+      q: string,
+      p: number,
+      st: StatusFilter,
+      pr: PrioFilter,
+      ag: AgeFilter = "30",
+    ) => {
+      const key = cacheKey(filter, q, st, pr) + `|age=${ag}`;
       const cached = RESPONSE_CACHE.get(key);
       const now = Date.now();
 
@@ -848,6 +858,7 @@ function MailTab({
         if (q) params.set("search", q);
         if (st !== "all") params.set("status", st);
         if (pr !== "all") params.set("priority", pr);
+        if (ag !== "30") params.set("age", ag); // 30 = default, weglassen
         const res = await window.fetch(`/api/mail-tasks?${params}`);
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
@@ -880,19 +891,19 @@ function MailTab({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      fetchData(search, 0, statusFilter, prioFilter);
+      fetchData(search, 0, statusFilter, prioFilter, ageFilter);
     }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [search, statusFilter, prioFilter, fetchData]);
+  }, [search, statusFilter, prioFilter, ageFilter, fetchData]);
 
   // Realtime: wenn die Aufgaben-Tabelle veraendert wurde (n8n hat klassifiziert,
   // andere User haben was geandert) -> Cache invalidieren + sofort refetchen.
   const realtimeRefetch = useCallback(() => {
     invalidateCacheForFilter(filter);
-    fetchData(search, 0, statusFilter, prioFilter);
-  }, [filter, search, statusFilter, prioFilter, fetchData]);
+    fetchData(search, 0, statusFilter, prioFilter, ageFilter);
+  }, [filter, search, statusFilter, prioFilter, ageFilter, fetchData]);
 
   useTaskRealtime({ onChange: realtimeRefetch });
 
@@ -995,7 +1006,7 @@ function MailTab({
       // damit die neu hinzugefuegte Task im Mein-Tag-Tab sofort erscheint
       // (oder die entfernte sofort verschwindet) — ohne 400ms Realtime-Lag.
       if (update.in_my_day !== undefined) {
-        fetchData(search, 0, statusFilter, prioFilter);
+        fetchData(search, 0, statusFilter, prioFilter, ageFilter);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Netzwerk-Fehler");
@@ -1308,6 +1319,18 @@ function MailTab({
 
   return (
     <div className="space-y-4">
+      {/* Bulk-Done-Banner fuer Infos: User kann mit 1 Klick alle alten Infos
+          archivieren. Wird nur im Infos-Tab gezeigt und nur wenn 'Alle'-
+          Altersfilter aktiv ist (= User sieht aktuell die alten Karteileichen). */}
+      {filter === "infos" && (
+        <BulkCleanupBanner
+          categories={["info"]}
+          onCleaned={() => {
+            invalidateCacheForFilter(filter);
+            fetchData(search, 0, statusFilter, prioFilter, ageFilter);
+          }}
+        />
+      )}
       <FilterBar
         search={search}
         setSearch={setSearch}
@@ -1315,7 +1338,9 @@ function MailTab({
         setStatusFilter={setStatusFilter}
         prioFilter={prioFilter}
         setPrioFilter={setPrioFilter}
-        hasFilters={!!hasFilters}
+        ageFilter={ageFilter}
+        setAgeFilter={setAgeFilter}
+        hasFilters={!!hasFilters || ageFilter !== "30"}
         defaultStatus={tabFilters.defaultStatus}
         loading={loading}
         showStatus={tabFilters.status}
@@ -1539,6 +1564,8 @@ function FilterBar({
   setStatusFilter,
   prioFilter,
   setPrioFilter,
+  ageFilter,
+  setAgeFilter,
   hasFilters,
   defaultStatus,
   loading,
@@ -1552,6 +1579,8 @@ function FilterBar({
   setStatusFilter: (v: StatusFilter) => void;
   prioFilter: PrioFilter;
   setPrioFilter: (v: PrioFilter) => void;
+  ageFilter: AgeFilter;
+  setAgeFilter: (v: AgeFilter) => void;
   hasFilters: boolean;
   defaultStatus: StatusFilter;
   loading: boolean;
@@ -1616,6 +1645,24 @@ function FilterBar({
         </>
       )}
 
+      {/* Altersfilter — Default 30 Tage versteckt alte Karteileichen.
+          User kann auf 90 oder Alle umschalten wenn er was Altes sucht. */}
+      {tab !== "my_day" && (
+        <>
+          <div className="h-5 w-px bg-border" />
+          <PillGroup
+            label="Alter"
+            value={ageFilter}
+            options={[
+              { value: "30", label: "30 Tage" },
+              { value: "90", label: "90 Tage" },
+              { value: "all", label: "Alle" },
+            ]}
+            onChange={(v) => setAgeFilter(v as AgeFilter)}
+          />
+        </>
+      )}
+
       {hasFilters && (
         <Button
           variant="ghost"
@@ -1625,6 +1672,7 @@ function FilterBar({
             setSearch("");
             setStatusFilter(defaultStatus);
             setPrioFilter("all");
+            setAgeFilter("30");
           }}
         >
           <X size={13} /> Reset
@@ -2593,6 +2641,112 @@ function PrioPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------- Bulk-Cleanup-Banner ---------------- */
+/**
+ * Zeigt im Infos-Tab oben einen Banner mit Count alter Infos und
+ * Bulk-Done-Button. Funktioniert in 2 Stufen:
+ *   1. Mount -> dry-run POST -> Count laden (kein DB-Write)
+ *   2. User klickt -> echter POST -> alle archivieren
+ */
+function BulkCleanupBanner({
+  categories,
+  onCleaned,
+}: {
+  categories: string[];
+  onCleaned: () => void;
+}) {
+  const [count, setCount] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const OLDER_THAN_DAYS = 30;
+
+  // Dry-Run beim Mount um Count zu holen
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/mail-tasks/bulk-done-old", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        categories,
+        olderThanDays: OLDER_THAN_DAYS,
+        dryRun: true,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : { affected: 0 }))
+      .then((d) => {
+        if (!cancelled)
+          setCount(typeof d.affected === "number" ? d.affected : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [categories]);
+
+  async function execute() {
+    if (busy || !count) return;
+    if (
+      !window.confirm(
+        `${count} Info-Aufgaben aelter als ${OLDER_THAN_DAYS} Tage werden auf 'erledigt' gesetzt. Fortfahren?`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/mail-tasks/bulk-done-old", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categories,
+          olderThanDays: OLDER_THAN_DAYS,
+          dryRun: false,
+        }),
+      });
+      if (res.ok) {
+        setCount(0);
+        setHidden(true);
+        onCleaned();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (hidden || count === null || count === 0) return null;
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/40 px-3 py-2">
+      <div className="flex-1 text-[12.5px]">
+        <span className="font-medium">{count}</span>{" "}
+        <span className="text-muted-foreground">
+          alte Info{count === 1 ? "" : "s"} (&gt;{OLDER_THAN_DAYS} Tage)
+          aufraeumen?
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 gap-1.5 text-[12px]"
+        onClick={execute}
+        disabled={busy}
+      >
+        {busy ? "läuft…" : `Erledigt setzen`}
+      </Button>
+      <button
+        type="button"
+        onClick={() => setHidden(true)}
+        className="text-muted-foreground hover:text-foreground p-1"
+        title="Banner ausblenden"
+        aria-label="Banner ausblenden"
+      >
+        <X size={14} />
+      </button>
+    </div>
   );
 }
 

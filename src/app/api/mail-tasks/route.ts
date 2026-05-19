@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") ?? undefined,
       status: (searchParams.get("status") as MailTaskFilters["status"]) ?? undefined,
       priority: (searchParams.get("priority") as MailTaskFilters["priority"]) ?? undefined,
+      age: (searchParams.get("age") as MailTaskFilters["age"]) ?? undefined,
     };
     const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
     const pageSize = Math.min(1000, Math.max(1, parseInt(searchParams.get("page_size") ?? "50", 10)));
