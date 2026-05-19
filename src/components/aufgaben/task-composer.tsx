@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
+  FileText,
   Loader2,
   Mail,
   Pen,
@@ -12,6 +13,41 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+
+interface TemplateOpt {
+  id: string;
+  name: string;
+  description: string | null;
+  subject: string | null;
+  body: string;
+  tag: string | null;
+}
+
+/** Extrahiert {{var}}-Platzhalter aus dem Text — unique, in Reihenfolge. */
+function extractPlaceholders(text: string): string[] {
+  const re = /\{\{\s*([a-zA-Z0-9_äöüÄÖÜß]+)\s*\}\}/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const name = m[1];
+    if (!seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/** Ersetzt {{var}} durch die Werte aus dem record. Unbekannte bleiben stehen
+ *  damit der User sieht was noch nicht ausgefuellt ist. */
+function substitute(text: string, values: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-zA-Z0-9_äöüÄÖÜß]+)\s*\}\}/g, (_full, name) => {
+    const v = values[name];
+    return v && v.length > 0 ? v : `{{${name}}}`;
+  });
+}
 
 interface Props {
   taskId: string;
@@ -45,6 +81,76 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
   const [busy, setBusy] = useState<"ai" | "note" | "mail" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // Templates + Variable-State
+  const [templates, setTemplates] = useState<TemplateOpt[]>([]);
+  const [selectedTplId, setSelectedTplId] = useState<string>("");
+  const [tplVars, setTplVars] = useState<Record<string, string>>({});
+  const [tplRawBody, setTplRawBody] = useState<string>("");
+
+  // Templates beim Mount lazy laden — leichtgewichtig, gecached
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/email-templates")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled && Array.isArray(j?.templates)) {
+          setTemplates(j.templates as TemplateOpt[]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const placeholders = useMemo(
+    () => (tplRawBody ? extractPlaceholders(tplRawBody) : []),
+    [tplRawBody],
+  );
+
+  function applyTemplate(tplId: string) {
+    setSelectedTplId(tplId);
+    setError(null);
+    if (!tplId) {
+      setTplRawBody("");
+      setTplVars({});
+      return;
+    }
+    const tpl = templates.find((t) => t.id === tplId);
+    if (!tpl) return;
+    setTplRawBody(tpl.body);
+    // Auto-fill: datum + uhrzeit als Defaults wenn drin
+    const now = new Date();
+    const defaults: Record<string, string> = {
+      datum: now.toLocaleDateString("de-AT", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }),
+      uhrzeit: now.toLocaleTimeString("de-AT", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+    const ph = extractPlaceholders(tpl.body);
+    const init: Record<string, string> = {};
+    for (const name of ph) {
+      init[name] = defaults[name.toLowerCase()] ?? "";
+    }
+    setTplVars(init);
+    // Initialen Substitutions-Text in die Textarea schreiben
+    setText(substitute(tpl.body, init));
+  }
+
+  // Wenn der User in den Variablen tippt -> Text live re-rendern (aber NUR
+  // wenn er nicht selbst manuell den Text editiert hat). Heuristik:
+  // wir setzen text immer neu wenn placeholders > 0 und kein manueller Override.
+  // Einfacher: ein "Übernehmen"-Button — kein Auto-Re-Render damit der User
+  // nicht plötzlich seinen handgeschriebenen Text verliert.
+  function applyVariables() {
+    if (!tplRawBody) return;
+    setText(substitute(tplRawBody, tplVars));
+  }
 
   function flashOk(msg: string) {
     setFlash(msg);
@@ -183,6 +289,79 @@ export function TaskComposer({ taskId, mailto, onActionCompleted }: Props) {
           className="text-[12.5px] resize-none"
           maxLength={1000}
         />
+      )}
+
+      {/* Template-Picker (Item 2.2 + 2.3) */}
+      {templates.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <FileText size={11} className="text-muted-foreground/70" />
+            <select
+              value={selectedTplId}
+              onChange={(e) => applyTemplate(e.target.value)}
+              className="flex-1 h-7 text-[11px] rounded-md bg-background border border-input px-2"
+              title="Vorlage einfügen — Platzhalter werden unten ausfüllbar"
+            >
+              <option value="">— Vorlage einfügen —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.tag ? `[${t.tag}] ` : ""}
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {selectedTplId && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[10px] text-muted-foreground hover:text-rose-600"
+                onClick={() => applyTemplate("")}
+                title="Vorlage zurücksetzen"
+              >
+                ✕
+              </Button>
+            )}
+          </div>
+
+          {placeholders.length > 0 && (
+            <div className="rounded-md border border-dashed border-border/60 bg-muted/30 p-2 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+                  Platzhalter ({placeholders.length})
+                </p>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-6 text-[10px] px-2 gap-1"
+                  onClick={applyVariables}
+                  title="Variablen in den Text übernehmen"
+                >
+                  <Check size={11} /> Übernehmen
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {placeholders.map((name) => (
+                  <div key={name} className="flex flex-col gap-0.5">
+                    <label className="text-[9.5px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+                      {name}
+                    </label>
+                    <Input
+                      value={tplVars[name] ?? ""}
+                      onChange={(e) =>
+                        setTplVars((prev) => ({
+                          ...prev,
+                          [name]: e.target.value,
+                        }))
+                      }
+                      className="h-7 text-[12px]"
+                      placeholder={`{{${name}}}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       <Textarea
