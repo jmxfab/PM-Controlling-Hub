@@ -520,27 +520,38 @@ export function AufgabenView({
         <MailTab
           initial={defaultTab === "kritisch" ? initialAufgaben : { entries: [], total: 0 }}
           filter="kritisch"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
       <TabsContent value="aufgaben">
         <MailTab
           initial={defaultTab === "aufgaben" ? initialAufgaben : { entries: [], total: 0 }}
           filter="aufgaben"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
       <TabsContent value="infos">
         <MailTab
           initial={defaultTab === "infos" ? initialAufgaben : { entries: [], total: 0 }}
           filter="infos"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
       {counts.inbox > 0 && (
         <TabsContent value="inbox">
-          <MailTab initial={{ entries: [], total: 0 }} filter="inbox" />
+          <MailTab
+            initial={{ entries: [], total: 0 }}
+            filter="inbox"
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
         </TabsContent>
       )}
       <TabsContent value="rechnungen">
-        <MailTab initial={{ entries: [], total: 0 }} filter="rechnungen" />
+        <MailTab
+          initial={{ entries: [], total: 0 }}
+          filter="rechnungen"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
       </TabsContent>
       <TabsContent value="heizlast">
         <HeizlastView
@@ -626,9 +637,11 @@ function invalidateCacheForFilter(filter: MailTabFilter) {
 function MailTab({
   initial,
   filter,
+  heroProjectLinkTemplate,
 }: {
   initial: MailTasksPage;
   filter: MailTabFilter;
+  heroProjectLinkTemplate: string | null;
 }) {
   const meta = TAB_META[filter];
   const tabFilters = TAB_FILTERS[filter];
@@ -1034,6 +1047,7 @@ function MailTab({
           onSenderClick={setHistoryEmail}
           buildMailto={buildMailto}
           buildOutlookDesktopLink={buildOutlookDesktopLink}
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
           tab={filter}
         />
       )}
@@ -1097,6 +1111,7 @@ function MailTab({
                     onSenderClick={(email) => setHistoryEmail(email)}
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
+                    heroProjectLinkTemplate={heroProjectLinkTemplate}
                   />
                 ))}
               </div>
@@ -1328,6 +1343,7 @@ function TaskCard({
   onSenderClick,
   buildMailto,
   buildOutlookDesktopLink,
+  heroProjectLinkTemplate,
 }: {
   task: MailTask;
   tab: MailTabFilter;
@@ -1346,6 +1362,7 @@ function TaskCard({
   onSenderClick: (email: string) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
+  heroProjectLinkTemplate: string | null;
 }) {
   const t = task;
   const prio = t.priority ? PRIORITY_CONFIG[t.priority] : null;
@@ -1619,13 +1636,25 @@ function TaskCard({
                 onUpdated={onDelegationChange}
               />
             )}
-            {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern / Outlook-Reply.
-             *  Item 1.1 + 1.3 + 2.1 aus Feature-Roadmap. Nur fuer Mail-Tasks,
-             *  nicht Infos (lesen) und nicht Hero (read-only). */}
-            {t.source === "mail" && tab !== "infos" && (
+            {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern.
+             *  - Mail-Task: KI-Antwort + Outlook-Reply + Notiz + Zwischenablage
+             *  - Hero-Task: KI-Logbuch-Eintrag + In-Hero-Oeffnen + Notiz + Zwischenablage
+             *    (Direct-Send ins Hero-Logbuch ist Item 1.2, blocked auf Hero-API) */}
+            {tab !== "infos" && (
               <TaskComposer
                 taskId={t.id}
+                source={t.source}
                 mailto={mailto}
+                heroProjectHref={
+                  t.source === "hero" &&
+                  t.hero_project_id &&
+                  heroProjectLinkTemplate
+                    ? heroProjectLinkTemplate.replace(
+                        "{projectId}",
+                        t.hero_project_id,
+                      )
+                    : null
+                }
                 onActionCompleted={onMarkDone}
               />
             )}
@@ -2006,6 +2035,7 @@ function PrioPanel({
   onSenderClick,
   buildMailto,
   buildOutlookDesktopLink,
+  heroProjectLinkTemplate,
   tab,
 }: {
   tasks: MailTask[];
@@ -2024,6 +2054,7 @@ function PrioPanel({
   onSenderClick: (email: string) => void;
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
+  heroProjectLinkTemplate: string | null;
   tab: MailTabFilter;
 }) {
   return (
@@ -2058,6 +2089,7 @@ function PrioPanel({
             onSenderClick={onSenderClick}
             buildMailto={buildMailto}
             buildOutlookDesktopLink={buildOutlookDesktopLink}
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
           />
         ))}
       </div>
