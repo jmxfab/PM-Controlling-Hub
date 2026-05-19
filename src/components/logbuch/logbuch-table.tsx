@@ -310,14 +310,6 @@ function LogbuchEntryDetails({ entry }: { entry: LogbuchEntry }) {
         />
       </section>
 
-      <section className="space-y-1">
-        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Rohdaten (Hero)
-        </h4>
-        <pre className="max-h-[320px] overflow-auto rounded border bg-background p-3 text-xs leading-relaxed">
-          {JSON.stringify(raw, null, 2)}
-        </pre>
-      </section>
     </div>
   );
 }
