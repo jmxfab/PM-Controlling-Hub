@@ -43,6 +43,20 @@ import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
 import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-strip";
 import { TaskComposer } from "@/components/aufgaben/task-composer";
+import { SortableTaskCard } from "@/components/aufgaben/sortable-task-card";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
 
 /** Keine echte Pagination — alles auf einmal laden (bis 500),
  *  einfach scrollen statt Seiten blaettern. */
@@ -985,6 +999,45 @@ function MailTab({
     return patchTask(task.id, { in_my_day: !task.in_my_day_at });
   }
 
+  /** Re-Order callback fuer DnD im Mein-Tag-Tab.
+   *  Schritt 1: lokal sofort umsortieren (optimistic UI).
+   *  Schritt 2: Parallel-PATCH alle Tasks mit neuen sort_order Werten
+   *  (Inkremente von 100, damit spaeter Insert dazwischen leicht moeglich).
+   */
+  async function reorderMyDay(reorderedTasks: MailTask[]) {
+    // Lokal: setze sort_order auf (index+1)*100 und replace die Listen-Reihenfolge.
+    const updated = reorderedTasks.map((t, i) => ({
+      ...t,
+      sort_order: (i + 1) * 100,
+    }));
+    setData((prev) => {
+      const remaining = prev.entries.filter(
+        (e) => !updated.find((u) => u.id === e.id),
+      );
+      return {
+        ...prev,
+        entries: [...updated, ...remaining],
+      };
+    });
+    invalidateCacheForFilter("my_day");
+
+    // Server: parallel PATCH. Wir warten nicht im Render-Block (fire-and-forget),
+    // aber loggen Fehler.
+    await Promise.all(
+      updated.map((t) =>
+        window
+          .fetch(`/api/mail-tasks/${t.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sort_order: t.sort_order }),
+          })
+          .catch((e) => {
+            console.warn("reorder PATCH failed", t.id, e);
+          }),
+      ),
+    );
+  }
+
   function snoozeBy(task: MailTask, ms: number) {
     const target = new Date(Date.now() + ms).toISOString();
     // Setzt sowohl remind_at (damit der neue Snooze-Filter greift und die Karte
@@ -1132,7 +1185,37 @@ function MailTab({
               } warten auf ihre Erinnerung. Klick auf den Button unten um sie trotzdem zu sehen.`}
             />
           )}
-          {groupByDate(visibleEntries).map((group) => (
+          {/* Im Mein-Tag Tab: flache Liste mit DnD. In anderen Tabs: nach Datum gruppiert. */}
+          {filter === "my_day" ? (
+            <DndContextWrapper
+              tasks={visibleEntries}
+              onReorder={reorderMyDay}
+              renderCard={(t) => (
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  tab={filter}
+                  expanded={expanded === t.id}
+                  busy={busyTaskId === t.id}
+                  onToggle={() =>
+                    setExpanded((cur) => (cur === t.id ? null : t.id))
+                  }
+                  onMarkDone={() => markDone(t)}
+                  onMarkAsRead={() => markAsRead(t)}
+                  onMoveToAufgaben={() => moveToAufgaben(t)}
+                  onSnooze={(ms) => snoozeBy(t, ms)}
+                  onSubtasksChange={(next) => updateTaskSubtasks(t.id, next)}
+                  onDelegationChange={(next) => updateTaskDelegation(t.id, next)}
+                  onSenderClick={(email) => setHistoryEmail(email)}
+                  onToggleMyDay={() => toggleMyDay(t)}
+                  buildMailto={buildMailto}
+                  buildOutlookDesktopLink={buildOutlookDesktopLink}
+                  heroProjectLinkTemplate={heroProjectLinkTemplate}
+                />
+              )}
+            />
+          ) : (
+          groupByDate(visibleEntries).map((group) => (
             <section key={group.bucket} className="space-y-2">
               <div className="flex items-baseline gap-2 px-1">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1169,7 +1252,8 @@ function MailTab({
                 ))}
               </div>
             </section>
-          ))}
+          ))
+          )}
           {snoozedCount > 0 && (
             <div className="flex justify-center pt-1">
               <Button
@@ -2103,6 +2187,59 @@ function ErrorBox({
 }
 
 /* Pagination entfernt — alles in einem Stream */
+
+/* ---------------- DnD Wrapper ---------------- */
+/**
+ * Wrapper-Komponente fuer den Mein-Tag-Tab: macht die TaskCards via
+ * @dnd-kit drag-and-drop sortierbar. Drag-Handle ist ein dezentes
+ * Grip-Icon links neben jeder Karte — der Rest der Karte bleibt klickbar.
+ */
+function DndContextWrapper({
+  tasks,
+  onReorder,
+  renderCard,
+}: {
+  tasks: MailTask[];
+  onReorder: (reordered: MailTask[]) => void;
+  renderCard: (task: MailTask) => React.ReactNode;
+}) {
+  // PointerSensor mit 8px Mindest-Distanz damit normale Clicks/Taps
+  // NICHT als Drag interpretiert werden.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = tasks.findIndex((t) => t.id === active.id);
+    const newIndex = tasks.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(tasks, oldIndex, newIndex);
+    onReorder(reordered);
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={tasks.map((t) => t.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="space-y-2">
+          {tasks.map((t) => (
+            <SortableTaskCard key={t.id} id={t.id}>
+              {renderCard(t)}
+            </SortableTaskCard>
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
 
 /* ---------------- Prio-Panel ---------------- */
 /**
