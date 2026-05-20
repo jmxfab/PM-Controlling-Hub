@@ -13,9 +13,26 @@ export const maxDuration = 30;
  * Response: { transcript: string }
  */
 export async function POST(req: NextRequest) {
-  if (!process.env.OPENAI_API_KEY) {
+  // Provider-Auswahl: Aether (gunstig, OpenAI-compat) bevorzugt, OpenAI direkt
+  // als Fallback. Eines von beiden muss in Vercel gesetzt sein.
+  const aetherKey = process.env.AETHER_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const { baseUrl, apiKey, provider } = aetherKey
+    ? {
+        baseUrl: "https://api.aetherapi.dev/v1",
+        apiKey: aetherKey,
+        provider: "aether",
+      }
+    : openaiKey
+      ? {
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: openaiKey,
+          provider: "openai",
+        }
+      : { baseUrl: "", apiKey: "", provider: "" };
+  if (!apiKey) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY fehlt fuer Whisper" },
+      { error: "Weder AETHER_API_KEY noch OPENAI_API_KEY gesetzt" },
       { status: 503 },
     );
   }
@@ -33,12 +50,10 @@ export async function POST(req: NextRequest) {
     whisperForm.append("model", "whisper-1");
     whisperForm.append("language", "de");
     whisperForm.append("response_format", "json");
-    const res = await fetch(
-      "https://api.openai.com/v1/audio/transcriptions",
-      {
+    const res = await fetch(`${baseUrl}/audio/transcriptions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: whisperForm,
         signal: AbortSignal.timeout(25_000),
@@ -47,12 +62,12 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       return NextResponse.json(
-        { error: `Whisper-Fehler ${res.status}: ${body.slice(0, 200)}` },
+        { error: `Whisper-Fehler (${provider}) ${res.status}: ${body.slice(0, 200)}` },
         { status: 502 },
       );
     }
     const json = (await res.json()) as { text?: string };
-    return NextResponse.json({ transcript: (json.text ?? "").trim() });
+    return NextResponse.json({ transcript: (json.text ?? "").trim(), provider });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

@@ -45,7 +45,13 @@ interface RunChatResult {
   toolCalls: Array<{ name: string; input: unknown; result: string }>;
 }
 
-/** Erstellt einen Anthropic-Client passend zur konfigurierten Auth-Methode. */
+/** Erstellt einen Anthropic-Client passend zur konfigurierten Auth-Methode.
+ *
+ *  HINWEIS: Aether wird hier NICHT genutzt obwohl der Key vorhanden waere —
+ *  Aether exposed Claude nur ueber das OpenAI-Format (/v1/chat/completions),
+ *  unser Tool-Use-Loop braucht aber Anthropic's natives /v1/messages-Format.
+ *  Aether wird daher nur fuer Whisper (Speech-to-Text) verwendet.
+ */
 function createAnthropic(): Anthropic {
   const oauth =
     process.env.ANTHROPIC_OAUTH_TOKEN ?? process.env.ANTHROPIC_AUTH_TOKEN;
