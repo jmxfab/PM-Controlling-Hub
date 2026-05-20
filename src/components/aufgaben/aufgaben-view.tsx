@@ -166,10 +166,10 @@ const TAB_META: Record<
     icon: AlertTriangle,
   },
   aufgaben: {
-    label: "Aufgaben",
-    emptyTitle: "Keine offenen Aufgaben",
+    label: "Operativ",
+    emptyTitle: "Keine offenen operativen Aufgaben",
     emptyHint:
-      "Sobald neue Mails oder Hero-Erwähnungen reinkommen, erscheinen sie hier.",
+      "Operative Aufgaben (alles außerhalb PL/GF) erscheinen hier. Sobald neue Mails oder Hero-Erwähnungen reinkommen, landen sie hier.",
     icon: Mail,
   },
   infos: {
@@ -623,9 +623,10 @@ export function AufgabenView({
         <TabsTrigger
           value="aufgaben"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          title="Operative Aufgaben (alles außerhalb PL und GF)"
         >
           <Mail size={14} />
-          <span className="flex-1 text-left">Aufgaben</span>
+          <span className="flex-1 text-left">Operativ</span>
           <CountPill value={counts.aufgaben} />
         </TabsTrigger>
         <TabsTrigger
@@ -2645,6 +2646,7 @@ function TaskCard({
                 expanded={expanded}
                 heroProjectLinkTemplate={heroProjectLinkTemplate}
                 onMatched={onHeroMatched}
+                previouslyAttempted={Boolean(t.hero_match_attempted_at)}
               />
             )}
             {/* Hero-Projekt-Badge fuer bereits gespeicherte Verknuepfung — klickbar */}
@@ -3314,11 +3316,19 @@ function buildHeroProjectHref(
     .replace("{projectNumber}", num);
 }
 
+type HeroCandidate = {
+  id: string;
+  number: string | null;
+  name: string | null;
+  customer: string | null;
+};
+
 function AutoHeroMatch({
   taskId,
   expanded,
   heroProjectLinkTemplate,
   onMatched,
+  previouslyAttempted,
 }: {
   taskId: string;
   expanded: boolean;
@@ -3326,6 +3336,8 @@ function AutoHeroMatch({
   /** Wird sofort nach erfolgreichem Match aufgerufen — updated lokalen State
    *  damit heroProjectLinked sofort true wird und die Hero-Buttons erscheinen. */
   onMatched?: (patch: HeroMatchPatch) => void;
+  /** Aus DB: hero_match_attempted_at ist gesetzt. Skip Auto-Match (no-match in der Vergangenheit). */
+  previouslyAttempted?: boolean;
 }) {
   const triedRef = useRef(false);
   const [state, setState] = useState<
@@ -3333,13 +3345,24 @@ function AutoHeroMatch({
     | { kind: "running" }
     | { kind: "matched"; projectId: string | null; projectNumber: string | null; projectName: string | null }
     | { kind: "no-match" }
-  >({ kind: "idle" });
+  >(previouslyAttempted ? { kind: "no-match" } : { kind: "idle" });
+  // Manuelles Mapping (no-match Fall)
+  const [manualInput, setManualInput] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualCandidates, setManualCandidates] = useState<HeroCandidate[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     if (!expanded) return;
     if (triedRef.current) return;
     triedRef.current = true;
+    // Wenn bereits versucht (cached in DB), zeigen wir gleich die No-Match-UI
+    // ohne erneuten API-Call. Spart Latenz + Claude-Token.
+    if (previouslyAttempted) {
+      setState({ kind: "no-match" });
+      return;
+    }
     setState({ kind: "running" });
     fetch(`/api/mail-tasks/${taskId}/match-hero-project`, { method: "POST" })
       .then(async (r) => {
@@ -3367,9 +3390,58 @@ function AutoHeroMatch({
       })
       .catch(() => setState({ kind: "no-match" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, taskId]);
+  }, [expanded, taskId, previouslyAttempted]);
 
-  if (state.kind === "idle" || state.kind === "no-match") return null;
+  /** Manuelles Mapping via Projektnummer (no-match Fall).
+   *  Wenn 1 Treffer: direkt linken. Wenn mehrere: Kandidaten-Liste anzeigen. */
+  async function tryManualLink(projectIdOrNumber?: string) {
+    setManualBusy(true);
+    setManualError(null);
+    setManualCandidates([]);
+    const isDirectId = Boolean(projectIdOrNumber);
+    const body = isDirectId
+      ? { projectId: projectIdOrNumber }
+      : { projectNumber: manualInput };
+    try {
+      const r = await fetch(`/api/mail-tasks/${taskId}/link-hero-project`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.matched && j.project) {
+        const patch: HeroMatchPatch = {
+          hero_project_id: j.project.id ?? "",
+          hero_project_number: j.project.number ?? null,
+          hero_project_name: j.project.name ?? null,
+        };
+        setState({
+          kind: "matched",
+          projectId: patch.hero_project_id,
+          projectNumber: patch.hero_project_number,
+          projectName: patch.hero_project_name,
+        });
+        onMatched?.(patch);
+        setManualInput("");
+        setTimeout(() => router.refresh(), 200);
+        return;
+      }
+      // 409 = mehrere Kandidaten → User soll waehlen
+      if (r.status === 409 && Array.isArray(j.candidates)) {
+        setManualCandidates(j.candidates as HeroCandidate[]);
+        return;
+      }
+      // 404 oder anderer Fehler
+      setManualError(typeof j.error === "string" ? j.error : `Fehler ${r.status}`);
+    } catch (e) {
+      setManualError(e instanceof Error ? e.message : "Netzwerk-Fehler");
+    } finally {
+      setManualBusy(false);
+    }
+  }
+
+  if (state.kind === "idle") return null;
+
   if (state.kind === "running") {
     return (
       <div className="text-[11px] text-muted-foreground italic flex items-center gap-1.5">
@@ -3379,6 +3451,69 @@ function AutoHeroMatch({
     );
   }
 
+  // No-Match: manuelles Mapping anbieten
+  if (state.kind === "no-match") {
+    return (
+      <div className="rounded-md border border-amber-200/60 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/15 p-2 space-y-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="font-medium">Kein Hero-Projekt automatisch gefunden</span>
+        </div>
+        <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+          Gib die Projektnummer manuell ein (z.B. <span className="font-mono">9702</span>, <span className="font-mono">EINS-9702</span> oder <span className="font-mono">PVS-9489</span>):
+        </p>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && manualInput.trim().length >= 2 && !manualBusy) {
+                e.preventDefault();
+                void tryManualLink();
+              }
+            }}
+            disabled={manualBusy}
+            placeholder="z.B. 9702"
+            className="flex-1 h-7 px-2 text-[11px] rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-amber-500"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); void tryManualLink(); }}
+            disabled={manualBusy || manualInput.trim().length < 2}
+            className="h-7 px-2.5 text-[10.5px] font-medium rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {manualBusy ? "…" : "Verlinken"}
+          </button>
+        </div>
+        {manualError && (
+          <p className="text-[10.5px] text-rose-600 dark:text-rose-400">{manualError}</p>
+        )}
+        {manualCandidates.length > 0 && (
+          <div className="space-y-0.5 pt-0.5">
+            <p className="text-[10px] text-muted-foreground">
+              {manualCandidates.length} Projekte gefunden — bitte waehlen:
+            </p>
+            {manualCandidates.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); void tryManualLink(c.id); }}
+                disabled={manualBusy}
+                className="w-full text-left text-[10.5px] px-2 py-1 rounded border border-border/60 bg-background hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:border-amber-400/60 transition-colors flex items-center gap-1.5"
+              >
+                <span className="font-mono font-semibold text-amber-700 dark:text-amber-300">{c.number ?? "?"}</span>
+                {c.customer && <span className="text-muted-foreground">— {c.customer}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // matched
   const href = buildHeroProjectHref(
     heroProjectLinkTemplate,
     state.projectId,
@@ -3627,7 +3762,7 @@ const CATEGORY_OPTIONS: Array<{
   },
   {
     value: "aufgabe",
-    label: "Aufgabe",
+    label: "Operativ",
     className:
       "text-blue-700 bg-blue-50 ring-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:ring-blue-900/40",
     dot: "bg-blue-500",

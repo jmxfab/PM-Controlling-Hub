@@ -71,6 +71,10 @@ export interface MailTask {
   hero_project_id?: string | null;
   /** Hero-spezifisch: ungelesen-Flag */
   hero_is_read?: boolean | null;
+  /** Timestamp wann AutoHeroMatch zuletzt versucht hat ein Projekt zu finden.
+   *  Null = noch nie. Wenn gesetzt UND hero_project_id null = no-match (manuelles
+   *  Mapping noetig). Verhindert wiederholte Match-Versuche. */
+  hero_match_attempted_at?: string | null;
   /** Auto-generierte Subtasks (Checkliste) — leer wenn noch nicht generiert. */
   subtasks: Subtask[];
   /** Wem ist die Aufgabe zugewiesen (delegiert) — Name oder E-Mail. */
@@ -230,7 +234,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order, is_important, hero_project_id, hero_project_number, hero_project_name", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order, is_important, hero_project_id, hero_project_number, hero_project_name, hero_match_attempted_at", { count: "exact" })
     .or("is_automated.eq.true,is_user_created.eq.true");
 
   if (filter === "my_day") {
@@ -347,6 +351,8 @@ export async function loadMailTasksPage(
       hero_project_number: (row as any).hero_project_number ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       hero_project_name: (row as any).hero_project_name ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hero_match_attempted_at: (row as any).hero_match_attempted_at ?? null,
     };
   });
 

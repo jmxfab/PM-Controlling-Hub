@@ -220,6 +220,7 @@ export async function POST(
           hero_project_id: p.id,
           hero_project_number: p.project_number,
           hero_project_name: p.project_name,
+          hero_match_attempted_at: new Date().toISOString(),
         })
         .eq("id", id);
       return NextResponse.json({
@@ -241,24 +242,35 @@ export async function POST(
   const candidates = await searchCandidates(supabase, terms);
 
   if (candidates.length === 0) {
+    // Kein Match — Timestamp setzen damit AutoHeroMatch nicht jeden Reload neu versucht.
+    await supabase
+      .from("tasks")
+      .update({ hero_match_attempted_at: new Date().toISOString() })
+      .eq("id", id);
     return NextResponse.json({ matched: false, candidatesFound: 0 });
   }
 
   const winner = await pickViaClaude(task.title ?? "", task.description ?? "", candidates);
   if (!winner) {
+    // Kandidaten vorhanden, aber Claude konnte nicht entscheiden — auch als Versuch werten.
+    await supabase
+      .from("tasks")
+      .update({ hero_match_attempted_at: new Date().toISOString() })
+      .eq("id", id);
     return NextResponse.json({
       matched: false,
       candidatesFound: candidates.length,
     });
   }
 
-  // Update Task mit Hero-Projekt-Verknuepfung
+  // Update Task mit Hero-Projekt-Verknuepfung + Timestamp
   await supabase
     .from("tasks")
     .update({
       hero_project_id: winner.id,
       hero_project_number: winner.project_number,
       hero_project_name: winner.project_name,
+      hero_match_attempted_at: new Date().toISOString(),
     })
     .eq("id", id);
 
