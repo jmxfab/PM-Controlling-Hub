@@ -95,6 +95,11 @@ export function DelegateRemindForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Collapsed-by-default — nur ein Button. Wenn schon was gesetzt ist
+  // (Delegation oder Reminder), automatisch aufgeklappt.
+  const [open, setOpen] = useState(
+    Boolean(currentAssignedTo || currentRemindAt),
+  );
 
   const dirty =
     assignee.trim() !== (currentAssignedTo ?? "") ||
@@ -188,6 +193,26 @@ export function DelegateRemindForm({
     }
   }
 
+  // Collapsed-Variante: nur ein schmaler Trigger-Button mit Statusanzeige.
+  // Wird geoeffnet sobald User klickt — oder bei initial gesetzten Werten.
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="w-full rounded-xl border bg-card/40 hover:bg-card/80 hover:border-foreground/15 transition-colors px-3 py-2 flex items-center gap-2 text-left text-[11.5px] text-muted-foreground"
+        title="Delegieren oder Erinnerung setzen"
+      >
+        <UserCheck size={12} className="opacity-70" />
+        <span>Delegieren &amp; Erinnerung</span>
+        <span className="ml-auto opacity-60 text-[10px]">öffnen</span>
+      </button>
+    );
+  }
+
   return (
     <div
       className="rounded-xl border bg-card/50 p-3 space-y-2.5"
@@ -208,6 +233,17 @@ export function DelegateRemindForm({
           >
             <X size={11} /> Reset
           </Button>
+        )}
+        {!(currentAssignedTo || currentRemindAt) && (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="ml-auto p-1 rounded hover:bg-muted/60 text-muted-foreground/60"
+            title="Schliessen"
+            aria-label="Schliessen"
+          >
+            <X size={11} />
+          </button>
         )}
       </div>
 
