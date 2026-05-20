@@ -50,6 +50,13 @@ export async function POST(req: NextRequest) {
     whisperForm.append("model", "whisper-1");
     whisperForm.append("language", "de");
     whisperForm.append("response_format", "json");
+    // 'prompt' biased Whisper auf erwartetes Vokabular UND reduziert die
+    // beruechtigten Halluzinationen bei stillen/leeren Aufnahmen
+    // ('Untertitel der Amara.org-Community', 'Vielen Dank fuers Zuschauen').
+    whisperForm.append(
+      "prompt",
+      "Jumax Elektrotechnik, Photovoltaik, Waermepumpe, Klima, Aufgabe, Termin, Kunde, Projekt, Anruf, Mueller, Anlage.",
+    );
     const res = await fetch(`${baseUrl}/audio/transcriptions`, {
         method: "POST",
         headers: {
@@ -67,7 +74,25 @@ export async function POST(req: NextRequest) {
       );
     }
     const json = (await res.json()) as { text?: string };
-    return NextResponse.json({ transcript: (json.text ?? "").trim(), provider });
+    const rawText = (json.text ?? "").trim();
+    // Whisper-Halluzinations-Filter: bei stillen/sehr kurzen Aufnahmen
+    // erzeugt Whisper bekannte Phrasen aus dem YouTube-Training. Wenn das
+    // GANZE Transkript so eine Phrase ist -> als leer behandeln.
+    const HALLUCINATIONS = [
+      /^untertitel(ung)?( der amara\.org-community)?\.?$/i,
+      /^vielen dank f(ue|ü)rs? zuschauen[.!]?$/i,
+      /^(bis zum n(ä|ae)chsten mal[.!]?)$/i,
+      /^danke f(ue|ü)r['s]* zuschauen[.!]?$/i,
+      /^musik\.?$/i,
+      /^\[musik\]$/i,
+    ];
+    const isHallucination = HALLUCINATIONS.some((re) => re.test(rawText));
+    const transcript = isHallucination ? "" : rawText;
+    return NextResponse.json({
+      transcript,
+      provider,
+      ...(isHallucination ? { note: "Whisper-Halluzination gefiltert" } : {}),
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },
