@@ -17,14 +17,20 @@ Analysiere eingehende E-Mails und klassifiziere sie. Antworte NUR als gültiges 
 Kategorien:
 - info: Newsletter, Informationen, keine Aktion erforderlich
 - aufgabe: Konkrete Handlung oder Rückmeldung erforderlich
-- dringend: Zeitkritisch, sofortiger Handlungsbedarf`;
+- dringend: Zeitkritisch, sofortiger Handlungsbedarf
+
+WICHTIG — Summary-Stil:
+- KEINEN Aufsatz schreiben. Maximal EIN kurzer Satz, der die KERN-Info enthält.
+- Wenn die Mail von Hero (Hero-Software, hero@, noreply@hero) kommt: NUR den Original-Betreff sinngemäß in 1 Zeile zusammenfassen. KEINE Vermutungen, KEINE Erklärungen.
+- Bei Newsletter/Bestätigungen (info-Kategorie): summary darf LEER ("") sein.
+- Keine Floskeln wie "Diese E-Mail informiert über..." oder "Der Absender bittet darum...". Direkt zum Punkt.`;
 
 const USER_PROMPT_TEMPLATE = `Analysiere diese E-Mail und antworte NUR als JSON:
 
 {
   "category": "info" | "aufgabe" | "dringend",
   "title": "Kurzer Aufgabentitel (max 60 Zeichen)",
-  "summary": "2-3 Sätze Zusammenfassung",
+  "summary": "MAX 1 Satz, knapp. Leer-String '' wenn nichts hinzuzufuegen.",
   "due_date": "YYYY-MM-DD oder null",
   "reasoning": "Kurze Begründung der Kategorie (1 Satz)"
 }
@@ -35,12 +41,36 @@ Betreff: {subject}
 Inhalt:
 {body}`;
 
+/** Detect Hero-Notification-Mails (Hero-Software-Notifications, Logbuch-Mails).
+ *  Solche Mails brauchen keinen KI-Aufsatz — Betreff alleine reicht. */
+function isHeroNotificationSender(senderEmail: string, senderName: string): boolean {
+  const e = senderEmail.toLowerCase();
+  const n = senderName.toLowerCase();
+  if (/(^|[@.+_-])hero([@.+_-]|$)/.test(e)) return true;
+  if (/noreply.*hero|hero.*noreply/.test(e)) return true;
+  if (n.includes("hero") && (n.includes("benachrichtigung") || n.includes("notification"))) {
+    return true;
+  }
+  return false;
+}
+
 export async function classifyEmail(params: {
   senderName: string;
   senderEmail: string;
   subject: string;
   body: string;
 }): Promise<ClassificationResult> {
+  // Fast-Path fuer Hero-Notifications: kein langer Aufsatz, Betreff = Title
+  if (isHeroNotificationSender(params.senderEmail, params.senderName)) {
+    return {
+      category: "info",
+      title: params.subject.slice(0, 120) || "Hero-Benachrichtigung",
+      summary: "",
+      due_date: null,
+      reasoning: "Hero-System-Benachrichtigung (Auto-erkannt, kein KI-Lauf)",
+    };
+  }
+
   const userPrompt = USER_PROMPT_TEMPLATE.replace("{sender_name}", params.senderName)
     .replace("{sender_email}", params.senderEmail)
     .replace("{subject}", params.subject)
@@ -77,5 +107,27 @@ export async function classifyEmail(params: {
 
   const result = schema.parse(parsed);
 
-  return result as ClassificationResult;
+  // Post-Processing: Summary auf max. 1 Satz / 200 Zeichen kappen,
+  // damit der Classifier nicht doch wieder Aufsaetze schreibt.
+  const trimmedSummary = trimToOneSentence(result.summary);
+
+  return { ...result, summary: trimmedSummary } as ClassificationResult;
+}
+
+/** Schneidet einen Text auf maximal einen Satz und 200 Zeichen,
+ *  entfernt Floskeln am Anfang. */
+function trimToOneSentence(s: string): string {
+  if (!s) return "";
+  let t = s.trim();
+  // Floskeln am Anfang entfernen
+  t = t.replace(
+    /^(Diese E-Mail|Die E-Mail|Der Absender|Diese Mail|In dieser Mail|Die Mail)\s+[^.]*\.\s*/i,
+    "",
+  );
+  // Bis zum ersten Satzende kuerzen
+  const m = t.match(/^[^.!?]*[.!?]/);
+  if (m) t = m[0];
+  // Hartes Limit
+  if (t.length > 200) t = t.slice(0, 197).trimEnd() + "…";
+  return t.trim();
 }
