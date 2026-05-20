@@ -23,7 +23,7 @@ export type MailTaskStatus =
   | "done"
   | "cancelled";
 export type MailTaskPriority = "urgent" | "high" | "medium" | "low";
-export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung" | "bestellung";
+export type MailCategory = "aufgabe" | "dringend" | "kritisch" | "info" | "inbox" | "rechnung" | "bestellung" | "pl_aufgabe" | "gf_aufgabe";
 export type ItemSource = "mail" | "hero";
 
 /** Auto-generierte Subtask aus Mail-Body via Claude. */
@@ -108,7 +108,9 @@ export type MailTabFilter =
   | "infos"
   | "inbox"
   | "rechnungen"
-  | "aufgeschoben";
+  | "aufgeschoben"
+  | "pl"
+  | "gf";
 
 const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   my_day:        [], // Mein Tag filtert NICHT nach Kategorie sondern in_my_day_at IS NOT NULL
@@ -118,6 +120,8 @@ const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   inbox:         ["inbox"],
   rechnungen:    ["rechnung", "bestellung"],
   aufgeschoben:  [], // filtert nach remind_at > now() — kategorie-uebergreifend
+  pl:            ["pl_aufgabe"],
+  gf:            ["gf_aufgabe"],
 };
 
 export interface MailTaskCounts {
@@ -130,6 +134,10 @@ export interface MailTaskCounts {
   rechnungen: number;
   /** Aufgeschobene: Tasks mit remind_at > now(), status != done/cancelled. */
   aufgeschoben: number;
+  /** PL-Tab: Aufgaben fuer den Projektleiter (pl_aufgabe). */
+  pl: number;
+  /** GF-Tab: Aufgaben fuer die Geschaeftsfuehrung (gf_aufgabe). */
+  gf: number;
 }
 
 export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
@@ -139,7 +147,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   // ein Full-Scan + Count). Jetzt: 1 RPC mit FILTER-Aggregaten, parallel zu
   // den Hero-Counts.
   const nowIso = new Date().toISOString();
-  const [rpcRes, heroCounts, aufgeschobenRes] = await Promise.all([
+  const [rpcRes, heroCounts, aufgeschobenRes, plRes, gfRes] = await Promise.all([
     supabase.rpc("compute_mail_task_counts").single<{
       my_day: number;
       kritisch: number;
@@ -156,6 +164,18 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
       .gt("remind_at", nowIso)
       .not("status", "in", '("done","cancelled")')
       .or("is_automated.eq.true,is_user_created.eq.true"),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .not("status", "in", '("done","cancelled")')
+      .eq("mail_category", "pl_aufgabe"),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .not("status", "in", '("done","cancelled")')
+      .eq("mail_category", "gf_aufgabe"),
   ]);
   const mailCounts = rpcRes.data ?? {
     my_day: 0,
@@ -173,6 +193,8 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     inbox: Number(mailCounts.inbox) || 0,
     rechnungen: Number(mailCounts.rechnungen) || 0,
     aufgeschoben: aufgeschobenRes.count ?? 0,
+    pl: plRes.count ?? 0,
+    gf: gfRes.count ?? 0,
   };
 }
 

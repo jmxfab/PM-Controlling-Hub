@@ -16,6 +16,8 @@ const VALID_CATEGORY = new Set([
   "inbox",
   "rechnung",
   "bestellung",
+  "pl_aufgabe",
+  "gf_aufgabe",
 ]);
 const VALID_PRIORITY = new Set(["urgent", "high", "medium", "low"]);
 
@@ -41,7 +43,9 @@ function parseTab(v: string | null): MailTabFilter {
     v === "infos" ||
     v === "inbox" ||
     v === "rechnungen" ||
-    v === "aufgeschoben"
+    v === "aufgeschoben" ||
+    v === "pl" ||
+    v === "gf"
   )
     return v;
   return "aufgaben";

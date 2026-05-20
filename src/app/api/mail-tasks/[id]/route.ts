@@ -26,6 +26,8 @@ const VALID_CATEGORY = new Set([
   "inbox",
   "rechnung",
   "bestellung",
+  "pl_aufgabe",
+  "gf_aufgabe",
 ]);
 const VALID_PRIORITY = new Set(["urgent", "high", "medium", "low"]);
 

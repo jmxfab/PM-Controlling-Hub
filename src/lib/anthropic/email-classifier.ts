@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { callClaudeMessage } from "@/lib/anthropic/client";
 
-export type EmailCategory = "info" | "aufgabe" | "dringend";
+export type EmailCategory = "info" | "aufgabe" | "dringend" | "pl_aufgabe" | "gf_aufgabe";
 
 export interface ClassificationResult {
   category: EmailCategory;
@@ -16,8 +16,10 @@ Analysiere eingehende E-Mails und klassifiziere sie. Antworte NUR als gültiges 
 
 Kategorien:
 - info: Newsletter, Informationen, keine Aktion erforderlich
-- aufgabe: Konkrete Handlung oder Rückmeldung erforderlich
+- aufgabe: Konkrete Handlung erforderlich (allgemein)
 - dringend: Zeitkritisch, sofortiger Handlungsbedarf
+- pl_aufgabe: Aufgabe für den PROJEKTLEITER — Terminplanung, Baustellenkoordination, technische Rückfragen von Kunden/Lieferanten, Materialbestellungen/-lieferungen, Abnahmen, Mängelrügen, Bauzeitverlängerungen, Subunternehmer-Koordination
+- gf_aufgabe: Aufgabe für die GESCHÄFTSFÜHRUNG — Angebotsprüfung/-freigabe, Auftragsbestätigung, Finanzentscheidungen (Budgetfreigabe, Großeinkauf, Zahlungsmodalitäten), Eskalationen von Kunden/Behörden, strategische Anfragen, VIP-Kunden oder Schlüsselkunden, rechtliche/behördliche Post
 
 WICHTIG — Summary-Stil:
 - KEINEN Aufsatz schreiben. Maximal EIN kurzer Satz, der die KERN-Info enthält.
@@ -28,7 +30,7 @@ WICHTIG — Summary-Stil:
 const USER_PROMPT_TEMPLATE = `Analysiere diese E-Mail und antworte NUR als JSON:
 
 {
-  "category": "info" | "aufgabe" | "dringend",
+  "category": "info" | "aufgabe" | "dringend" | "pl_aufgabe" | "gf_aufgabe",
   "title": "Kurzer Aufgabentitel (max 60 Zeichen)",
   "summary": "MAX 1 Satz, knapp. Leer-String '' wenn nichts hinzuzufuegen.",
   "due_date": "YYYY-MM-DD oder null",
@@ -105,7 +107,7 @@ export async function classifyEmail(params: {
   }
 
   const schema = z.object({
-    category: z.enum(["info", "aufgabe", "dringend"]).catch("info"),
+    category: z.enum(["info", "aufgabe", "dringend", "pl_aufgabe", "gf_aufgabe"]).catch("info"),
     title: z.string().max(120).catch("(kein Titel)"),
     summary: z.string().max(2000).catch(""),
     due_date: z

@@ -36,6 +36,8 @@ import {
   History,
   Star,
   ExternalLink,
+  HardHat,
+  Briefcase,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -187,6 +189,20 @@ const TAB_META: Record<
     emptyHint:
       "Wenn du bei einer Aufgabe eine Erinnerung setzt, landet sie hier bis sie fällig wird.",
     icon: Clock3,
+  },
+  pl: {
+    label: "Projektleiter",
+    emptyTitle: "Keine PL-Aufgaben",
+    emptyHint:
+      "Aufgaben für den Projektleiter landen hier — Baustellen, Termine, technische Rückfragen, Materialien.",
+    icon: HardHat,
+  },
+  gf: {
+    label: "Geschäftsführung",
+    emptyTitle: "Keine GF-Aufgaben",
+    emptyHint:
+      "Angebote, Freigaben, Finanzentscheidungen und Eskalationen die die Geschäftsführung betreffen.",
+    icon: Briefcase,
   },
 };
 
@@ -634,6 +650,28 @@ export function AufgabenView({
             <CountPill value={counts.aufgeschoben} tone="amber" />
           </TabsTrigger>
         )}
+        {/* PL-Tab: Aufgaben für den Projektleiter */}
+        {counts.pl > 0 && (
+          <TabsTrigger
+            value="pl"
+            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          >
+            <HardHat size={14} />
+            <span className="flex-1 text-left">Projektleiter</span>
+            <CountPill value={counts.pl} tone="indigo" />
+          </TabsTrigger>
+        )}
+        {/* GF-Tab: Aufgaben für die Geschäftsführung */}
+        {counts.gf > 0 && (
+          <TabsTrigger
+            value="gf"
+            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          >
+            <Briefcase size={14} />
+            <span className="flex-1 text-left">Geschäftsführung</span>
+            <CountPill value={counts.gf} tone="violet" />
+          </TabsTrigger>
+        )}
         <TabsTrigger
           value="heizlast"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -694,6 +732,24 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
+      {counts.pl > 0 && (
+        <TabsContent value="pl">
+          <MailTab
+            initial={{ entries: [], total: 0 }}
+            filter="pl"
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
+        </TabsContent>
+      )}
+      {counts.gf > 0 && (
+        <TabsContent value="gf">
+          <MailTab
+            initial={{ entries: [], total: 0 }}
+            filter="gf"
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
+        </TabsContent>
+      )}
       <TabsContent value="heizlast">
         <HeizlastView
           projects={heizlastProjects}
@@ -713,7 +769,7 @@ function CountPill({
   highlight?: boolean;
   /** Spezial-Variante fuer Kritisch: bei aktivem Tab heller weisser Halo,
    *  bei inaktivem Tab sattes Rose. */
-  tone?: "rose" | "amber";
+  tone?: "rose" | "amber" | "indigo" | "violet";
 }) {
   if (!value) return null;
   if (tone === "rose") {
@@ -726,6 +782,20 @@ function CountPill({
   if (tone === "amber") {
     return (
       <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300 ring-1 ring-amber-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
+        {value}
+      </span>
+    );
+  }
+  if (tone === "indigo") {
+    return (
+      <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-indigo-500/15 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300 ring-1 ring-indigo-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
+        {value}
+      </span>
+    );
+  }
+  if (tone === "violet") {
+    return (
+      <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-violet-500/15 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300 ring-1 ring-violet-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
         {value}
       </span>
     );
@@ -755,6 +825,8 @@ const TAB_FILTERS: Record<
   inbox:        { status: true,  priority: false, defaultStatus: "open" },
   rechnungen:   { status: true,  priority: false, defaultStatus: "open" },
   aufgeschoben: { status: false, priority: false, defaultStatus: "open" },
+  pl:           { status: true,  priority: true,  defaultStatus: "open" },
+  gf:           { status: true,  priority: true,  defaultStatus: "open" },
 };
 
 /**
@@ -3421,6 +3493,20 @@ const CATEGORY_OPTIONS: Array<{
     className:
       "text-zinc-600 bg-zinc-100 ring-zinc-200 dark:text-zinc-400 dark:bg-zinc-800 dark:ring-zinc-700",
     dot: "bg-zinc-400",
+  },
+  {
+    value: "pl_aufgabe",
+    label: "Projektleiter",
+    className:
+      "text-indigo-700 bg-indigo-50 ring-indigo-200 dark:text-indigo-300 dark:bg-indigo-950/40 dark:ring-indigo-900/40",
+    dot: "bg-indigo-500",
+  },
+  {
+    value: "gf_aufgabe",
+    label: "Geschäftsführung",
+    className:
+      "text-violet-700 bg-violet-50 ring-violet-200 dark:text-violet-300 dark:bg-violet-950/40 dark:ring-violet-900/40",
+    dot: "bg-violet-500",
   },
 ];
 
