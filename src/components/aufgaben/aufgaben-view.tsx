@@ -736,6 +736,76 @@ function invalidateCacheForFilter(filter: MailTabFilter) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter-Persistenz: pro Tab werden Status/Prio/Age im localStorage gespeichert.
+// SSR-safe: localStorage existiert nur im Browser.
+// ─────────────────────────────────────────────────────────────────────────────
+type PersistedFilters = {
+  status: StatusFilter;
+  prio: PrioFilter;
+  age: AgeFilter;
+};
+
+function persistKey(filter: MailTabFilter): string {
+  return `aufgaben-filters:${filter}`;
+}
+
+function readPersistedFilters(
+  filter: MailTabFilter,
+  defaultStatus: StatusFilter,
+): PersistedFilters {
+  const fallback: PersistedFilters = {
+    status: defaultStatus,
+    prio: "all",
+    age: "30",
+  };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(persistKey(filter));
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<PersistedFilters>;
+    return {
+      status:
+        parsed.status === "all" ||
+        parsed.status === "open" ||
+        parsed.status === "done"
+          ? parsed.status
+          : defaultStatus,
+      prio:
+        parsed.prio === "all" ||
+        parsed.prio === "urgent" ||
+        parsed.prio === "high" ||
+        parsed.prio === "medium" ||
+        parsed.prio === "low"
+          ? parsed.prio
+          : "all",
+      age:
+        parsed.age === "30" || parsed.age === "90" || parsed.age === "all"
+          ? parsed.age
+          : "30",
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function writePersistedFilters(
+  filter: MailTabFilter,
+  patch: Partial<PersistedFilters>,
+) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(persistKey(filter));
+    const current = raw ? (JSON.parse(raw) as Partial<PersistedFilters>) : {};
+    window.localStorage.setItem(
+      persistKey(filter),
+      JSON.stringify({ ...current, ...patch }),
+    );
+  } catch {
+    // silent — Persistenz ist nice-to-have
+  }
+}
+
 function MailTab({
   initial,
   filter,
@@ -761,13 +831,46 @@ function MailTab({
     // nicht ihn ueberschreiben.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSearchTerm]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    tabFilters.defaultStatus,
+  // Filter-Persistenz pro Tab in localStorage. Beim Tab-Wechsel UND Reload
+  // werden die letzten Filter-Werte wieder geladen. Key: `aufgaben-filters:${filter}`.
+  const persistedFilters = readPersistedFilters(filter, tabFilters.defaultStatus);
+  const [statusFilter, setStatusFilterRaw] = useState<StatusFilter>(
+    persistedFilters.status,
   );
-  const [prioFilter, setPrioFilter] = useState<PrioFilter>("all");
+  const [prioFilter, setPrioFilterRaw] = useState<PrioFilter>(persistedFilters.prio);
   // Altersfilter (Default 30 Tage) — sorgt dafuer dass alte Karteileichen
   // standardmaessig nicht stoeren. User kann auf 90 oder 'Alle' umschalten.
-  const [ageFilter, setAgeFilter] = useState<AgeFilter>("30");
+  const [ageFilter, setAgeFilterRaw] = useState<AgeFilter>(persistedFilters.age);
+  // Bei Tab-Wechsel: Filter aus localStorage neu laden
+  useEffect(() => {
+    const next = readPersistedFilters(filter, tabFilters.defaultStatus);
+    setStatusFilterRaw(next.status);
+    setPrioFilterRaw(next.prio);
+    setAgeFilterRaw(next.age);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+  // Setter mit Auto-Persist — schreiben in localStorage und State
+  const setStatusFilter = useCallback(
+    (v: StatusFilter) => {
+      setStatusFilterRaw(v);
+      writePersistedFilters(filter, { status: v });
+    },
+    [filter],
+  );
+  const setPrioFilter = useCallback(
+    (v: PrioFilter) => {
+      setPrioFilterRaw(v);
+      writePersistedFilters(filter, { prio: v });
+    },
+    [filter],
+  );
+  const setAgeFilter = useCallback(
+    (v: AgeFilter) => {
+      setAgeFilterRaw(v);
+      writePersistedFilters(filter, { age: v });
+    },
+    [filter],
+  );
   const [data, setData] = useState<MailTasksPage>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

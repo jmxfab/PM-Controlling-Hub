@@ -75,17 +75,32 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const rec = new MediaRecorder(stream, { mimeType: mime });
+      // Mime-Type-Fallback-Kette: Chrome/Firefox/Edge mögen webm/opus,
+      // Safari (iOS) kann nur audio/mp4. Whisper akzeptiert beide Formate.
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+        "",
+      ];
+      const mime =
+        candidates.find((m) =>
+          m === "" ? true : MediaRecorder.isTypeSupported(m),
+        ) ?? "";
+      // Wenn mime leer ist: Default des Browsers nutzen (Safari-Fallback).
+      const rec = mime
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = rec;
       chunksRef.current = [];
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       rec.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mime });
+        const blob = new Blob(chunksRef.current, {
+          type: mime || rec.mimeType || "audio/webm",
+        });
         cleanupStream();
         await processAudio(blob);
       };
@@ -116,7 +131,15 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
   async function processAudio(blob: Blob) {
     try {
       const fd = new FormData();
-      fd.append("file", blob, "voice.webm");
+      // Dateiendung anhand des MIME-Types waehlen — Whisper erkennt Format
+      // ueber Extension wenn Content-Type generic ist (Safari liefert oft
+      // 'audio/mp4' bei iOS-Aufnahmen).
+      const ext = blob.type.includes("mp4")
+        ? "mp4"
+        : blob.type.includes("ogg")
+          ? "ogg"
+          : "webm";
+      fd.append("file", blob, `voice.${ext}`);
       const res = await fetch("/api/speech/transcribe-and-extract", {
         method: "POST",
         body: fd,
@@ -187,12 +210,14 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="h-9 gap-1.5">
+        <Button size="sm" variant="outline" className="h-9 gap-1.5 px-2.5 sm:px-3">
           <Mic size={14} />
-          Sprachnotiz
+          <span className="hidden sm:inline">Sprachnotiz</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl rounded-2xl">
+      <DialogContent
+        className="sm:max-w-xl rounded-2xl w-[calc(100vw-1rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      >
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="shrink-0 grid place-items-center w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">

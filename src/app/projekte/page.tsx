@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { Activity, ArrowRight, Building2, Clock3, CheckCircle2 } from "lucide-react";
 import { loadProjectPulse } from "@/lib/supabase/hero-project-activity";
@@ -54,9 +55,9 @@ function activityBadge(events30d: number, daysSinceLast: number) {
   };
 }
 
-export default async function ProjektePage() {
-  const pulses = await loadProjectPulse(24).catch(() => []);
-
+export default function ProjektePage() {
+  // Header rendert sofort. Das Pulse-Grid kommt via Suspense streamend nach —
+  // bei kalter Lambda + Supabase-Query dauerte das vorher 500-1500ms blocking.
   return (
     <div className="flex-1 space-y-6 p-6 md:p-8 max-w-[1600px] mx-auto">
       <header className="space-y-1">
@@ -68,8 +69,31 @@ export default async function ProjektePage() {
         </p>
       </header>
       <RealtimeRefresh tables={["hero_histories"]} />
+      <Suspense fallback={<ProjektPulseSkeleton />}>
+        <ProjektPulseGrid />
+      </Suspense>
+    </div>
+  );
+}
 
+function ProjektPulseSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div
+          key={i}
+          className="rounded-2xl border bg-card/40 p-4 h-48 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
 
+async function ProjektPulseGrid() {
+  const pulses = await loadProjectPulse(24).catch(() => []);
+
+  return (
+    <>
       {pulses.length === 0 ? (
         <div className="rounded-2xl border bg-card/40 p-12 text-center text-sm text-muted-foreground">
           Keine Projekt-Aktivität in den letzten 60 Tagen gefunden.
@@ -189,6 +213,6 @@ export default async function ProjektePage() {
           })}
         </div>
       )}
-    </div>
+    </>
   );
 }
