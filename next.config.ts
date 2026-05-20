@@ -67,7 +67,9 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            // Mikrofon AUF UNSEREM Origin erlaubt (fuer Voice-Input im
+            // Sprachnotiz-Dialog + AI-Chat). Kamera/Geo bleiben blockiert.
+            value: "camera=(), microphone=(self), geolocation=()",
           },
           {
             key: "Strict-Transport-Security",

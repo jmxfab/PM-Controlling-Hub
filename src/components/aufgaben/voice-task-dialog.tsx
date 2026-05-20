@@ -111,11 +111,7 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
         setElapsed(Math.floor((Date.now() - t0) / 1000));
       }, 250);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? `Mikrofon-Zugriff verweigert: ${e.message}`
-          : "Mikrofon nicht verfuegbar",
-      );
+      setError(diagnoseMicError(e));
       cleanupStream();
       setStage("idle");
     }
@@ -404,4 +400,37 @@ function formatTime(s: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+/** Diagnose-Funktion fuer Mikro-Errors. Browser werfen sehr generische
+ *  DOMExceptions — diese Funktion mappt sie auf user-verstaendliche
+ *  Meldungen mit konkreten Fix-Hinweisen. */
+export function diagnoseMicError(e: unknown): string {
+  if (typeof window !== "undefined" && !window.isSecureContext) {
+    return "Mikrofon braucht HTTPS. Seite ueber https:// aufrufen.";
+  }
+  if (
+    typeof navigator !== "undefined" &&
+    (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+  ) {
+    return "Browser unterstuetzt kein Mikrofon (zu alt oder im Sandbox-Iframe).";
+  }
+  if (!(e instanceof Error)) return "Mikrofon nicht verfuegbar.";
+
+  const name = (e as DOMException).name ?? "";
+  const msg = e.message ?? "";
+
+  if (name === "NotAllowedError" || /denied|permission/i.test(msg)) {
+    return "Mikrofon-Zugriff verweigert. Klick links neben der URL aufs Schloss-Icon → Mikrofon erlauben → Seite neu laden.";
+  }
+  if (name === "NotFoundError" || /no device|no microphone/i.test(msg)) {
+    return "Kein Mikrofon gefunden. Headset/Mikro angeschlossen?";
+  }
+  if (name === "NotReadableError" || /in use|hardware/i.test(msg)) {
+    return "Mikrofon wird gerade von einer anderen App benutzt (Teams/Zoom?). Andere App schliessen.";
+  }
+  if (/permissions policy|features/i.test(msg)) {
+    return "Mikrofon vom Browser blockiert (Permissions-Policy). Cache leeren + Seite neu laden, dann sollte's klappen.";
+  }
+  return `Mikrofon-Fehler: ${msg || name || "unbekannt"}`;
 }
