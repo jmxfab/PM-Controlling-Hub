@@ -550,6 +550,30 @@ export function TaskComposer({
           )}
         </Button>
 
+        {/* Hero-Logbuch — PRIMARY wenn Task an Hero-Projekt verknuepft.
+         *  Steht direkt neben KI-Antwort weil das die haeufigste Aktion
+         *  fuer Hero-Tasks ist (statt per Mail antworten -> direkt im Projekt). */}
+        {heroProjectLinked && (
+          <Button
+            size="sm"
+            variant="default"
+            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+            onClick={sendToHeroLog}
+            disabled={busy !== null || text.trim().length === 0}
+            title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
+          >
+            {busy === "hero-log" ? (
+              <>
+                <Loader2 size={12} className="animate-spin" /> Schreibt…
+              </>
+            ) : (
+              <>
+                <Sparkles size={12} /> In Hero antworten
+              </>
+            )}
+          </Button>
+        )}
+
         {/* Sekundaer: Notiz in App speichern */}
         <Button
           size="sm"
@@ -591,29 +615,6 @@ export function TaskComposer({
               </>
             )}
           </Button>
-
-          {/* Direkt ins Hero-Logbuch eintragen — sichtbar wenn die Task
-              an ein Hero-Projekt verknuepft ist (egal ob mail- oder hero-source). */}
-          {heroProjectLinked && (
-            <Button
-              size="sm"
-              variant="default"
-              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
-              onClick={sendToHeroLog}
-              disabled={busy !== null || text.trim().length === 0}
-              title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
-            >
-              {busy === "hero-log" ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" /> Schreibt…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={12} /> Im Hero-Logbuch eintragen
-                </>
-              )}
-            </Button>
-          )}
 
           {source === "hero" && heroProjectHref && (
             <Button
