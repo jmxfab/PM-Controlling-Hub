@@ -223,7 +223,9 @@ function ProjectCard({
   const cleanName = cleanProjectName(project.project_name);
   const avatar = avatarFor(project.project_number || cleanName);
   const heroHref = heroProjectLinkTemplate
-    ? heroProjectLinkTemplate.replace("{projectId}", project.id)
+    ? heroProjectLinkTemplate
+        .replace("{projectId}", project.id)
+        .replace("{projectNumber}", project.project_number ?? "")
     : null;
   const hasWp = wpDocs.length > 0;
 

@@ -1345,9 +1345,14 @@ function MailTab({
         ? markHeroAsUnread(task)
         : markHeroAsRead(task);
     }
-    return patchTask(task.id, {
-      status: task.status === "done" ? "open" : "done",
-    });
+    const markingDone = task.status !== "done";
+    // removeFromList=true wenn wir "erledigt" setzen UND der Tab nur offene
+    // Items zeigt — dann verschwindet die Karte sofort ohne Page-Reload.
+    return patchTask(
+      task.id,
+      { status: markingDone ? "done" : "open" },
+      markingDone && statusFilter === "open",
+    );
   }
 
   function toggleMyDay(task: MailTask) {
@@ -2425,9 +2430,11 @@ function TaskCard({
             )}
             {/* Hero-Projekt-Badge fuer bereits gespeicherte Verknuepfung — klickbar */}
             {t.hero_project_id && t.hero_project_number && (() => {
-              const href = heroProjectLinkTemplate
-                ? heroProjectLinkTemplate.replace("{projectId}", t.hero_project_id!)
-                : null;
+              const href = buildHeroProjectHref(
+                heroProjectLinkTemplate,
+                t.hero_project_id,
+                t.hero_project_number,
+              );
               const clean = cleanHeroProjectName(t.hero_project_name, t.hero_project_number);
               const label = clean
                 ? `${t.hero_project_number} — ${clean}`
@@ -3062,6 +3069,25 @@ function cleanHeroProjectName(
   return result;
 }
 
+/** Baut einen Hero-Projekt-Deep-Link aus dem URL-Template.
+ *  Unterstuetzt alle offiziellen Platzhalter:
+ *  {projectId}     → hero_project_id (UUID in unserer DB, von Hero vergeben)
+ *  {projectNumber} → hero_project_number (z.B. "PVS-9402")
+ *  Damit funktioniert das Template egal welches Format Hero in URLs erwartet. */
+function buildHeroProjectHref(
+  template: string | null,
+  projectId: string | null | undefined,
+  projectNumber: string | null | undefined,
+): string | null {
+  if (!template) return null;
+  const id = projectId ?? "";
+  const num = projectNumber ?? "";
+  if (!id && !num) return null;
+  return template
+    .replace("{projectId}", id)
+    .replace("{projectNumber}", num);
+}
+
 function AutoHeroMatch({
   taskId,
   expanded,
@@ -3115,10 +3141,11 @@ function AutoHeroMatch({
     );
   }
 
-  const href =
-    state.projectId && heroProjectLinkTemplate
-      ? heroProjectLinkTemplate.replace("{projectId}", state.projectId)
-      : null;
+  const href = buildHeroProjectHref(
+    heroProjectLinkTemplate,
+    state.projectId,
+    state.projectNumber,
+  );
   const clean = cleanHeroProjectName(state.projectName, state.projectNumber);
   const label = clean
     ? `${state.projectNumber} — ${clean}`
