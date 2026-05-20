@@ -817,11 +817,12 @@ function MailTab({
 }) {
   const meta = TAB_META[filter];
   const tabFilters = TAB_FILTERS[filter];
-  // URL-Param ?search=... unterstuetzen — wird beim Mount UND bei Navigation
-  // dazwischen in den Filter uebernommen. So funktionieren Cross-Links vom
-  // Logbuch auch wenn der User schon auf /aufgaben ist.
+  // URL-Param ?search=... + ?focusTask=... unterstuetzen — wird beim Mount UND
+  // bei Navigation dazwischen in den Filter uebernommen. So funktionieren
+  // Cross-Links vom Logbuch / Sender-History.
   const urlSearchParams = useSearchParams();
   const urlSearchTerm = urlSearchParams.get("search") ?? "";
+  const urlFocusTask = urlSearchParams.get("focusTask");
   const [search, setSearch] = useState(urlSearchTerm);
   useEffect(() => {
     if (urlSearchTerm !== "" && urlSearchTerm !== search) {
@@ -876,6 +877,25 @@ function MailTab({
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  // focusTask aus URL: Karte direkt expanden + in den Viewport scrollen.
+  // Wird nach dem ersten Treffer geleert (zurueck zur normalen Bedienung).
+  useEffect(() => {
+    if (!urlFocusTask) return;
+    setExpanded(urlFocusTask);
+    // Kurz warten bis DOM da ist, dann scrollIntoView
+    const t = setTimeout(() => {
+      const el = document.querySelector(
+        `[data-task-id="${CSS.escape(urlFocusTask)}"]`,
+      );
+      if (el && "scrollIntoView" in el) {
+        (el as HTMLElement).scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [urlFocusTask]);
   /** Wenn gesetzt -> SenderHistoryDialog ist offen mit dieser Mail-Adresse. */
   const [historyEmail, setHistoryEmail] = useState<string | null>(null);
   /** "Erinnerung in Zukunft" = Snooze: Karte versteckt bis Reminder faellig.
@@ -2023,6 +2043,7 @@ function TaskCard({
 
   return (
     <div
+      data-task-id={t.id}
       className={`group relative overflow-hidden rounded-xl border bg-card transition-all duration-200 ${
         isDone ? "opacity-60" : ""
       } ${

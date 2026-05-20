@@ -463,6 +463,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as {
       messages?: ChatMessage[];
+      /** Optionale Session-ID aus dem Client. Wenn leer -> neue Session anlegen. */
+      sessionId?: string | null;
     };
     const messages = Array.isArray(body.messages)
       ? body.messages.filter(
@@ -496,7 +498,56 @@ export async function POST(req: NextRequest) {
       messages,
       tools,
     });
-    return NextResponse.json(result);
+
+    // ── Server-side Speicherung der Session ────────────────────────────────
+    const supabase = supabaseAdmin();
+    let sessionId = body.sessionId ?? null;
+    try {
+      if (!sessionId) {
+        // Neue Session — Titel = erste User-Message (max 60 Zeichen)
+        const firstUser = messages.find((m) => m.role === "user")?.content ?? "";
+        const title = firstUser.slice(0, 60) || "Neue Konversation";
+        const { data: sess } = await supabase
+          .from("ai_chat_sessions")
+          .insert({ title })
+          .select("id")
+          .single();
+        sessionId = sess?.id ?? null;
+        // Alle bisherigen Messages sichern (Vor-Verlauf des Clients)
+        if (sessionId && messages.length > 0) {
+          await supabase.from("ai_chat_messages").insert(
+            messages.map((m) => ({
+              session_id: sessionId,
+              role: m.role,
+              content: m.content,
+            })),
+          );
+        }
+      } else {
+        // Nur die LETZTE User-Message sichern (alles davor war schon drin)
+        const last = messages[messages.length - 1];
+        if (last && last.role === "user") {
+          await supabase.from("ai_chat_messages").insert({
+            session_id: sessionId,
+            role: "user",
+            content: last.content,
+          });
+        }
+      }
+      // Assistant-Antwort speichern
+      if (sessionId && result.reply) {
+        await supabase.from("ai_chat_messages").insert({
+          session_id: sessionId,
+          role: "assistant",
+          content: result.reply,
+          tool_names: result.toolCalls.map((c) => c.name),
+        });
+      }
+    } catch {
+      // History ist nice-to-have — Fehler darf den Chat nicht crashen
+    }
+
+    return NextResponse.json({ ...result, sessionId });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

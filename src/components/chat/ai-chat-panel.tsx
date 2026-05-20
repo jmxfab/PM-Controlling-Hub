@@ -12,6 +12,10 @@ import {
   Loader2,
   Wrench,
   Trash2,
+  History,
+  Plus,
+  Search,
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { diagnoseMicError } from "@/components/aufgaben/voice-task-dialog";
@@ -26,8 +30,16 @@ interface ChatMsg {
 }
 
 const STORAGE_KEY = "ai-chat:messages";
+const SESSION_KEY = "ai-chat:sessionId";
 const MAX_HISTORY = 30;
 const MAX_RECORDING_SECONDS = 300; // 5 Min Hard-Cap, dann Auto-Stop
+
+interface SessionListItem {
+  id: string;
+  title: string | null;
+  updated_at: string;
+  message_count: number;
+}
 
 function loadHistory(): ChatMsg[] {
   if (typeof window === "undefined") return [];
@@ -71,6 +83,14 @@ export function AiChatPanel() {
   const [recording, setRecording] = useState(false);
   const [recordingElapsed, setRecordingElapsed] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
+  // Server-side Session-ID — wird vom Backend beim ersten Send vergeben
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  // History-Drawer State
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyDays, setHistoryDays] = useState<"7" | "30" | "365">("30");
+  const [historyList, setHistoryList] = useState<SessionListItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -79,9 +99,13 @@ export function AiChatPanel() {
   const streamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Lade History beim Mount
+  // Lade History + Session-ID beim Mount
   useEffect(() => {
     setMessages(loadHistory());
+    if (typeof window !== "undefined") {
+      const sid = window.localStorage.getItem(SESSION_KEY);
+      if (sid) setSessionId(sid);
+    }
   }, []);
 
   // Persist History
@@ -131,12 +155,22 @@ export function AiChatPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: next.map(({ role, content }) => ({ role, content })),
+          sessionId,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error || `Fehler ${res.status}`);
         return;
+      }
+      // Session-ID persistieren (Server vergibt sie beim ersten Call)
+      if (typeof json.sessionId === "string" && json.sessionId !== sessionId) {
+        setSessionId(json.sessionId);
+        try {
+          window.localStorage.setItem(SESSION_KEY, json.sessionId);
+        } catch {
+          /* silent */
+        }
       }
       const reply: ChatMsg = {
         role: "assistant",
@@ -160,6 +194,89 @@ export function AiChatPanel() {
   function clearHistory() {
     if (!window.confirm("Chat-Verlauf wirklich loeschen?")) return;
     setMessages([]);
+    setSessionId(null);
+    try {
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* silent */
+    }
+  }
+
+  function startNewSession() {
+    setMessages([]);
+    setSessionId(null);
+    setError(null);
+    try {
+      window.localStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* silent */
+    }
+  }
+
+  async function openHistory() {
+    setHistoryOpen(true);
+    await fetchHistory(historySearch, historyDays);
+  }
+
+  async function fetchHistory(search: string, days: string) {
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({ days });
+      if (search.trim()) params.set("search", search.trim());
+      const res = await fetch(`/api/ai/chat/sessions?${params}`);
+      const json = await res.json().catch(() => ({}));
+      setHistoryList(Array.isArray(json.sessions) ? json.sessions : []);
+    } catch {
+      setHistoryList([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadSession(id: string) {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/ai/chat/sessions/${id}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Konnte Session nicht laden");
+        return;
+      }
+      const loaded: ChatMsg[] = (json.messages ?? []).map(
+        (m: { role: Role; content: string; tool_names?: string[] }) => ({
+          role: m.role,
+          content: m.content,
+          toolNames: m.tool_names ?? undefined,
+        }),
+      );
+      setMessages(loaded);
+      setSessionId(id);
+      try {
+        window.localStorage.setItem(SESSION_KEY, id);
+      } catch {
+        /* silent */
+      }
+      setHistoryOpen(false);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function deleteSession(id: string) {
+    if (!window.confirm("Diese Konversation loeschen?")) return;
+    await fetch(`/api/ai/chat/sessions/${id}`, { method: "DELETE" });
+    setHistoryList((l) => l.filter((s) => s.id !== id));
+    if (id === sessionId) {
+      setSessionId(null);
+      setMessages([]);
+      try {
+        window.localStorage.removeItem(SESSION_KEY);
+      } catch {
+        /* silent */
+      }
+    }
   }
 
   async function startRecording() {
@@ -322,6 +439,24 @@ export function AiChatPanel() {
               Durchsucht Aufgaben · Hero · Logbuch
             </div>
           </div>
+          <button
+            type="button"
+            onClick={openHistory}
+            className="text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60"
+            title="Verlauf"
+            aria-label="Verlauf oeffnen"
+          >
+            <History size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={startNewSession}
+            className="text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60"
+            title="Neue Konversation"
+            aria-label="Neue Konversation"
+          >
+            <Plus size={14} />
+          </button>
           {messages.length > 0 && (
             <button
               type="button"
@@ -342,6 +477,122 @@ export function AiChatPanel() {
             <X size={16} />
           </button>
         </div>
+
+        {/* History-Drawer (overlay innerhalb Panel) */}
+        {historyOpen && (
+          <div className="absolute inset-0 top-[57px] z-10 bg-card flex flex-col">
+            <div className="flex items-center gap-2 border-b px-3 py-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60"
+                aria-label="Zurueck"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <div className="text-sm font-semibold">Verlauf</div>
+              <div className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                {historyList.length}
+              </div>
+            </div>
+            {/* Filter */}
+            <div className="border-b px-3 py-2 shrink-0 space-y-2">
+              <div className="relative">
+                <Search
+                  size={12}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Suche im Verlauf…"
+                  value={historySearch}
+                  onChange={(e) => {
+                    setHistorySearch(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      fetchHistory(historySearch, historyDays);
+                  }}
+                  className="w-full h-8 pl-7 pr-2 text-[12.5px] rounded-lg border bg-background/50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div className="flex gap-1">
+                {(["7", "30", "365"] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      setHistoryDays(d);
+                      fetchHistory(historySearch, d);
+                    }}
+                    className={`flex-1 text-[11px] px-2 py-1 rounded-md transition-colors ${
+                      historyDays === d
+                        ? "bg-foreground text-background font-medium"
+                        : "bg-muted/60 hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {d === "7" ? "7 T" : d === "30" ? "30 T" : "1 J"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+              {historyLoading && (
+                <div className="flex items-center justify-center py-6 text-muted-foreground text-[12px]">
+                  <Loader2 size={14} className="animate-spin mr-2" />
+                  Lade…
+                </div>
+              )}
+              {!historyLoading && historyList.length === 0 && (
+                <div className="text-center text-[12px] text-muted-foreground py-8 px-3">
+                  Keine Konversationen
+                  {historySearch ? ` zu "${historySearch}"` : ""} gefunden.
+                </div>
+              )}
+              {historyList.map((s) => (
+                <div
+                  key={s.id}
+                  className={`group rounded-lg border bg-background/40 hover:bg-background/80 hover:border-foreground/15 transition-colors ${
+                    s.id === sessionId ? "border-blue-500/40" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => loadSession(s.id)}
+                    className="w-full text-left px-2.5 py-2"
+                  >
+                    <div className="text-[12.5px] font-medium line-clamp-2">
+                      {s.title || "(ohne Titel)"}
+                    </div>
+                    <div className="flex items-center justify-between mt-1 text-[10px] text-muted-foreground">
+                      <span>
+                        {new Date(s.updated_at).toLocaleString("de-AT", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <span className="tabular-nums">
+                        {s.message_count} Msg.
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteSession(s.id)}
+                    className="absolute opacity-0 group-hover:opacity-100 right-2 top-2 p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-all"
+                    title="Loeschen"
+                    aria-label="Loeschen"
+                    style={{ position: "relative", float: "right" }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div
