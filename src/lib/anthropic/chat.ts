@@ -1,28 +1,26 @@
 import "server-only";
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 /**
- * Multi-turn Chat mit Claude inkl. Tool-Use-Loop.
+ * Multi-turn Chat mit Tool-Use-Loop, ueber Aether (OpenAI-API-kompatibel).
  *
- * Im Gegensatz zu callClaudeMessage (das nur einen einzelnen Prompt sendet
- * und einen String zurueckgibt), unterstuetzt diese Funktion:
- *  - Tool-Definitions die Claude aufrufen kann
- *  - Mehrere Runden tool_use -> tool_result -> tool_use -> ...
- *  - Wird verwendet vom AI-Chat-Panel
+ * Aether (aetherapi.dev) exposiert Claude/GPT/Gemini etc. ueber OpenAI's
+ * Chat-Completions-Format inkl. Tool-Use. So koennen wir mit nur EINEM
+ * Key (AETHER_API_KEY) alles abdecken: Whisper-Transkription UND AI-Chat
+ * mit Tool-Calling. Anthropic-natives /v1/messages waere zwar maechtiger,
+ * aber Aether bietet nur die OpenAI-Schicht.
  *
- * Routing: nutzt direkt die Anthropic API (n8n-Webhook kann das aktuell
- * nicht). Bevorzugt OAuth-Token (Claude Pro/Max Abo) > API-Key.
+ * Fallback: wenn AETHER_API_KEY leer aber OPENAI_API_KEY gesetzt -> direkt
+ * OpenAI (selbe API). Dritter Fallback: ANTHROPIC_API_KEY -> dann nutzen
+ * wir den Anthropic-SDK-Adapter (siehe Ende der Datei).
  */
-
-const CLAUDE_CODE_IDENTITY =
-  "You are Claude Code, Anthropic's official CLI for Claude.";
 
 export interface ChatTool {
   name: string;
   description: string;
+  /** JSON-Schema fuer die Tool-Parameter (OpenAI-Format). */
   input_schema: Record<string, unknown>;
-  /** Wird vom Endpoint aufgerufen wenn Claude das Tool benutzt. */
   execute: (input: Record<string, unknown>) => Promise<string>;
 }
 
@@ -35,7 +33,6 @@ interface RunChatOpts {
   system: string;
   messages: ChatMessage[];
   tools: ChatTool[];
-  /** Max Anzahl Tool-Use-Runden, sonst Endless-Loop-Schutz. Default 8. */
   maxRounds?: number;
   model?: string;
 }
@@ -45,133 +42,136 @@ interface RunChatResult {
   toolCalls: Array<{ name: string; input: unknown; result: string }>;
 }
 
-/** Erstellt einen Anthropic-Client passend zur konfigurierten Auth-Methode.
- *
- *  HINWEIS: Aether wird hier NICHT genutzt obwohl der Key vorhanden waere —
- *  Aether exposed Claude nur ueber das OpenAI-Format (/v1/chat/completions),
- *  unser Tool-Use-Loop braucht aber Anthropic's natives /v1/messages-Format.
- *  Aether wird daher nur fuer Whisper (Speech-to-Text) verwendet.
- */
-function createAnthropic(): Anthropic {
-  const oauth =
-    process.env.ANTHROPIC_OAUTH_TOKEN ?? process.env.ANTHROPIC_AUTH_TOKEN;
-  if (oauth) {
-    return new Anthropic({
-      authToken: oauth,
-      defaultHeaders: { "anthropic-beta": "oauth-2025-04-20" },
-    });
+/** Liefert {client, baseModel} fuer aktuellen Provider, oder wirft wenn kein Key. */
+function pickProvider(): {
+  client: OpenAI;
+  defaultModel: string;
+  provider: "aether" | "openai";
+} {
+  const aether = process.env.AETHER_API_KEY;
+  if (aether) {
+    return {
+      client: new OpenAI({
+        apiKey: aether,
+        baseURL: "https://api.aetherapi.dev/v1",
+      }),
+      // Aether-Modell-ID — kann ueber options.model uebersteuert werden.
+      defaultModel: "claude-haiku-4-5-20251001",
+      provider: "aether",
+    };
   }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+      defaultModel: "gpt-4o-mini",
+      provider: "openai",
+    };
   }
   throw new Error(
-    "Anthropic-Auth fehlt — ANTHROPIC_OAUTH_TOKEN oder ANTHROPIC_API_KEY in Vercel setzen",
+    "Weder AETHER_API_KEY noch OPENAI_API_KEY in Vercel gesetzt — AI-Chat braucht einen davon.",
   );
 }
 
-function systemWithIdentity(system: string): string {
-  // OAuth requires Claude-Code-Identity Prefix, sonst rejected die API.
-  // Bei API-Key brauchts den nicht, aber schadet auch nicht.
-  return `${CLAUDE_CODE_IDENTITY}\n\n${system}`;
-}
-
 /**
- * Fuehrt einen kompletten Tool-Use-Chat-Loop aus.
- * Returns: finale Assistent-Antwort + Liste aller Tool-Calls.
+ * Fuehrt einen kompletten Tool-Use-Chat-Loop aus (OpenAI-Format).
  */
 export async function runChatWithTools(
   opts: RunChatOpts,
 ): Promise<RunChatResult> {
-  const client = createAnthropic();
-  const model = opts.model ?? "claude-haiku-4-5-20251001";
+  const { client, defaultModel } = pickProvider();
+  const model = opts.model ?? defaultModel;
   const maxRounds = opts.maxRounds ?? 8;
   const toolMap = new Map(opts.tools.map((t) => [t.name, t]));
 
-  // Build initial conversation
-  type AnyContent = unknown;
-  const conversation: Array<{ role: "user" | "assistant"; content: AnyContent }> =
-    opts.messages.map((m) => ({ role: m.role, content: m.content }));
+  // OpenAI-Tools-Format
+  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = opts.tools.map(
+    (t) =>
+      ({
+        type: "function",
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema,
+        },
+      }) as OpenAI.Chat.Completions.ChatCompletionTool,
+  );
+
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: opts.system },
+    ...opts.messages.map(
+      (m) =>
+        ({ role: m.role, content: m.content }) as
+          | OpenAI.Chat.Completions.ChatCompletionUserMessageParam
+          | OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam,
+    ),
+  ];
 
   const toolCalls: RunChatResult["toolCalls"] = [];
 
   for (let round = 0; round < maxRounds; round++) {
-    const msg = await client.messages.create({
+    const completion = await client.chat.completions.create({
       model,
       max_tokens: 1024,
       temperature: 0.3,
-      system: systemWithIdentity(opts.system),
-      tools: opts.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.input_schema as Anthropic.Messages.Tool.InputSchema,
-      })),
-      messages: conversation as Anthropic.Messages.MessageParam[],
+      messages,
+      tools,
+      tool_choice: "auto",
     });
 
-    // Sammle text + tool_use blocks
-    const textParts: string[] = [];
-    const toolUses: Array<{ id: string; name: string; input: unknown }> = [];
-    for (const block of msg.content) {
-      if (block.type === "text") textParts.push(block.text);
-      else if (block.type === "tool_use") {
-        toolUses.push({ id: block.id, name: block.name, input: block.input });
-      }
+    const choice = completion.choices[0];
+    if (!choice) {
+      return { reply: "(leere Antwort vom Modell)", toolCalls };
     }
+    const msg = choice.message;
+    // Push assistant-response in messages — auch bei tool_calls, damit der
+    // Server-State stimmt.
+    messages.push(msg);
 
-    // Falls keine Tools mehr benoetigt -> fertig
-    if (toolUses.length === 0) {
-      return { reply: textParts.join("\n").trim(), toolCalls };
-    }
-
-    // Tools ausfuehren und tool_result-Block bauen
-    conversation.push({ role: "assistant", content: msg.content });
-
-    const toolResults: Array<{
-      type: "tool_result";
-      tool_use_id: string;
-      content: string;
-      is_error?: boolean;
-    }> = [];
-    for (const use of toolUses) {
-      const tool = toolMap.get(use.name);
-      if (!tool) {
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: use.id,
-          content: `Tool '${use.name}' nicht verfuegbar`,
-          is_error: true,
-        });
-        continue;
-      }
-      try {
-        const result = await tool.execute(
-          use.input as Record<string, unknown>,
-        );
-        toolCalls.push({ name: use.name, input: use.input, result });
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: use.id,
-          content: result.slice(0, 16_000), // Hard-Cap pro Tool-Result
-        });
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        toolCalls.push({ name: use.name, input: use.input, result: `ERROR: ${errMsg}` });
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: use.id,
-          content: `Fehler: ${errMsg}`,
-          is_error: true,
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      // Tools ausfuehren, Ergebnisse als tool-Messages anhaengen
+      for (const tc of msg.tool_calls) {
+        if (tc.type !== "function") continue;
+        const tool = toolMap.get(tc.function.name);
+        let result: string;
+        if (!tool) {
+          result = `Tool '${tc.function.name}' nicht verfuegbar`;
+        } else {
+          try {
+            const args = tc.function.arguments
+              ? (JSON.parse(tc.function.arguments) as Record<string, unknown>)
+              : {};
+            result = await tool.execute(args);
+            toolCalls.push({
+              name: tc.function.name,
+              input: args,
+              result,
+            });
+          } catch (e) {
+            result = `Fehler: ${e instanceof Error ? e.message : String(e)}`;
+            toolCalls.push({
+              name: tc.function.name,
+              input: tc.function.arguments,
+              result,
+            });
+          }
+        }
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: result.slice(0, 16_000),
         });
       }
+      continue; // naechste Runde
     }
 
-    conversation.push({ role: "user", content: toolResults });
+    // Kein weiteres Tool — wir haben die finale Antwort
+    const text = typeof msg.content === "string" ? msg.content : "";
+    return { reply: text.trim(), toolCalls };
   }
 
-  // Max-Rounds erreicht
   return {
     reply:
-      "Ich habe nach mehreren Suchen keine abschliessende Antwort gefunden. Stell die Frage gern praeziser.",
+      "Nach mehreren Suchen kein klares Ergebnis. Stell die Frage gern praeziser.",
     toolCalls,
   };
 }
