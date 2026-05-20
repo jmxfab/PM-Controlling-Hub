@@ -181,6 +181,13 @@ const TAB_META: Record<
       "Eingehende Rechnungen, Mahnungen, Gutschriften, Bestellbestätigungen und Lieferscheine erscheinen hier.",
     icon: Euro,
   },
+  aufgeschoben: {
+    label: "Aufgeschoben",
+    emptyTitle: "Nichts aufgeschoben",
+    emptyHint:
+      "Wenn du bei einer Aufgabe eine Erinnerung setzt, landet sie hier bis sie fällig wird.",
+    icon: Clock3,
+  },
 };
 
 function formatRelative(iso: string): string {
@@ -617,6 +624,16 @@ export function AufgabenView({
           <span className="flex-1 text-left">Rechnungen</span>
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
+        {counts.aufgeschoben > 0 && (
+          <TabsTrigger
+            value="aufgeschoben"
+            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          >
+            <Clock3 size={14} />
+            <span className="flex-1 text-left">Aufgeschoben</span>
+            <CountPill value={counts.aufgeschoben} tone="amber" />
+          </TabsTrigger>
+        )}
         <TabsTrigger
           value="heizlast"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -670,6 +687,13 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
+      <TabsContent value="aufgeschoben">
+        <MailTab
+          initial={{ entries: [], total: 0 }}
+          filter="aufgeschoben"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      </TabsContent>
       <TabsContent value="heizlast">
         <HeizlastView
           projects={heizlastProjects}
@@ -689,12 +713,19 @@ function CountPill({
   highlight?: boolean;
   /** Spezial-Variante fuer Kritisch: bei aktivem Tab heller weisser Halo,
    *  bei inaktivem Tab sattes Rose. */
-  tone?: "rose";
+  tone?: "rose" | "amber";
 }) {
   if (!value) return null;
   if (tone === "rose") {
     return (
       <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300 ring-1 ring-rose-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 group-data-[state=active]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.25)] transition-colors">
+        {value}
+      </span>
+    );
+  }
+  if (tone === "amber") {
+    return (
+      <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300 ring-1 ring-amber-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
         {value}
       </span>
     );
@@ -717,12 +748,13 @@ const TAB_FILTERS: Record<
   MailTabFilter,
   { status: boolean; priority: boolean; defaultStatus: StatusFilter }
 > = {
-  my_day:     { status: false, priority: false, defaultStatus: "open" },
-  kritisch:   { status: false, priority: false, defaultStatus: "open" },
-  aufgaben:   { status: true,  priority: true,  defaultStatus: "open" },
-  infos:      { status: true,  priority: false, defaultStatus: "open" }, // Default ungelesene, "Gelesen"-Filter erreichbar
-  inbox:      { status: true,  priority: false, defaultStatus: "open" },
-  rechnungen: { status: true,  priority: false, defaultStatus: "open" },
+  my_day:       { status: false, priority: false, defaultStatus: "open" },
+  kritisch:     { status: false, priority: false, defaultStatus: "open" },
+  aufgaben:     { status: true,  priority: true,  defaultStatus: "open" },
+  infos:        { status: true,  priority: false, defaultStatus: "open" },
+  inbox:        { status: true,  priority: false, defaultStatus: "open" },
+  rechnungen:   { status: true,  priority: false, defaultStatus: "open" },
+  aufgeschoben: { status: false, priority: false, defaultStatus: "open" },
 };
 
 /**
@@ -941,8 +973,9 @@ function MailTab({
     for (const t of data.entries) {
       // 1) Erledigte raus — Item 3.1 (sofortiges Ausblenden nach Mark-Done)
       if (t.status === "done" && statusFilter !== "done") continue;
-      // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt
-      if (t.status !== "done" && t.remind_at) {
+      // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt.
+      //    Im "Aufgeschoben"-Tab zeigen wir sie IMMER (der Tab ist genau dafuer da).
+      if (t.status !== "done" && t.remind_at && filter !== "aufgeschoben") {
         const remindMs = new Date(t.remind_at).getTime();
         if (Number.isFinite(remindMs) && remindMs > nowMs) {
           snoozed += 1;
@@ -1753,7 +1786,7 @@ function MailTab({
             </section>
           ))
           )}
-          {snoozedCount > 0 && (
+          {snoozedCount > 0 && filter !== "aufgeschoben" && (
             <div className="flex justify-center pt-1">
               <Button
                 size="sm"

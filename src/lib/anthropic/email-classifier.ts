@@ -42,15 +42,26 @@ Inhalt:
 {body}`;
 
 /** Detect Hero-Notification-Mails (Hero-Software-Notifications, Logbuch-Mails).
+ *  Erkennung per Absender-Email, Absender-Name ODER Betreff-Muster.
  *  Solche Mails brauchen keinen KI-Aufsatz — Betreff alleine reicht. */
-function isHeroNotificationSender(senderEmail: string, senderName: string): boolean {
+function isHeroNotification(
+  senderEmail: string,
+  senderName: string,
+  subject: string,
+): boolean {
   const e = senderEmail.toLowerCase();
   const n = senderName.toLowerCase();
+  const s = subject.toLowerCase();
+  // Absender-basiert
   if (/(^|[@.+_-])hero([@.+_-]|$)/.test(e)) return true;
   if (/noreply.*hero|hero.*noreply/.test(e)) return true;
   if (n.includes("hero") && (n.includes("benachrichtigung") || n.includes("notification"))) {
     return true;
   }
+  // Betreff-basiert: Hero sendet Mails mit diesen Mustern fuer Projekt-Aktivitaeten
+  if (/kommentar zum projekt|neuer kommentar|neue aufgabe.*hero|hero.*aufgabe/.test(s)) return true;
+  // Muster wie "PVS-1234: Neuer Kommentar" oder "[Hero] ..."
+  if (/^\[hero\]/i.test(subject)) return true;
   return false;
 }
 
@@ -61,7 +72,7 @@ export async function classifyEmail(params: {
   body: string;
 }): Promise<ClassificationResult> {
   // Fast-Path fuer Hero-Notifications: kein langer Aufsatz, Betreff = Title
-  if (isHeroNotificationSender(params.senderEmail, params.senderName)) {
+  if (isHeroNotification(params.senderEmail, params.senderName, params.subject)) {
     return {
       category: "info",
       title: params.subject.slice(0, 120) || "Hero-Benachrichtigung",

@@ -553,8 +553,8 @@ export function TaskComposer({
         </Button>
 
         {/* Hero-Logbuch — PRIMARY wenn Task an Hero-Projekt verknuepft.
-         *  Steht direkt neben KI-Antwort weil das die haeufigste Aktion
-         *  fuer Hero-Tasks ist (statt per Mail antworten -> direkt im Projekt). */}
+         *  Steht direkt neben KI-Notiz. Kommunikation zu Projekten laeuft
+         *  in der Firma intern immer ueber Hero — Mail ist nur Fallback. */}
         {heroProjectLinked && (
           <Button
             size="sm"
@@ -570,8 +570,26 @@ export function TaskComposer({
               </>
             ) : (
               <>
-                <Sparkles size={12} /> In Hero antworten
+                <Sparkles size={12} /> In Hero eintragen
               </>
+            )}
+          </Button>
+        )}
+        {/* Sekundaer: Per Mail antworten — nur wenn Hero verknuepft UND Absender vorhanden.
+         *  Kleiner Outline-Button daneben damit klar ist: Hero = Default, Mail = Ausnahme. */}
+        {heroProjectLinked && source === "mail" && mailto && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={sendViaOutlook}
+            disabled={busy !== null || text.trim().length === 0}
+            title="Per Mail antworten (Ausnahme — normalerweise direkt in Hero eintragen)"
+          >
+            {busy === "mail" ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <><Mail size={12} /> Per Mail</>
             )}
           </Button>
         )}
@@ -638,7 +656,9 @@ export function TaskComposer({
             </Button>
           )}
 
-          {source === "mail" && (
+          {/* Outlook als Haupt-Versand-Button nur wenn KEIN Hero-Projekt verknuepft.
+           *  Mit Hero-Projekt: Outlook-Button steht kleiner direkt neben dem Hero-Button. */}
+          {source === "mail" && !heroProjectLinked && (
             <Button
               size="sm"
               variant="default"
