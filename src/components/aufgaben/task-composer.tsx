@@ -665,48 +665,6 @@ export function TaskComposer({
           )}
         </Button>
 
-        {/* Hero-Logbuch — PRIMARY wenn Task an Hero-Projekt verknuepft.
-         *  Steht direkt neben KI-Notiz. Kommunikation zu Projekten laeuft
-         *  in der Firma intern immer ueber Hero — Mail ist nur Fallback. */}
-        {heroProjectLinked && (
-          <Button
-            size="sm"
-            variant="default"
-            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
-            onClick={() => void sendToHeroLog()}
-            disabled={busy !== null || text.trim().length === 0}
-            title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
-          >
-            {busy === "hero-log" ? (
-              <>
-                <Loader2 size={12} className="animate-spin" /> Schreibt…
-              </>
-            ) : (
-              <>
-                <Sparkles size={12} /> In Hero eintragen
-              </>
-            )}
-          </Button>
-        )}
-        {/* Sekundaer: Per Mail antworten — nur wenn Hero verknuepft UND Absender vorhanden.
-         *  Kleiner Outline-Button daneben damit klar ist: Hero = Default, Mail = Ausnahme. */}
-        {heroProjectLinked && source === "mail" && mailto && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            onClick={sendViaOutlook}
-            disabled={busy !== null || text.trim().length === 0}
-            title="Per Mail antworten (Ausnahme — normalerweise direkt in Hero eintragen)"
-          >
-            {busy === "mail" ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <><Mail size={12} /> Per Mail</>
-            )}
-          </Button>
-        )}
-
         {/* Sekundaer: Notiz in App speichern */}
         <Button
           size="sm"
@@ -769,20 +727,41 @@ export function TaskComposer({
             </Button>
           )}
 
-          {/* Outlook als Haupt-Versand-Button nur wenn KEIN Hero-Projekt verknuepft.
-           *  Mit Hero-Projekt: Outlook-Button steht kleiner direkt neben dem Hero-Button. */}
-          {source === "mail" && !heroProjectLinked && (
+          {/* PRIMARY: Im Logbuch antworten — Haupt-Versand-Action wenn Hero verknuepft.
+           *  Schreibt Text direkt ins Hero-Projekt-Logbuch via API.
+           *  Bei Fehler: Clipboard-Fallback + Hero-Tab oeffnen (siehe sendToHeroLog). */}
+          {heroProjectLinked && (
             <Button
               size="sm"
               variant="default"
+              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm"
+              onClick={() => void sendToHeroLog()}
+              disabled={busy !== null || text.trim().length === 0}
+              title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
+            >
+              {busy === "hero-log" ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> Schreibt…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} /> Im Logbuch antworten
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Per Outlook antworten — bei Mail-Tasks immer sichtbar wenn Absender da ist.
+           *  Bei Hero-verknuepften Tasks: Outline-Variante neben dem primaeren Logbuch-Button.
+           *  Sonst: primaere Variante (Default-Style). */}
+          {source === "mail" && mailto && (
+            <Button
+              size="sm"
+              variant={heroProjectLinked ? "outline" : "default"}
               className="h-8 gap-1.5"
               onClick={sendViaOutlook}
-              disabled={busy !== null || !mailto || text.trim().length === 0}
-              title={
-                !mailto
-                  ? "Kein Absender — kein Outlook-Reply möglich"
-                  : "Öffnet Outlook mit dem Text als Antwort"
-              }
+              disabled={busy !== null || text.trim().length === 0}
+              title="Öffnet Outlook mit dem Text als Antwort"
             >
               {busy === "mail" ? (
                 <>

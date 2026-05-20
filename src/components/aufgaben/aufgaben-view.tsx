@@ -2281,6 +2281,37 @@ function TaskCard({
             >
               {t.title}
             </h3>
+            {/* Hero-Projekt-Pille im Header — sichtbar collapsed UND expanded,
+             *  damit der User in der Liste sofort sieht welche Karten Hero-verknuepft sind. */}
+            {t.hero_project_id && t.hero_project_number && (() => {
+              const href = buildHeroProjectHref(
+                heroProjectLinkTemplate,
+                t.hero_project_id,
+                t.hero_project_number,
+              );
+              const inner = (
+                <>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="font-mono">{t.hero_project_number}</span>
+                  <ExternalLink size={9} className="opacity-60" />
+                </>
+              );
+              const cls = "shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors";
+              return href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Hero-Projekt ${t.hero_project_number} öffnen`}
+                  className={cls}
+                >
+                  {inner}
+                </a>
+              ) : (
+                <span className={cls}>{inner}</span>
+              );
+            })()}
             <div className="flex flex-col items-end gap-1 shrink-0">
               {/* Kompakte Schnell-Aktionen — nur im expanded Zustand, direkt oben rechts */}
               {expanded && !isDone && (
