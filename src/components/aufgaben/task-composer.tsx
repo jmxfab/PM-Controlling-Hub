@@ -64,6 +64,13 @@ interface Props {
   mailto: string | null;
   /** Bei „In Hero oeffnen" (nur source='hero'). Deep-Link zum Projekt. */
   heroProjectHref?: string | null;
+  /** Wenn gesetzt: aktiviert „Im Hero-Logbuch eintragen"-Button.
+   *  Der Endpoint /api/mail-tasks/[id]/hero-log schreibt dann direkt
+   *  per GraphQL-Mutation ins Hero-Projekt-Logbuch — keine Mail noetig. */
+  heroProjectLinked?: boolean;
+  /** Titel der Aufgabe — wird als 'custom_title' des Logbuch-Eintrags
+   *  uebernommen wenn vorhanden. */
+  taskTitle?: string;
   /** Auto-Done-Hook nach erfolgreicher Aktion. */
   onActionCompleted?: () => void;
   /** Status auf 'controlling' setzen. */
@@ -89,6 +96,8 @@ export function TaskComposer({
   source,
   mailto,
   heroProjectHref,
+  heroProjectLinked,
+  taskTitle,
   onActionCompleted,
   onMarkControlling,
 }: Props) {
@@ -98,7 +107,7 @@ export function TaskComposer({
   const [showHint, setShowHint] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [busy, setBusy] = useState<
-    "ai" | "note" | "mail" | "clip" | null
+    "ai" | "note" | "mail" | "clip" | "hero-log" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -290,6 +299,47 @@ export function TaskComposer({
       if (autoDone) onActionCompleted?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kopieren fehlgeschlagen");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendToHeroLog() {
+    const body = text.trim();
+    if (!body) {
+      setError("Logbuch-Text ist leer");
+      return;
+    }
+    setBusy("hero-log");
+    setError(null);
+    try {
+      const res = await fetch(`/api/mail-tasks/${taskId}/hero-log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: body,
+          title: taskTitle || "Notiz aus Hub",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || `Fehler ${res.status}`);
+        return;
+      }
+      // Notiz auch lokal als 'hero-log' kind speichern fuer History
+      await fetch(`/api/mail-tasks/${taskId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, kind: "hero-log" }),
+      }).catch(() => {});
+      flashOk(
+        autoDone
+          ? `Im Hero-Logbuch eingetragen + erledigt (Eintrag #${json.heroEntryId})`
+          : `Im Hero-Logbuch eingetragen (Eintrag #${json.heroEntryId})`,
+      );
+      if (autoDone) onActionCompleted?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Netzwerk-Fehler");
     } finally {
       setBusy(null);
     }
@@ -541,6 +591,29 @@ export function TaskComposer({
               </>
             )}
           </Button>
+
+          {/* Direkt ins Hero-Logbuch eintragen — sichtbar wenn die Task
+              an ein Hero-Projekt verknuepft ist (egal ob mail- oder hero-source). */}
+          {heroProjectLinked && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={sendToHeroLog}
+              disabled={busy !== null || text.trim().length === 0}
+              title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
+            >
+              {busy === "hero-log" ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> Schreibt…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} /> Im Hero-Logbuch eintragen
+                </>
+              )}
+            </Button>
+          )}
 
           {source === "hero" && heroProjectHref && (
             <Button
