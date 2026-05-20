@@ -2427,6 +2427,8 @@ function TaskCard({
                       )
                     : null
                 }
+                heroProjectLinked={Boolean(t.hero_project_id)}
+                taskTitle={t.title}
                 onActionCompleted={onMarkDone}
               />
             )}
