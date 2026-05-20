@@ -207,17 +207,52 @@ export async function POST(
       hero_project_name: projectName,
     };
   } else {
-    const { data: row, error } = await supabase
+    const { data: row } = await supabase
       .from("tasks")
       .select(
         "title, description, mail_category, hero_project_id, hero_project_number, hero_project_name",
       )
       .eq("id", id)
-      .single();
-    if (error || !row) {
-      return NextResponse.json({ error: "task not found" }, { status: 404 });
+      .maybeSingle();
+    if (row) {
+      task = row as TaskCtx;
+    } else {
+      // Fallback: vielleicht ist die ID doch eine hero_notification ohne
+      // 'hero-' Praefix (z.B. wenn der Client den Praefix verloren hat).
+      const { data: noteRow } = await supabase
+        .from("hero_notifications")
+        .select("title, body, target_id")
+        .eq("id", id)
+        .maybeSingle();
+      if (noteRow) {
+        let projectNumber: string | null = null;
+        let projectName: string | null = null;
+        if (noteRow.target_id) {
+          const { data: proj } = await supabase
+            .from("hero_projects")
+            .select("project_number, project_name")
+            .eq("id", noteRow.target_id)
+            .maybeSingle();
+          projectNumber = (proj?.project_number as string | null) ?? null;
+          projectName = (proj?.project_name as string | null) ?? null;
+        }
+        task = {
+          title: noteRow.title ?? "(ohne Titel)",
+          description: noteRow.body ?? null,
+          mail_category: "aufgabe",
+          hero_project_id: noteRow.target_id ?? null,
+          hero_project_number: projectNumber,
+          hero_project_name: projectName,
+        };
+      } else {
+        return NextResponse.json(
+          {
+            error: `Task mit ID ${id.slice(0, 36)} nicht gefunden — vermutlich zwischendurch geloescht oder in eine andere Kategorie verschoben. Seite neu laden.`,
+          },
+          { status: 404 },
+        );
+      }
     }
-    task = row as TaskCtx;
   }
 
   // Letzte 8 Logbuch-Eintraege laden — nur wenn Task an Hero-Projekt haengt.
