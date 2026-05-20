@@ -5,6 +5,7 @@ import "./globals.css";
 import { MainNav } from "@/components/nav/main-nav";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { AiChatPanel } from "@/components/chat/ai-chat-panel";
 
 export const metadata: Metadata = {
   title: {
@@ -50,6 +51,7 @@ export default function RootLayout({
           </div>
           <MainNav />
           <main className="animate-page-in">{children}</main>
+          <AiChatPanel />
           <Toaster richColors closeButton />
         </ThemeProvider>
       </body>
