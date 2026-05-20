@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -100,6 +101,13 @@ const CATEGORY_LABELS: Record<string, { label: string; cls: string }> = {
  * im TaskCard geoeffnet. Zeigt 30/90/365-Tage-Fenster + Counts.
  */
 export function SenderHistoryDialog({ email, open, onOpenChange }: Props) {
+  const router = useRouter();
+  function jumpToTask(taskId: string) {
+    onOpenChange(false);
+    // URL-Parameter focusTask wird vom Aufgaben-View ausgewertet (siehe
+    // useSearchParams) — die entsprechende Karte wird auto-expanded.
+    router.push(`/aufgaben?focusTask=${encodeURIComponent(taskId)}`);
+  }
   const [days, setDays] = useState<30 | 90 | 365>(90);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,12 +231,15 @@ export function SenderHistoryDialog({ email, open, onOpenChange }: Props) {
                   : undefined;
                 const isDone = e.status === "done";
                 return (
-                  <li
-                    key={e.id}
-                    className={`rounded-xl border bg-card/40 hover:bg-card/80 transition-colors px-3.5 py-2.5 ${
-                      isDone ? "opacity-60" : ""
-                    }`}
-                  >
+                  <li key={e.id}>
+                    <button
+                      type="button"
+                      onClick={() => jumpToTask(e.id)}
+                      className={`w-full text-left rounded-xl border bg-card/40 hover:bg-card/80 hover:border-foreground/20 transition-all px-3.5 py-2.5 hover:scale-[1.005] active:scale-100 ${
+                        isDone ? "opacity-60" : ""
+                      }`}
+                      title="Zur Aufgabe springen"
+                    >
                     <div className="flex items-start gap-2.5">
                       <div
                         className={`shrink-0 mt-1 w-1.5 h-1.5 rounded-full ${
@@ -273,6 +284,7 @@ export function SenderHistoryDialog({ email, open, onOpenChange }: Props) {
                         </div>
                       </div>
                     </div>
+                    </button>
                   </li>
                 );
               })}
