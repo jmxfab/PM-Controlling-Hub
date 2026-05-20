@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
           // Bei Tab-zurueck oder Hard-Refresh innerhalb 15s = kein Server-Hit.
           // Innerhalb 60s = stale Content sofort + Refresh in Background.
           "Cache-Control":
-            "private, max-age=15, stale-while-revalidate=60",
+            "private, max-age=30, stale-while-revalidate=120",
         },
       },
     );
