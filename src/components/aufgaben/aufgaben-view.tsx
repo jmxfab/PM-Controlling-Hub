@@ -35,6 +35,7 @@ import {
   Bell,
   History,
   Star,
+  ExternalLink,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -2383,8 +2384,41 @@ function TaskCard({
              *  wir den Match-Endpoint automatisch beim ersten Expand. Wenn
              *  #NNNN im Titel/Body steht, ist's nach 200ms verlinkt. */}
             {t.source === "mail" && !t.hero_project_id && (
-              <AutoHeroMatch taskId={t.id} expanded={expanded} />
+              <AutoHeroMatch
+                taskId={t.id}
+                expanded={expanded}
+                heroProjectLinkTemplate={heroProjectLinkTemplate}
+              />
             )}
+            {/* Hero-Projekt-Badge fuer bereits gespeicherte Verknuepfung — klickbar */}
+            {t.hero_project_id && t.hero_project_number && (() => {
+              const href = heroProjectLinkTemplate
+                ? heroProjectLinkTemplate.replace("{projectId}", t.hero_project_id!)
+                : null;
+              const clean = cleanHeroProjectName(t.hero_project_name, t.hero_project_number);
+              const label = clean
+                ? `${t.hero_project_number} — ${clean}`
+                : t.hero_project_number;
+              return href ? (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 hover:underline decoration-dotted underline-offset-2 w-fit"
+                  title={`Hero-Projekt ${t.hero_project_number} öffnen`}
+                >
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  Hero-Projekt:{" "}
+                  <span className="font-mono font-semibold">{label}</span>
+                  <ExternalLink size={11} className="opacity-60" />
+                </a>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  Hero-Projekt: <span className="font-mono font-semibold">{label}</span>
+                </div>
+              );
+            })()}
             {/* Projekt-Pulse: zeigt letzte 5 Logbuch-Eintraege des Hero-Projekts,
              *  falls verknuepft. */}
             {t.hero_project_id && (
@@ -2994,15 +3028,17 @@ function cleanHeroProjectName(
 function AutoHeroMatch({
   taskId,
   expanded,
+  heroProjectLinkTemplate,
 }: {
   taskId: string;
   expanded: boolean;
+  heroProjectLinkTemplate: string | null;
 }) {
   const triedRef = useRef(false);
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "running" }
-    | { kind: "matched"; projectNumber: string | null; projectName: string | null }
+    | { kind: "matched"; projectId: string | null; projectNumber: string | null; projectName: string | null }
     | { kind: "no-match" }
   >({ kind: "idle" });
   const router = useRouter();
@@ -3019,12 +3055,10 @@ function AutoHeroMatch({
         if (j.matched && j.project) {
           setState({
             kind: "matched",
+            projectId: j.project.id ?? null,
             projectNumber: j.project.number ?? null,
             projectName: j.project.name ?? null,
           });
-          // Server-State changed -> realtime listener triggert auch refresh,
-          // aber wir nudgen vorsichtig nochmal damit ProjectActivityStrip
-          // den neuen hero_project_id sofort bekommt.
           setTimeout(() => router.refresh(), 200);
         } else {
           setState({ kind: "no-match" });
@@ -3043,22 +3077,38 @@ function AutoHeroMatch({
       </div>
     );
   }
-  return (
-    <div className="text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+
+  const href =
+    state.projectId && heroProjectLinkTemplate
+      ? heroProjectLinkTemplate.replace("{projectId}", state.projectId)
+      : null;
+  const clean = cleanHeroProjectName(state.projectName, state.projectNumber);
+  const label = clean
+    ? `${state.projectNumber} — ${clean}`
+    : (state.projectNumber ?? "");
+
+  const inner = (
+    <>
+      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
       Hero-Projekt verknuepft:{" "}
-      {state.projectNumber && (
-        <span className="font-mono">{state.projectNumber}</span>
-      )}
-      {(() => {
-        const clean = cleanHeroProjectName(
-          state.projectName,
-          state.projectNumber,
-        );
-        return clean ? (
-          <span className="text-muted-foreground"> — {clean}</span>
-        ) : null;
-      })()}
+      <span className="font-mono font-semibold">{label}</span>
+      {href && <ExternalLink size={11} className="opacity-60" />}
+    </>
+  );
+
+  return href ? (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 hover:underline decoration-dotted underline-offset-2 w-fit"
+      title={`Hero-Projekt ${state.projectNumber} öffnen`}
+    >
+      {inner}
+    </a>
+  ) : (
+    <div className="text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+      {inner}
     </div>
   );
 }
