@@ -112,12 +112,14 @@ function buildHeroLogPrompt(
   hint: string,
   heroHistoryFormatted: string,
 ): string {
+  // Bei Info-Kategorie (z.B. Hero-Benachrichtigung): noch kuerzere Anweisung
+  const isInfo = task.mail_category === "info";
   return `Du bist Assistent fuer Domenic Wagenleitner (Geschaeftsfuehrer Jumax Elektrotechnik GmbH).
 Du formulierst eine INTERNE NOTIZ die als Kommentar in den Hero-Projekt-Logbuch-Verlauf eingetragen wird.
 
 STIL:
 - KEINE Anrede ('Hallo X'), KEINE Grussformel ('Viele Gruesse').
-- Sehr knapp: 1-3 Saetze. Pure Fakten / Statement / Naechster Schritt.
+- ${isInfo ? "MAXIMAL 1 Satz. Fasse nur zusammen was passiert ist — kein Aufsatz, keine Erklaerung." : "Sehr knapp: 1-3 Saetze. Pure Fakten / Statement / Naechster Schritt."}
 - Schreibe wie ein Eintrag im internen Projekt-Verlauf — sachlich, kurz.
 - Wenn ein Termin/Wert/Name aus dem Kontext klar ist: uebernehme ihn 1:1.
 - Wenn unklar: Platzhalter wie [TBC], NIE erfinden.

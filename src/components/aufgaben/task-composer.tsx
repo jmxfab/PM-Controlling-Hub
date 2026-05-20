@@ -201,7 +201,9 @@ export function TaskComposer({
           tone,
           // Hero-Tasks: kompakte interne Notiz fuer Logbuch.
           // Mail-Tasks: voll formulierte Email-Antwort.
-          mode: source === "hero" ? "hero_log" : "email",
+          // Hero-Tasks (source=hero) ODER Mail-Tasks mit Hero-Verknuepfung:
+          // kurze interne Logbuch-Notiz statt langer Email-Antwort.
+          mode: source === "hero" || heroProjectLinked ? "hero_log" : "email",
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -545,7 +547,7 @@ export function TaskComposer({
           ) : (
             <>
               <Sparkles size={12} />
-              {source === "hero" ? "KI-Eintrag" : "KI-Antwort"}
+              {source === "hero" || heroProjectLinked ? "KI-Notiz" : "KI-Antwort"}
             </>
           )}
         </Button>
