@@ -38,6 +38,7 @@ import {
   ExternalLink,
   HardHat,
   Briefcase,
+  Users2,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -67,6 +68,7 @@ import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
 import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-strip";
+import { ProjectHistoryPanel } from "@/components/aufgaben/project-history-panel";
 import { TaskComposer } from "@/components/aufgaben/task-composer";
 import { SortableTaskCard } from "@/components/aufgaben/sortable-task-card";
 import {
@@ -203,6 +205,12 @@ const TAB_META: Record<
     emptyHint:
       "Angebote, Freigaben, Finanzentscheidungen und Eskalationen die die Geschäftsführung betreffen.",
     icon: Briefcase,
+  },
+  controlling: {
+    label: "Controlling",
+    emptyTitle: "Keine delegierten Aufgaben",
+    emptyHint: "Hier landen alle Aufgaben die du delegiert hast — solange sie noch nicht erledigt sind.",
+    icon: Users2,
   },
 };
 
@@ -672,6 +680,17 @@ export function AufgabenView({
             <CountPill value={counts.gf} tone="violet" />
           </TabsTrigger>
         )}
+        {/* Controlling-Tab: delegierte Aufgaben die noch offen sind */}
+        {counts.controlling > 0 && (
+          <TabsTrigger
+            value="controlling"
+            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          >
+            <Users2 size={14} />
+            <span className="flex-1 text-left">Controlling</span>
+            <CountPill value={counts.controlling} tone="teal" />
+          </TabsTrigger>
+        )}
         <TabsTrigger
           value="heizlast"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -750,6 +769,15 @@ export function AufgabenView({
           />
         </TabsContent>
       )}
+      {counts.controlling > 0 && (
+        <TabsContent value="controlling">
+          <MailTab
+            initial={{ entries: [], total: 0 }}
+            filter="controlling"
+            heroProjectLinkTemplate={heroProjectLinkTemplate}
+          />
+        </TabsContent>
+      )}
       <TabsContent value="heizlast">
         <HeizlastView
           projects={heizlastProjects}
@@ -769,7 +797,7 @@ function CountPill({
   highlight?: boolean;
   /** Spezial-Variante fuer Kritisch: bei aktivem Tab heller weisser Halo,
    *  bei inaktivem Tab sattes Rose. */
-  tone?: "rose" | "amber" | "indigo" | "violet";
+  tone?: "rose" | "amber" | "indigo" | "violet" | "teal";
 }) {
   if (!value) return null;
   if (tone === "rose") {
@@ -796,6 +824,13 @@ function CountPill({
   if (tone === "violet") {
     return (
       <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-violet-500/15 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300 ring-1 ring-violet-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
+        {value}
+      </span>
+    );
+  }
+  if (tone === "teal") {
+    return (
+      <span className="relative text-[10px] tabular-nums font-bold px-1.5 min-w-[1.125rem] h-[1.125rem] inline-flex items-center justify-center rounded-full bg-teal-500/15 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300 ring-1 ring-teal-500/30 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white group-data-[state=active]:ring-white/30 transition-colors">
         {value}
       </span>
     );
@@ -827,6 +862,7 @@ const TAB_FILTERS: Record<
   aufgeschoben: { status: false, priority: false, defaultStatus: "open" },
   pl:           { status: true,  priority: true,  defaultStatus: "open" },
   gf:           { status: true,  priority: true,  defaultStatus: "open" },
+  controlling:  { status: true,  priority: false, defaultStatus: "open" },
 };
 
 /**
@@ -2531,10 +2567,14 @@ function TaskCard({
                 </div>
               );
             })()}
-            {/* Projekt-Pulse: zeigt letzte 5 Logbuch-Eintraege des Hero-Projekts,
-             *  falls verknuepft. */}
+            {/* Projektverlauf: laedt Logbuch + KI-Analyse auf Klick (lazy).
+             *  Ersetzt den alten ProjectActivityStrip (der auto-lud). */}
             {t.hero_project_id && (
-              <ProjectActivityStrip projectId={t.hero_project_id} />
+              <ProjectHistoryPanel
+                taskId={t.id}
+                projectNumber={t.hero_project_number ?? null}
+                projectName={t.hero_project_name ?? null}
+              />
             )}
             {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
              *  NICHT bei Infos (reine Lese-Items, keine Action) und nicht

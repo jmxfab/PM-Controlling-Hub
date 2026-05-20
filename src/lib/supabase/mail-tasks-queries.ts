@@ -110,7 +110,8 @@ export type MailTabFilter =
   | "rechnungen"
   | "aufgeschoben"
   | "pl"
-  | "gf";
+  | "gf"
+  | "controlling";
 
 const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   my_day:        [], // Mein Tag filtert NICHT nach Kategorie sondern in_my_day_at IS NOT NULL
@@ -122,6 +123,7 @@ const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   aufgeschoben:  [], // filtert nach remind_at > now() — kategorie-uebergreifend
   pl:            ["pl_aufgabe"],
   gf:            ["gf_aufgabe"],
+  controlling:   [], // filtert nach assigned_to IS NOT NULL — kategorie-uebergreifend
 };
 
 export interface MailTaskCounts {
@@ -138,6 +140,8 @@ export interface MailTaskCounts {
   pl: number;
   /** GF-Tab: Aufgaben fuer die Geschaeftsfuehrung (gf_aufgabe). */
   gf: number;
+  /** Controlling: delegierte Tasks (assigned_to IS NOT NULL), status != done/cancelled. */
+  controlling: number;
 }
 
 export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
@@ -147,7 +151,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   // ein Full-Scan + Count). Jetzt: 1 RPC mit FILTER-Aggregaten, parallel zu
   // den Hero-Counts.
   const nowIso = new Date().toISOString();
-  const [rpcRes, heroCounts, aufgeschobenRes, plRes, gfRes] = await Promise.all([
+  const [rpcRes, heroCounts, aufgeschobenRes, plRes, gfRes, controllingRes] = await Promise.all([
     supabase.rpc("compute_mail_task_counts").single<{
       my_day: number;
       kritisch: number;
@@ -176,6 +180,12 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
       .or("is_automated.eq.true,is_user_created.eq.true")
       .not("status", "in", '("done","cancelled")')
       .eq("mail_category", "gf_aufgabe"),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .or("is_automated.eq.true,is_user_created.eq.true")
+      .not("status", "in", '("done","cancelled")')
+      .not("assigned_to", "is", null),
   ]);
   const mailCounts = rpcRes.data ?? {
     my_day: 0,
@@ -195,6 +205,7 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
     aufgeschoben: aufgeschobenRes.count ?? 0,
     pl: plRes.count ?? 0,
     gf: gfRes.count ?? 0,
+    controlling: controllingRes.count ?? 0,
   };
 }
 
@@ -241,6 +252,14 @@ export async function loadMailTasksPage(
       .gt("remind_at", nowIso)
       .not("status", "in", '("done","cancelled")')
       .order("remind_at", { ascending: true });
+  } else if (filter === "controlling") {
+    // Controlling: alle delegierten Tasks (assigned_to IS NOT NULL),
+    // kategorie-uebergreifend. Sort: zuletzt aktualisiert oben.
+    query = query
+      .not("assigned_to", "is", null)
+      .order("is_important", { ascending: false })
+      .order("thread_last_message_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
   } else {
     // Standard Tabs nach Kategorie. is_important wins always.
     query = query
@@ -266,7 +285,7 @@ export async function loadMailTasksPage(
   }
   // Altersfilter (Default 30 Tage, kann auf 90 oder 'alle' umgestellt werden).
   // Wirkt NICHT in Mein Tag / Aufgeschoben (da entscheidet der User explizit).
-  if (filter !== "my_day" && filter !== "aufgeschoben") {
+  if (filter !== "my_day" && filter !== "aufgeschoben" && filter !== "controlling") {
     const ageMode = filters.age ?? "30";
     if (ageMode === "30" || ageMode === "90") {
       const cutoff = new Date(

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   Bell,
+  CalendarDays,
   Check,
   Loader2,
   UserCheck,
@@ -347,6 +348,24 @@ export function DelegateRemindForm({
               {p.label}
             </button>
           ))}
+          {/* Kalender-Picker: natives datetime-local hinter Icon-Button */}
+          <label
+            className="inline-flex items-center justify-center h-[22px] w-[22px] rounded border border-border/60 bg-background/40 hover:bg-amber-50 hover:border-amber-400 dark:hover:bg-amber-950/40 dark:hover:border-amber-700 transition-colors cursor-pointer"
+            title="Datum aus Kalender wählen"
+          >
+            <CalendarDays size={11} className="text-muted-foreground pointer-events-none" />
+            <input
+              type="datetime-local"
+              className="absolute opacity-0 w-px h-px overflow-hidden"
+              disabled={saving}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setReminder(new Date(e.target.value));
+                  e.target.value = "";
+                }
+              }}
+            />
+          </label>
           <div className="flex-1 min-w-[120px] flex items-center gap-1">
             <Input
               placeholder="morgen 9 / in 2 std / Fr 14"

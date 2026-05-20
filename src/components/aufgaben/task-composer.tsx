@@ -15,6 +15,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,7 +108,7 @@ export function TaskComposer({
   const [showHint, setShowHint] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [busy, setBusy] = useState<
-    "ai" | "note" | "mail" | "clip" | "hero-log" | null
+    "ai" | "note" | "mail" | "clip" | "hero-log" | "one-click" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -306,13 +307,33 @@ export function TaskComposer({
     }
   }
 
-  async function sendToHeroLog() {
-    const body = text.trim();
+  /** Kopiert text in die Zwischenablage — stille Fallback-Funktion. */
+  async function clipboardWrite(body: string): Promise<boolean> {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(body);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = body;
+        ta.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function sendToHeroLog(bodyOverride?: string) {
+    const body = (bodyOverride ?? text).trim();
     if (!body) {
       setError("Logbuch-Text ist leer");
       return;
     }
-    setBusy("hero-log");
+    if (!busy) setBusy("hero-log");
     setError(null);
     try {
       const res = await fetch(`/api/mail-tasks/${taskId}/hero-log`, {
@@ -325,7 +346,12 @@ export function TaskComposer({
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json.error || `Fehler ${res.status}`);
+        // Fallback: Text in Zwischenablage + Hero-Logbuch öffnen
+        const copied = await clipboardWrite(body);
+        if (heroProjectHref) window.open(heroProjectHref, "_blank", "noopener,noreferrer");
+        setError(
+          `Hero API Fehler — ${copied ? "Text in Zwischenablage kopiert" : "Kopieren fehlgeschlagen"}${heroProjectHref ? " + Logbuch geöffnet" : ""}`,
+        );
         return;
       }
       // Notiz auch lokal als 'hero-log' kind speichern fuer History
@@ -341,7 +367,70 @@ export function TaskComposer({
       );
       if (autoDone) onActionCompleted?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Netzwerk-Fehler");
+      // Netzwerkfehler: auch Fallback
+      const copied = await clipboardWrite(body);
+      if (heroProjectHref) window.open(heroProjectHref, "_blank", "noopener,noreferrer");
+      setError(
+        `Netzwerk-Fehler — ${copied ? "Text in Zwischenablage" : "Kopieren fehlgeschlagen"}${heroProjectHref ? " + Hero geöffnet" : ""}`,
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** One-Click: KI-Entwurf generieren → Hero-Logbuch eintragen → Erledigt. */
+  async function oneClickKiHeroDone() {
+    setBusy("one-click");
+    setError(null);
+    // 1. KI-Entwurf generieren
+    let draft = "";
+    try {
+      const res = await fetch(`/api/mail-tasks/${taskId}/ai-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hint: hint.trim(), tone, mode: "hero_log" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error ?? `KI-Fehler ${res.status}`);
+        setBusy(null);
+        return;
+      }
+      draft = json.draft as string;
+      setText(draft);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "KI Netzwerk-Fehler");
+      setBusy(null);
+      return;
+    }
+    // 2. Hero-Logbuch eintragen (mit Fallback)
+    try {
+      const res = await fetch(`/api/mail-tasks/${taskId}/hero-log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: draft, title: taskTitle || "KI-Notiz" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const copied = await clipboardWrite(draft);
+        if (heroProjectHref) window.open(heroProjectHref, "_blank", "noopener,noreferrer");
+        flashOk(`Hero Fehler — ${copied ? "in Zwischenablage + " : ""}Logbuch geöffnet`);
+      } else {
+        // Lokal archivieren
+        await fetch(`/api/mail-tasks/${taskId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: draft, kind: "hero-log" }),
+        }).catch(() => {});
+        flashOk(`KI-Notiz ins Hero-Logbuch eingetragen + erledigt (Eintrag #${json.heroEntryId})`);
+      }
+      // 3. Aufgabe als erledigt markieren
+      onActionCompleted?.();
+    } catch {
+      const copied = await clipboardWrite(draft);
+      if (heroProjectHref) window.open(heroProjectHref, "_blank", "noopener,noreferrer");
+      flashOk(`Netzwerk-Fehler — ${copied ? "Text kopiert + " : ""}Hero geöffnet`);
+      onActionCompleted?.();
     } finally {
       setBusy(null);
     }
@@ -526,11 +615,35 @@ export function TaskComposer({
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* KI-Entwurf jetzt PRIMARY — generiert kontext-spezifischen Vorschlag
+        {/* One-Click: KI + Hero + Erledigt — Haupt-CTA wenn Hero verknuepft.
+         *  Generiert KI-Notiz, traegt sie ins Logbuch ein und markiert erledigt.
+         *  Kein Text vorher noetig — Button schaltet bei leerem Feld aktiv. */}
+        {heroProjectLinked && (
+          <Button
+            size="sm"
+            variant="default"
+            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm"
+            onClick={oneClickKiHeroDone}
+            disabled={busy !== null}
+            title="KI-Notiz generieren + ins Hero-Logbuch eintragen + Aufgabe erledigen — alles in einem Klick"
+          >
+            {busy === "one-click" ? (
+              <>
+                <Loader2 size={12} className="animate-spin" /> Läuft…
+              </>
+            ) : (
+              <>
+                <Zap size={12} /> KI + Hero + Erledigt
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* KI-Entwurf — generiert kontext-spezifischen Vorschlag
          *  basierend auf Email-Inhalt (Mail-Mode) oder Hero-Notification (Hero-Mode). */}
         <Button
           size="sm"
-          variant="default"
+          variant={heroProjectLinked ? "outline" : "default"}
           className="h-8 gap-1.5"
           onClick={generateAiDraft}
           disabled={busy !== null}

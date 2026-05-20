@@ -45,7 +45,8 @@ function parseTab(v: string | null): MailTabFilter {
     v === "rechnungen" ||
     v === "aufgeschoben" ||
     v === "pl" ||
-    v === "gf"
+    v === "gf" ||
+    v === "controlling"
   )
     return v;
   return "aufgaben";
