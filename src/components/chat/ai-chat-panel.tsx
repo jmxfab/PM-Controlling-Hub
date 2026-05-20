@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { diagnoseMicError } from "@/components/aufgaben/voice-task-dialog";
 
 type Role = "user" | "assistant";
 
@@ -198,11 +199,7 @@ export function AiChatPanel() {
         setRecordingElapsed(Math.floor((Date.now() - t0) / 1000));
       }, 250);
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? `Mikro-Zugriff verweigert: ${e.message}`
-          : "Mikro nicht verfuegbar",
-      );
+      setError(diagnoseMicError(e));
       cleanupStream();
       setRecording(false);
     }
