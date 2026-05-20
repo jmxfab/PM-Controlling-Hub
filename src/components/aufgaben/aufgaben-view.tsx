@@ -67,7 +67,6 @@ const HeizlastView = dynamic(
 import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
-import { ProjectActivityStrip } from "@/components/aufgaben/project-activity-strip";
 import { ProjectHistoryPanel } from "@/components/aufgaben/project-history-panel";
 import { TaskComposer } from "@/components/aufgaben/task-composer";
 import { SortableTaskCard } from "@/components/aufgaben/sortable-task-card";
@@ -1313,7 +1312,7 @@ function MailTab({
         invalidateCacheForFilter("my_day");
       }
       if (update.mail_category) {
-        // Task wechselt Tab -> auch dort Cache leeren
+        // Task wechselt Tab -> auch Ziel-Tab-Cache leeren
         if (update.mail_category === "aufgabe" || update.mail_category === "dringend") {
           invalidateCacheForFilter("aufgaben");
         } else if (update.mail_category === "info") {
@@ -1324,6 +1323,10 @@ function MailTab({
           invalidateCacheForFilter("rechnungen");
         } else if (update.mail_category === "inbox") {
           invalidateCacheForFilter("inbox");
+        } else if (update.mail_category === "pl_aufgabe") {
+          invalidateCacheForFilter("pl");
+        } else if (update.mail_category === "gf_aufgabe") {
+          invalidateCacheForFilter("gf");
         }
       }
       // Mutation-Tick bumpen -> Vorschläge-Panel und andere Sub-Panels
@@ -1363,6 +1366,9 @@ function MailTab({
       infos: ["info"],
       inbox: ["inbox"],
       rechnungen: ["rechnung", "bestellung"],
+      pl: ["pl_aufgabe"],
+      gf: ["gf_aufgabe"],
+      controlling: [], // kategorie-uebergreifend — assigned_to-Filter
     };
     const leavingCurrentTab =
       filter !== "my_day" && !tabCategories[filter]?.includes(category);
@@ -2517,7 +2523,6 @@ function TaskCard({
             )}
             {t.remind_at && (() => {
               const remDate = new Date(t.remind_at);
-              // eslint-disable-next-line react-hooks/purity -- Aktuelle Zeit darf hier 'unstabil' sein
               const isFuture = remDate.getTime() > Date.now();
               return (
                 <span
