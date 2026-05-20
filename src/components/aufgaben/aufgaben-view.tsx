@@ -98,6 +98,13 @@ type StatusFilter = "all" | "open" | "done";
 type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
 type AgeFilter = "30" | "90" | "all";
 
+/** Patch-Objekt das AutoHeroMatch nach erfolgreichem Match nach oben gibt. */
+type HeroMatchPatch = {
+  hero_project_id: string;
+  hero_project_number: string | null;
+  hero_project_name: string | null;
+};
+
 interface Props {
   heizlastProjects: HeizlastProject[];
   heroProjectLinkTemplate: string | null;
@@ -1584,6 +1591,21 @@ function MailTab({
     invalidateCacheForFilter(filter);
   }
 
+  /** Hero-Projekt-Verknuepfung lokal aktualisieren, nachdem AutoHeroMatch
+   *  einen Treffer gefunden und in die DB gespeichert hat.
+   *  Ohne diesen Update bliebe hero_project_id im lokalen State null und
+   *  der "In Hero eintragen"-Button wuerde nie erscheinen. */
+  function updateTaskHeroLink(taskId: string, patch: HeroMatchPatch) {
+    setData((prev) => ({
+      ...prev,
+      entries: prev.entries.map((t) =>
+        t.id === taskId ? { ...t, ...patch } : t,
+      ),
+    }));
+    // Cache invalidieren: naechster Tab-Wechsel holt frische Daten.
+    invalidateCacheForFilter(filter);
+  }
+
   function buildOutlookDesktopLink(task: MailTask): string | null {
     if (task.source_email_entry_id) {
       return `ms-outlook://emails/open?ItemID=${encodeURIComponent(task.source_email_entry_id)}`;
@@ -1776,6 +1798,7 @@ function MailTab({
           buildOutlookDesktopLink={buildOutlookDesktopLink}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
           tab={filter}
+          onHeroMatched={updateTaskHeroLink}
         />
       )}
 
@@ -1845,6 +1868,7 @@ function MailTab({
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
+                    onHeroMatched={(patch) => updateTaskHeroLink(t.id, patch)}
                   />
                 )}
               />
@@ -1899,6 +1923,7 @@ function MailTab({
                     buildMailto={buildMailto}
                     buildOutlookDesktopLink={buildOutlookDesktopLink}
                     heroProjectLinkTemplate={heroProjectLinkTemplate}
+                    onHeroMatched={(patch) => updateTaskHeroLink(t.id, patch)}
                   />
                 )}
               />
@@ -2168,6 +2193,7 @@ function TaskCard({
   buildMailto,
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
+  onHeroMatched,
 }: {
   task: MailTask;
   tab: MailTabFilter;
@@ -2191,6 +2217,8 @@ function TaskCard({
   buildMailto: (task: MailTask) => string | null;
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
+  /** Callback wenn AutoHeroMatch ein Projekt gefunden hat — updated lokalen State sofort. */
+  onHeroMatched?: (patch: HeroMatchPatch) => void;
 }) {
   const t = task;
   const prio = t.priority ? PRIORITY_CONFIG[t.priority] : null;
@@ -2585,6 +2613,7 @@ function TaskCard({
                 taskId={t.id}
                 expanded={expanded}
                 heroProjectLinkTemplate={heroProjectLinkTemplate}
+                onMatched={onHeroMatched}
               />
             )}
             {/* Hero-Projekt-Badge fuer bereits gespeicherte Verknuepfung — klickbar */}
@@ -3119,6 +3148,7 @@ function PrioPanel({
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
   tab,
+  onHeroMatched,
 }: {
   tasks: MailTask[];
   expanded: string | null;
@@ -3142,6 +3172,7 @@ function PrioPanel({
   buildOutlookDesktopLink: (task: MailTask) => string | null;
   heroProjectLinkTemplate: string | null;
   tab: MailTabFilter;
+  onHeroMatched?: (taskId: string, patch: HeroMatchPatch) => void;
 }) {
   return (
     <section className="relative rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-amber-950/30 dark:via-orange-950/20 dark:to-card/40 dark:border-amber-700/40 p-3 space-y-2 shadow-[0_4px_24px_-4px_hsl(35_95%_55%/0.25)]">
@@ -3180,6 +3211,7 @@ function PrioPanel({
             buildMailto={buildMailto}
             buildOutlookDesktopLink={buildOutlookDesktopLink}
             heroProjectLinkTemplate={heroProjectLinkTemplate}
+            onHeroMatched={onHeroMatched ? (patch) => onHeroMatched(t.id, patch) : undefined}
           />
         ))}
       </div>
@@ -3255,10 +3287,14 @@ function AutoHeroMatch({
   taskId,
   expanded,
   heroProjectLinkTemplate,
+  onMatched,
 }: {
   taskId: string;
   expanded: boolean;
   heroProjectLinkTemplate: string | null;
+  /** Wird sofort nach erfolgreichem Match aufgerufen — updated lokalen State
+   *  damit heroProjectLinked sofort true wird und die Hero-Buttons erscheinen. */
+  onMatched?: (patch: HeroMatchPatch) => void;
 }) {
   const triedRef = useRef(false);
   const [state, setState] = useState<
@@ -3279,12 +3315,20 @@ function AutoHeroMatch({
         if (!r.ok) return setState({ kind: "no-match" });
         const j = await r.json();
         if (j.matched && j.project) {
+          const patch: HeroMatchPatch = {
+            hero_project_id: j.project.id ?? "",
+            hero_project_number: j.project.number ?? null,
+            hero_project_name: j.project.name ?? null,
+          };
           setState({
             kind: "matched",
-            projectId: j.project.id ?? null,
-            projectNumber: j.project.number ?? null,
-            projectName: j.project.name ?? null,
+            projectId: patch.hero_project_id,
+            projectNumber: patch.hero_project_number,
+            projectName: patch.hero_project_name,
           });
+          // Lokalen State sofort updaten → Hero-Buttons erscheinen ohne Page-Reload
+          onMatched?.(patch);
+          // router.refresh() als Fallback fuer SSR-Cache
           setTimeout(() => router.refresh(), 200);
         } else {
           setState({ kind: "no-match" });
