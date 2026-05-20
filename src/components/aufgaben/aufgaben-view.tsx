@@ -2324,6 +2324,7 @@ function TaskCard({
             )}
             {t.remind_at && (() => {
               const remDate = new Date(t.remind_at);
+              // eslint-disable-next-line react-hooks/purity -- Aktuelle Zeit darf hier 'unstabil' sein
               const isFuture = remDate.getTime() > Date.now();
               return (
                 <span

@@ -22,7 +22,11 @@ interface UseTaskRealtimeOpts {
  */
 export function useTaskRealtime({ onChange, enabled = true }: UseTaskRealtimeOpts) {
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  // Refs duerfen in React 19+ nicht waehrend Render geschrieben werden,
+  // sonst koennen Strict-Mode-Doppel-Renders zu Stale-Closures fuehren.
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
   // Debounce-Timer fuer Burst-Events
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +76,9 @@ export function useVisibilityPoll(
   enabled = true,
 ) {
   const cbRef = useRef(callback);
-  cbRef.current = callback;
+  useEffect(() => {
+    cbRef.current = callback;
+  });
 
   useEffect(() => {
     if (!enabled) return;

@@ -91,6 +91,9 @@ function ProjektPulseSkeleton() {
 
 async function ProjektPulseGrid() {
   const pulses = await loadProjectPulse(24).catch(() => []);
+  // Server-Render: now einmal fixieren statt pro Map-Iteration Date.now() —
+  // satisfies react-hooks/purity rule und ist semantisch korrekt.
+  const now = Date.now();
 
   return (
     <>
@@ -102,7 +105,7 @@ async function ProjektPulseGrid() {
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {pulses.map((p) => {
             const daysSinceLast = p.lastEventAt
-              ? (Date.now() - new Date(p.lastEventAt).getTime()) / 86_400_000
+              ? (now - new Date(p.lastEventAt).getTime()) / 86_400_000
               : 9999;
             const badge = activityBadge(p.events30d, daysSinceLast);
             return (
