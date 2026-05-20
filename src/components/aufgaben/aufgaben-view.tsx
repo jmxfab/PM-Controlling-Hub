@@ -2418,9 +2418,7 @@ function TaskCard({
                 source={t.source}
                 mailto={mailto}
                 heroProjectHref={
-                  t.source === "hero" &&
-                  t.hero_project_id &&
-                  heroProjectLinkTemplate
+                  t.hero_project_id && heroProjectLinkTemplate
                     ? heroProjectLinkTemplate.replace(
                         "{projectId}",
                         t.hero_project_id,
@@ -2465,7 +2463,15 @@ function SourceInfo({
         <MessageSquare size={11} className="text-purple-500 shrink-0" />
         <span className="truncate max-w-[160px] sm:max-w-[260px]">
           {task.hero_project_number
-            ? `${task.hero_project_number}${task.hero_project_name ? " · " + task.hero_project_name : ""}`
+            ? (() => {
+                const clean = cleanHeroProjectName(
+                  task.hero_project_name,
+                  task.hero_project_number,
+                );
+                return clean
+                  ? `${task.hero_project_number} · ${clean}`
+                  : task.hero_project_number;
+              })()
             : "Hero"}
         </span>
       </span>
@@ -2949,6 +2955,41 @@ function PrioPanel({
  * Sichtbar nur als kleiner Status-Hinweis (Spinner -> Result), kein
  * Eingriff. Wenn der Match fehlschlaegt, bleibt das Component still.
  */
+/** Saeubert Hero-Projekt-Namen: das Hero-Backend liefert oft Platzhalter
+ *  wie "-7189 | --, --, --" wenn Kunde/Ort/PLZ fehlen. Wir entfernen
+ *  leere Pipe-Segmente und reine Dash-Tokens. Wenn nach dem Cleanup
+ *  nichts Sinnvolles uebrig bleibt (nur Zahlen/Dashes), wird null
+ *  zurueckgegeben → der UI-Code blendet den Namens-Span komplett aus. */
+function cleanHeroProjectName(
+  name: string | null | undefined,
+  number: string | null | undefined,
+): string | null {
+  if (!name) return null;
+  const numTail = (number ?? "").replace(/^\D+/, "");
+  const parts = name
+    .split("|")
+    .map((p) => p.trim())
+    .map((p) =>
+      p
+        .split(",")
+        .map((x) => x.trim())
+        .filter((x) => x && !/^-+$/.test(x))
+        .join(", "),
+    )
+    .filter((p) => {
+      if (!p) return false;
+      if (/^-+$/.test(p)) return false;
+      // Drop suffixe wie "-7189" die nur die Projektnummer wiederholen
+      if (numTail && p === `-${numTail}`) return false;
+      return true;
+    });
+  const result = parts.join(" | ").trim();
+  if (!result) return null;
+  // Wenn nach allem nur noch Sonderzeichen/Zahlen/Dashes uebrig sind -> null
+  if (!/[a-zA-ZäöüÄÖÜß]/.test(result)) return null;
+  return result;
+}
+
 function AutoHeroMatch({
   taskId,
   expanded,
@@ -3008,9 +3049,15 @@ function AutoHeroMatch({
       {state.projectNumber && (
         <span className="font-mono">{state.projectNumber}</span>
       )}
-      {state.projectName && (
-        <span className="text-muted-foreground"> — {state.projectName}</span>
-      )}
+      {(() => {
+        const clean = cleanHeroProjectName(
+          state.projectName,
+          state.projectNumber,
+        );
+        return clean ? (
+          <span className="text-muted-foreground"> — {clean}</span>
+        ) : null;
+      })()}
     </div>
   );
 }
