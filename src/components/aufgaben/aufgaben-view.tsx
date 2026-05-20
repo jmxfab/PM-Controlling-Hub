@@ -519,10 +519,10 @@ export function AufgabenView({
       orientation="vertical"
       // MS-To-Do-Style Sidebar-Layout: links Liste der Tabs, rechts Content.
       // Auf Mobile bricht das Grid auf eine einzige Spalte um, Sidebar landet oben.
-      className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-5 items-start"
+      className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-3 sm:gap-5 items-start"
     >
       <TabsList
-        className="h-auto p-2 bg-muted/40 rounded-xl gap-1 flex md:flex-col md:items-stretch w-full overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap"
+        className="h-auto p-1.5 sm:p-2 bg-muted/40 rounded-xl gap-1 flex md:flex-col md:items-stretch w-full overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap scrollbar-thin"
       >
         {/* Mein Tag — Microsoft-To-Do-Style "My Day". Manuell kuratierte
          *  Liste der Aufgaben fuer heute. Sonnen-Icon ist das MS-Symbol. */}
@@ -1848,8 +1848,8 @@ function FilterBar({
         : { all: "Alle", open: "Offen", done: "Erledigt" };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card/40 px-3 py-2">
-      <div className="relative">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card/40 px-2 py-2 sm:px-3">
+      <div className="relative w-full sm:w-auto">
         <Search
           size={14}
           className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none"
@@ -1858,7 +1858,7 @@ function FilterBar({
           placeholder="Suche…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-56 h-8 pl-8 text-sm"
+          className="w-full sm:w-56 h-8 pl-8 text-sm"
         />
       </div>
 
@@ -2063,7 +2063,7 @@ function TaskCard({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full text-left pl-5 pr-4 py-4 flex items-start gap-3.5"
+        className="w-full text-left pl-3 pr-3 py-3 sm:pl-5 sm:pr-4 sm:py-4 flex items-start gap-2.5 sm:gap-3.5"
       >
         {/* Avatar */}
         <div
@@ -2104,7 +2104,7 @@ function TaskCard({
                   className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
                     t.is_important
                       ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-0 group-hover:opacity-100"
+                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                   }`}
                   aria-label={
                     t.is_important ? "Nicht mehr wichtig" : "Wichtig markieren"
@@ -2134,7 +2134,7 @@ function TaskCard({
                   className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
                     t.in_my_day_at
                       ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-0 group-hover:opacity-100"
+                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                   }`}
                   aria-label={
                     t.in_my_day_at
@@ -2348,7 +2348,7 @@ function TaskCard({
         }`}
       >
         <div className="overflow-hidden">
-          <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-5 py-4 space-y-4">
+          <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-3 py-3 sm:px-5 sm:py-4 space-y-3 sm:space-y-4">
             {/* Schnell-Edit: Priorität + Kategorie. Nur fuer mail-source-Tasks,
                 Hero-Items sind read-only. */}
             {t.source === "mail" && (
@@ -3399,6 +3399,9 @@ function MyDaySuggestionsPanel({
   const [items, setItems] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // Auf Mobile defaultmaessig kollabiert — sonst sitzt das Panel unter der
+  // Liste und nimmt viel Platz. User kann es ausklappen wenn er will.
+  const [mobileExpanded, setMobileExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -3464,16 +3467,31 @@ function MyDaySuggestionsPanel({
   }
 
   return (
-    <aside className="rounded-2xl border bg-card/60 p-3 space-y-2 sticky top-4 max-h-[calc(100vh-120px)] flex flex-col">
-      <div className="flex items-center justify-between gap-2 px-1 shrink-0">
+    <aside className="rounded-2xl border bg-card/60 p-3 space-y-2 lg:sticky lg:top-4 lg:max-h-[calc(100vh-120px)] flex flex-col">
+      {/* Header — auf Mobile klickbar zum Auf-/Zuklappen */}
+      <button
+        type="button"
+        onClick={() => setMobileExpanded((v) => !v)}
+        className="flex items-center justify-between gap-2 px-1 shrink-0 lg:cursor-default"
+      >
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Vorschläge
         </div>
-        <div className="text-[10px] text-muted-foreground/60 tabular-nums">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 tabular-nums">
           {visible.length} {visible.length === 1 ? "Vorschlag" : "Vorschläge"}
+          <ChevronDown
+            size={12}
+            className={`lg:hidden transition-transform ${
+              mobileExpanded ? "rotate-180" : ""
+            }`}
+          />
         </div>
-      </div>
-      <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 -mr-1">
+      </button>
+      <div
+        className={`space-y-1.5 overflow-y-auto pr-1 -mr-1 ${
+          mobileExpanded ? "block" : "hidden lg:block"
+        } lg:flex-1`}
+      >
         {visible.map((s) => {
           const isBusy = busyTaskId === s.id;
           return (
