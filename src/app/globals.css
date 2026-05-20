@@ -402,8 +402,10 @@ html, body {
    Defaults waren auf hellem BG ausgelegt — auf dunkler Popover-Karte sind
    die Outside-Days und normale Tagesnummern kaum lesbar.
    ─────────────────────────────────────────────────────────────────────────── */
+/* Jumax-Brand-Yellow (Amber 500) statt generischem Blau — passt zum
+   gelb-schwarzen Branding der Webseite (jumax-elektro.de). */
 .rdp-jumax {
-  --rdp-accent-color: hsl(217 91% 60%);
+  --rdp-accent-color: hsl(38 92% 50%); /* Amber 500 */
   --rdp-background-color: hsl(var(--accent));
   font-size: 13px;
 }
@@ -415,7 +417,7 @@ html, body {
   color: hsl(var(--muted-foreground) / 0.55);
 }
 .rdp-jumax .rdp-day_today:not(.rdp-day_selected) {
-  color: hsl(217 91% 60%);
+  color: hsl(38 92% 50%); /* Amber 500 */
   font-weight: 700;
 }
 .rdp-jumax .rdp-head_cell {
@@ -425,13 +427,13 @@ html, body {
   font-size: 11px;
 }
 .rdp-jumax .rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_disabled) {
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background-color: hsl(38 92% 50% / 0.15);
+  color: hsl(var(--foreground));
 }
 .rdp-jumax .rdp-day_selected,
 .rdp-jumax .rdp-day_selected:hover {
-  background-color: hsl(217 91% 60%);
-  color: white;
+  background-color: hsl(38 92% 50%); /* Amber 500 */
+  color: hsl(20 14% 4%); /* near-black fuer Kontrast auf gelb */
   font-weight: 700;
 }
 .rdp-jumax .rdp-caption_label {
@@ -440,10 +442,10 @@ html, body {
   color: hsl(var(--foreground));
 }
 .rdp-jumax .rdp-nav_button {
-  color: hsl(var(--foreground));
-  opacity: 0.7;
+  color: hsl(38 92% 50%); /* Amber 500 */
+  opacity: 0.85;
 }
 .rdp-jumax .rdp-nav_button:hover {
   opacity: 1;
-  background-color: hsl(var(--accent));
+  background-color: hsl(38 92% 50% / 0.15);
 }
