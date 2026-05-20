@@ -28,6 +28,58 @@ function toInputDateTime(iso: string | null): string {
   )}:${pad(d.getMinutes())}`;
 }
 
+/** Liefert ein Date Object fuer einen Quick-Pick-Preset. */
+function presetDate(preset: string): Date {
+  const d = new Date();
+  switch (preset) {
+    case "1h":
+      d.setHours(d.getHours() + 1);
+      break;
+    case "3h":
+      d.setHours(d.getHours() + 3);
+      break;
+    case "today_evening":
+      d.setHours(18, 0, 0, 0);
+      if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1); // wenn schon vorbei
+      break;
+    case "tomorrow":
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+      break;
+    case "day_after_tomorrow":
+      d.setDate(d.getDate() + 2);
+      d.setHours(9, 0, 0, 0);
+      break;
+    case "next_monday": {
+      const dow = d.getDay(); // 0 So, 1 Mo
+      const daysToMon = ((1 - dow + 7) % 7) || 7;
+      d.setDate(d.getDate() + daysToMon);
+      d.setHours(9, 0, 0, 0);
+      break;
+    }
+    case "next_week":
+      d.setDate(d.getDate() + 7);
+      d.setHours(9, 0, 0, 0);
+      break;
+    case "in_2_weeks":
+      d.setDate(d.getDate() + 14);
+      d.setHours(9, 0, 0, 0);
+      break;
+  }
+  return d;
+}
+
+const REMINDER_PRESETS: Array<{ key: string; label: string }> = [
+  { key: "1h", label: "+1 Std" },
+  { key: "3h", label: "+3 Std" },
+  { key: "today_evening", label: "Heute 18:00" },
+  { key: "tomorrow", label: "Morgen 9:00" },
+  { key: "day_after_tomorrow", label: "Übermorgen" },
+  { key: "next_monday", label: "Nächster Montag" },
+  { key: "next_week", label: "+1 Woche" },
+  { key: "in_2_weeks", label: "+2 Wochen" },
+];
+
 /**
  * Inline-Form im expanded TaskCard: Delegieren an wen + Erinnerung wann.
  * Optimistic update + revert on error.
@@ -70,6 +122,38 @@ export function DelegateRemindForm({
       onUpdated({
         assigned_to: body.assigned_to,
         remind_at: body.remind_at,
+      });
+      setSavedFlash(true);
+      window.setTimeout(() => setSavedFlash(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Netzwerk-Fehler");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Quick-Preset waehlen: setzt remind_at + speichert SOFORT (kein extra
+   *  'Speichern'-Klick noetig). */
+  async function applyPreset(presetKey: string) {
+    const date = presetDate(presetKey);
+    const iso = date.toISOString();
+    setRemindAt(toInputDateTime(iso));
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/mail-tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remind_at: iso }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(json.error || `Fehler ${res.status}`);
+        return;
+      }
+      onUpdated({
+        assigned_to: assignee.trim() || null,
+        remind_at: iso,
       });
       setSavedFlash(true);
       window.setTimeout(() => setSavedFlash(false), 1500);
@@ -144,10 +228,25 @@ export function DelegateRemindForm({
           <label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Bell size={10} /> Erinnern am
           </label>
+          {/* Quick-Presets — ein Klick = sofort gespeichert */}
+          <div className="flex flex-wrap gap-1 mb-1">
+            {REMINDER_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                disabled={saving}
+                onClick={() => applyPreset(p.key)}
+                className="text-[10.5px] px-2 py-0.5 rounded-full border border-border/60 bg-background/50 hover:bg-amber-50 hover:border-amber-400 dark:hover:bg-amber-950/40 dark:hover:border-amber-700 transition-colors disabled:opacity-50"
+                title={`Erinnerung in ${p.label} setzen + speichern`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <DateTimePicker
             value={remindAt}
             onChange={setRemindAt}
-            placeholder="z. B. morgen 9:00"
+            placeholder="… oder benutzerdefiniert"
             className="w-full"
           />
         </div>
