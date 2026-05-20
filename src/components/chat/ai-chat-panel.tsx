@@ -27,6 +27,7 @@ interface ChatMsg {
 
 const STORAGE_KEY = "ai-chat:messages";
 const MAX_HISTORY = 30;
+const MAX_RECORDING_SECONDS = 300; // 5 Min Hard-Cap, dann Auto-Stop
 
 function loadHistory(): ChatMsg[] {
   if (typeof window === "undefined") return [];
@@ -196,7 +197,18 @@ export function AiChatPanel() {
       setRecording(true);
       const t0 = Date.now();
       recordTimerRef.current = setInterval(() => {
-        setRecordingElapsed(Math.floor((Date.now() - t0) / 1000));
+        const sec = Math.floor((Date.now() - t0) / 1000);
+        setRecordingElapsed(sec);
+        // Hartes Auto-Stop nach MAX_RECORDING_SECONDS
+        if (sec >= MAX_RECORDING_SECONDS) {
+          if (
+            mediaRecorderRef.current &&
+            mediaRecorderRef.current.state !== "inactive"
+          ) {
+            mediaRecorderRef.current.stop();
+            setRecording(false);
+          }
+        }
       }, 250);
     } catch (e) {
       setError(diagnoseMicError(e));
@@ -419,7 +431,11 @@ export function AiChatPanel() {
                 send(input);
               }
             }}
-            placeholder={recording ? "Aufnahme läuft…" : "Frage stellen…"}
+            placeholder={
+              recording
+                ? `Aufnahme: ${formatTime(recordingElapsed)} / ${formatTime(MAX_RECORDING_SECONDS)}`
+                : "Frage stellen…"
+            }
             disabled={recording || transcribing || busy}
             rows={1}
             className="flex-1 resize-none rounded-lg border bg-background/50 px-2.5 py-1.5 text-[13px] min-h-[32px] max-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/30"

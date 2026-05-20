@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-Safety: html + body buchstaeblich nie horizontal scrollen lassen.
+   Falls irgendein Child versehentlich ueberlauft, wird's hart gekappt
+   statt eine Scroll-Leiste zu erzeugen die das Layout zerschiesst. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
