@@ -43,8 +43,10 @@ async function loadInitialTab(tab: MailTabFilter): Promise<MailTasksPage> {
 
 export default async function AufgabenPage() {
   const heroProjectLinkTemplate = process.env.HERO_PROJECT_URL_TEMPLATE ?? null;
-  // Counts + Heizlast erstmal parallel laden
-  const [heizlastProjects, counts] = await Promise.all([
+  // ALLES parallel laden — auch beide moegliche Default-Tabs.
+  // Statt counts -> default-tab -> loadInitialTab (2 sequenzielle RTTs) jetzt
+  // alles in EINEM Promise.all (1 RTT). Spart ~150-400ms.
+  const [heizlastProjects, counts, kritischData, aufgabenData] = await Promise.all([
     loadHeizlastProjects().catch(() => []),
     loadMailTaskCounts().catch(() => ({
       my_day: 0,
@@ -54,12 +56,13 @@ export default async function AufgabenPage() {
       inbox: 0,
       rechnungen: 0,
     })),
+    loadInitialTab("kritisch"),
+    loadInitialTab("aufgaben"),
   ]);
 
   // Default-Tab: kritisch wenn was drin, sonst aufgaben
   const defaultTab: MailTabFilter = counts.kritisch > 0 ? "kritisch" : "aufgaben";
-  // Initial-Daten fuer Default-Tab serverseitig holen
-  const initialData = await loadInitialTab(defaultTab);
+  const initialData = defaultTab === "kritisch" ? kritischData : aufgabenData;
 
   return (
     <div className="flex-1 space-y-6 p-3 sm:p-6 md:p-8 max-w-[1600px] mx-auto min-w-0 overflow-x-hidden">

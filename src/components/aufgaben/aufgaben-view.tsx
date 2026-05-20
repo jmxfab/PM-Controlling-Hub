@@ -44,7 +44,22 @@ import type {
   MailTabFilter,
   Subtask,
 } from "@/lib/supabase/mail-tasks-queries";
-import { HeizlastView } from "@/components/heizlast/heizlast-view";
+import dynamic from "next/dynamic";
+// HeizlastView (492 LOC) wird nur im Heizlast-Tab gebraucht — lazy laden
+// damit der Haupt-Bundle der /aufgaben-Page kleiner ist.
+const HeizlastView = dynamic(
+  () =>
+    import("@/components/heizlast/heizlast-view").then((m) => ({
+      default: m.HeizlastView,
+    })),
+  {
+    loading: () => (
+      <div className="rounded-2xl border bg-card/40 p-8 text-center text-sm text-muted-foreground">
+        Heizlast-Übersicht laedt…
+      </div>
+    ),
+  },
+);
 import { SubtaskList } from "@/components/aufgaben/subtask-list";
 import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
@@ -2342,12 +2357,16 @@ function TaskCard({
         />
       </button>
 
+      {/* Expand-Container — schwere Sub-Komponenten (SubtaskList, Composer
+       *  etc) werden NUR gemountet wenn expanded=true. Spart bei einer Liste
+       *  mit 200 Karten ~600 unnoetige Component-Mounts beim Initial-Render. */}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${
           expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
       >
         <div className="overflow-hidden">
+          {expanded && (
           <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-3 py-3 sm:px-5 sm:py-4 space-y-3 sm:space-y-4">
             {/* Schnell-Edit: Priorität + Kategorie. Nur fuer mail-source-Tasks,
                 Hero-Items sind read-only. */}
@@ -2424,6 +2443,7 @@ function TaskCard({
               onSnooze={onSnooze}
             />
           </div>
+          )}
         </div>
       </div>
     </div>
