@@ -260,8 +260,18 @@ export function AiChatPanel() {
         return;
       }
       const t = typeof json.transcript === "string" ? json.transcript : "";
-      if (!t) {
-        setError("Leeres Transkript");
+      // Client-side Halluzinations-Filter als zweite Verteidigungslinie
+      // (Server filtert auch, aber falls dort mal was durchrutscht).
+      const HALLUCINATIONS = [
+        /^untertitel(ung)?( der amara\.org-community)?\.?$/i,
+        /^vielen dank f(ue|ü)rs? zuschauen[.!]?$/i,
+        /^danke f(ue|ü)r['s]* zuschauen[.!]?$/i,
+        /^bis zum n(ae|ä)chsten mal[.!]?$/i,
+        /^musik\.?$/i,
+        /^\[musik\]$/i,
+      ];
+      if (!t || HALLUCINATIONS.some((re) => re.test(t.trim()))) {
+        setError("Leeres Transkript (oder nur Stille). Bitte nochmal sprechen.");
         return;
       }
       // Transkript wird direkt gesendet (kein Vor-Edit). Wer's editieren
