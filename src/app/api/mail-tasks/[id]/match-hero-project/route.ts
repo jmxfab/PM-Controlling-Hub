@@ -160,9 +160,17 @@ export async function POST(
     .from("tasks")
     .select("title, description, hero_project_id")
     .eq("id", id)
-    .single();
-  if (error || !task) {
-    return NextResponse.json({ error: "task not found" }, { status: 404 });
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!task) {
+    return NextResponse.json(
+      {
+        error: `Task mit ID ${id.slice(0, 36)} nicht gefunden — vermutlich Hero-Comment (read-only) oder geloescht.`,
+      },
+      { status: 404 },
+    );
   }
 
   if (task.hero_project_id) {
