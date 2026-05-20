@@ -22,11 +22,19 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    // Aether (OpenAI-compat, guenstiger) bevorzugt, OpenAI als Fallback
+    const aetherKey = process.env.AETHER_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const { baseUrl, apiKey } = aetherKey
+      ? { baseUrl: "https://api.aetherapi.dev/v1", apiKey: aetherKey }
+      : openaiKey
+        ? { baseUrl: "https://api.openai.com/v1", apiKey: openaiKey }
+        : { baseUrl: "", apiKey: "" };
+    if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            "OPENAI_API_KEY fehlt in Vercel-Env. Speech-to-Text nutzt Whisper.",
+            "Weder AETHER_API_KEY noch OPENAI_API_KEY in Vercel gesetzt — Speech-to-Text braucht Whisper-Zugriff.",
         },
         { status: 503 },
       );
@@ -44,19 +52,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // === Schritt 1: Whisper ===
+    // === Schritt 1: Whisper (via Aether oder OpenAI) ===
     const whisperForm = new FormData();
     whisperForm.append("file", file);
     whisperForm.append("model", "whisper-1");
     whisperForm.append("language", "de");
     whisperForm.append("response_format", "json");
 
-    const whisperRes = await fetch(
-      "https://api.openai.com/v1/audio/transcriptions",
-      {
+    const whisperRes = await fetch(`${baseUrl}/audio/transcriptions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: whisperForm,
         signal: AbortSignal.timeout(50_000),
