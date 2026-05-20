@@ -230,7 +230,7 @@ export async function loadMailTasksPage(
 
   let query = supabase
     .from("tasks")
-    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order, is_important", { count: "exact" })
+    .select("id, title, description, status, priority, due_date, created_at, source_email_id, source_email_entry_id, source_email_web_link, source_email_is_read, source_email_conversation_id, thread_message_count, thread_last_message_at, mail_category, subtasks, assigned_to, remind_at, is_user_created, in_my_day_at, sort_order, is_important, hero_project_id, hero_project_number, hero_project_name", { count: "exact" })
     .or("is_automated.eq.true,is_user_created.eq.true");
 
   if (filter === "my_day") {
@@ -341,6 +341,12 @@ export async function loadMailTasksPage(
       in_my_day_at: row.in_my_day_at ?? null,
       sort_order: typeof row.sort_order === "number" ? row.sort_order : 0,
       is_important: Boolean(row.is_important),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hero_project_id: (row as any).hero_project_id ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hero_project_number: (row as any).hero_project_number ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      hero_project_name: (row as any).hero_project_name ?? null,
     };
   });
 

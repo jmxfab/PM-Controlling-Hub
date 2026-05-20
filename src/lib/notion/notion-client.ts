@@ -15,6 +15,8 @@ const CATEGORY_LABELS: Record<EmailCategory, string> = {
   info: "Info",
   aufgabe: "Todo",
   dringend: "Dringend",
+  pl_aufgabe: "PL",
+  gf_aufgabe: "GF",
 };
 
 function getNotionClient(): Client {

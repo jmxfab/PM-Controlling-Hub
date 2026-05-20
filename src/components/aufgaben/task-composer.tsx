@@ -673,7 +673,7 @@ export function TaskComposer({
             size="sm"
             variant="default"
             className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
-            onClick={sendToHeroLog}
+            onClick={() => void sendToHeroLog()}
             disabled={busy !== null || text.trim().length === 0}
             title="Schreibt den Text direkt ins Hero-Projekt-Logbuch (keine Mail noetig)"
           >
