@@ -2441,6 +2441,10 @@ function TaskCard({
                 currentAssignedTo={t.assigned_to}
                 currentRemindAt={t.remind_at}
                 onUpdated={onDelegationChange}
+                taskTitle={t.title}
+                taskBody={t.body ?? null}
+                senderEmail={t.sender ?? null}
+                heroProjectId={t.hero_project_id ?? null}
               />
             )}
             {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern.
