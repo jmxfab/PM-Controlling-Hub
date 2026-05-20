@@ -22,6 +22,11 @@ interface ExtractedTask {
 
 type Stage = "idle" | "recording" | "processing" | "review" | "creating";
 
+/** Max-Aufnahmedauer in Sekunden. Whisper-File-Limit ist 25MB,
+ *  bei opus/webm @ 32kbps schaffen wir locker 30+ Min — wir cappen aber
+ *  bewusst, damit User nicht versehentlich 20 Min Endless-Aufnahme machen. */
+const MAX_RECORDING_SECONDS = 300; // 5 Min
+
 /**
  * Sprach-zu-Aufgabe (Items 6.1-6.4).
  *
@@ -108,7 +113,18 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
       setStage("recording");
       const t0 = Date.now();
       timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - t0) / 1000));
+        const sec = Math.floor((Date.now() - t0) / 1000);
+        setElapsed(sec);
+        // Hartes Limit: 5 Min — automatisch stoppen
+        if (sec >= MAX_RECORDING_SECONDS) {
+          if (
+            mediaRecorderRef.current &&
+            mediaRecorderRef.current.state !== "inactive"
+          ) {
+            mediaRecorderRef.current.stop();
+            setStage("processing");
+          }
+        }
       }, 250);
     } catch (e) {
       setError(diagnoseMicError(e));
@@ -247,7 +263,7 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
               <Mic size={36} />
             </button>
             <p className="text-sm text-muted-foreground">
-              Tipp zum Aufnehmen — bis zu 2 Min am Stück
+              Tipp zum Aufnehmen — bis zu {Math.floor(MAX_RECORDING_SECONDS / 60)} Min am Stück
             </p>
           </div>
         )}
@@ -257,14 +273,40 @@ export function VoiceTaskDialog({ onCreated }: { onCreated?: () => void }) {
             <button
               type="button"
               onClick={stopRecording}
-              className="relative w-24 h-24 rounded-full bg-rose-500 text-white grid place-items-center shadow-lg shadow-rose-500/40 animate-pulse"
+              className={`relative w-24 h-24 rounded-full text-white grid place-items-center shadow-lg animate-pulse ${
+                elapsed > MAX_RECORDING_SECONDS - 30
+                  ? "bg-rose-700 shadow-rose-700/50"
+                  : "bg-rose-500 shadow-rose-500/40"
+              }`}
               aria-label="Aufnahme stoppen"
             >
               <Square size={32} className="fill-white" />
             </button>
-            <p className="text-sm font-medium tabular-nums">
-              {formatTime(elapsed)} — tipp zum Stoppen
-            </p>
+            <div className="flex flex-col items-center gap-2 w-full max-w-[260px]">
+              <p className="text-sm font-medium tabular-nums">
+                {formatTime(elapsed)} / {formatTime(MAX_RECORDING_SECONDS)}
+              </p>
+              {/* Fortschrittsbalken — Farbe wechselt wenn Limit naht */}
+              <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    elapsed > MAX_RECORDING_SECONDS - 30
+                      ? "bg-rose-600"
+                      : elapsed > MAX_RECORDING_SECONDS - 60
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (elapsed / MAX_RECORDING_SECONDS) * 100)}%`,
+                  }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {elapsed > MAX_RECORDING_SECONDS - 30
+                  ? `noch ${MAX_RECORDING_SECONDS - elapsed}s — wird gleich auto-gestoppt`
+                  : "tipp zum Stoppen"}
+              </p>
+            </div>
           </div>
         )}
 

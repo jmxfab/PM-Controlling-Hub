@@ -2420,7 +2420,7 @@ function SourceInfo({
     return (
       <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <MessageSquare size={11} className="text-purple-500 shrink-0" />
-        <span className="truncate max-w-[260px]">
+        <span className="truncate max-w-[160px] sm:max-w-[260px]">
           {task.hero_project_number
             ? `${task.hero_project_number}${task.hero_project_name ? " · " + task.hero_project_name : ""}`
             : "Hero"}
@@ -2445,7 +2445,7 @@ function SourceInfo({
           size={11}
           className="text-blue-500 shrink-0 group-hover:scale-110 transition-transform"
         />
-        <span className="truncate max-w-[260px] group-hover:underline decoration-dotted underline-offset-2">
+        <span className="truncate max-w-[160px] sm:max-w-[260px] group-hover:underline decoration-dotted underline-offset-2">
           {task.sender}
         </span>
         <History
