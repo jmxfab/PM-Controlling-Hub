@@ -2239,15 +2239,60 @@ function TaskCard({
 
         <div className="flex-1 min-w-0 space-y-1.5">
           {/* Header line: title + datum */}
-          <div className="flex items-baseline justify-between gap-3">
+          <div className={`flex ${expanded ? "items-start" : "items-baseline"} justify-between gap-3`}>
             <h3
-              className={`text-[15px] font-semibold leading-snug truncate ${
+              className={`text-[15px] font-semibold leading-snug ${expanded ? "" : "truncate"} ${
                 isDone ? "line-through" : ""
               }`}
             >
               {t.title}
             </h3>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              {/* Kompakte Schnell-Aktionen — nur im expanded Zustand, direkt oben rechts */}
+              {expanded && !isDone && (
+                <div
+                  className="flex items-center gap-1 -mt-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onMarkDone(); }}
+                    className="inline-flex items-center gap-1 text-[10.5px] font-medium px-2 py-0.5 rounded-md border border-emerald-300/60 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/50 transition-colors"
+                    title="Aufgabe als erledigt markieren"
+                  >
+                    <Check size={10} /> Erledigt
+                  </button>
+                  {t.source !== "hero" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onSnooze(3 * 60 * 60 * 1000); }}
+                        className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded-md border border-border/50 bg-background/50 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        title="3 Stunden zurückstellen"
+                      >
+                        <Clock3 size={10} /> +3 Std
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onSnooze(24 * 60 * 60 * 1000); }}
+                        className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded-md border border-border/50 bg-background/50 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        title="Auf morgen verschieben"
+                      >
+                        <CalendarDays size={10} /> Morgen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onSnooze(7 * 24 * 60 * 60 * 1000); }}
+                        className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded-md border border-border/50 bg-background/50 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        title="Eine Woche zurückstellen"
+                      >
+                        <CalendarClock size={10} /> +1W
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
               {/* Wichtig-Star (Microsoft-To-Do-Style).
                *  Pinnt Task oben in der Liste + Visual-Highlight. Nur fuer
                *  mail-source Tasks (Hero ist read-only). */}
@@ -2322,8 +2367,9 @@ function TaskCard({
               >
                 {formatRelative(t.created_at)}
               </span>
-            </div>
-          </div>
+              </div>{/* end inner flex items-center gap-2 */}
+            </div>{/* end flex flex-col */}
+          </div>{/* end header row */}
 
           {/* Sender / project line */}
           <SourceInfo task={t} onSenderClick={onSenderClick} />
