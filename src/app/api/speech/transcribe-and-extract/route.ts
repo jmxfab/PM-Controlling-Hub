@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
     whisperForm.append("model", "whisper-1");
     whisperForm.append("language", "de");
     whisperForm.append("response_format", "json");
+    whisperForm.append(
+      "prompt",
+      "Jumax Elektrotechnik, Photovoltaik, Waermepumpe, Klima, Aufgabe, Termin, Kunde, Projekt, Anruf, Mueller, Anlage.",
+    );
 
     const whisperRes = await fetch(`${baseUrl}/audio/transcriptions`, {
         method: "POST",
@@ -78,10 +82,27 @@ export async function POST(req: NextRequest) {
     }
 
     const whisperJson = (await whisperRes.json()) as { text?: string };
-    const transcript = (whisperJson.text ?? "").trim();
+    const rawTranscript = (whisperJson.text ?? "").trim();
+    // Whisper-Halluzinations-Filter (bekannte Phrasen aus YouTube-Training)
+    const HALLUCINATIONS = [
+      /^untertitel(ung)?( der amara\.org-community)?\.?$/i,
+      /^vielen dank f(ue|ü)rs? zuschauen[.!]?$/i,
+      /^(bis zum n(ä|ae)chsten mal[.!]?)$/i,
+      /^danke f(ue|ü)r['s]* zuschauen[.!]?$/i,
+      /^musik\.?$/i,
+      /^\[musik\]$/i,
+    ];
+    const isHallucination = HALLUCINATIONS.some((re) => re.test(rawTranscript));
+    const transcript = isHallucination ? "" : rawTranscript;
     if (!transcript) {
       return NextResponse.json(
-        { transcript: "", tasks: [], note: "Leeres Transkript" },
+        {
+          transcript: "",
+          tasks: [],
+          note: isHallucination
+            ? "Whisper-Halluzination gefiltert (stilles/leeres Audio?)"
+            : "Leeres Transkript",
+        },
         { status: 200 },
       );
     }

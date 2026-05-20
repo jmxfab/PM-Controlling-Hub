@@ -175,6 +175,60 @@ export async function POST(
   }
 
   const text = `${task.title ?? ""}\n${task.description ?? ""}`;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Schritt 0: explizite Projekt-Nummer im Text (#9753 / Projekt 9753 / etc).
+  // Wenn vorhanden -> direkt nach project_number in DB suchen. 100% sicher,
+  // kein KI-Roundtrip noetig.
+  // ─────────────────────────────────────────────────────────────────────────
+  const projectNumberPatterns = [
+    /#\s*(\d{3,6})\b/g,            // #9753, # 9753
+    /\bProjekt(?:nummer)?\s*[#:]?\s*(\d{3,6})\b/gi,  // Projekt 9753, Projektnummer: 9753
+    /\b(?:PVS|WAEP|WÄP|WP|KLI|GBT)[- ]?(\d{3,6})\b/gi, // PVS-9402, WÄP9831
+  ];
+  const numbers = new Set<string>();
+  for (const re of projectNumberPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) numbers.add(m[1]);
+    }
+  }
+  if (numbers.size > 0) {
+    // ILIKE-Search nach project_number — Hero benutzt manchmal Prefixe wie
+    // "PVS-9402" als Number, also Suffix-Match.
+    const orClauses = Array.from(numbers)
+      .map((n) => `project_number.ilike.%${n}%`)
+      .join(",");
+    const { data: directHits } = await supabase
+      .from("hero_dashboard_projects")
+      .select("id, project_number, project_name, customer_name")
+      .or(orClauses)
+      .limit(5);
+    if (directHits && directHits.length === 1) {
+      const p = directHits[0];
+      await supabase
+        .from("tasks")
+        .update({
+          hero_project_id: p.id,
+          hero_project_number: p.project_number,
+          hero_project_name: p.project_name,
+        })
+        .eq("id", id);
+      return NextResponse.json({
+        matched: true,
+        method: "project_number_direct",
+        project: {
+          id: p.id,
+          number: p.project_number,
+          name: p.project_name,
+          customer: p.customer_name,
+        },
+        candidatesFound: 1,
+      });
+    }
+    // Mehrere Hits -> weiter mit Fuzzy-Match (Claude entscheidet)
+  }
+
   const terms = extractCandidateNames(text);
   const candidates = await searchCandidates(supabase, terms);
 

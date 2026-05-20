@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -2338,10 +2338,15 @@ function TaskCard({
               />
             )}
             {t.body && <DescriptionBody text={t.body} />}
+            {/* Auto-Hero-Match: bei Mail-Tasks ohne hero_project_id triggern
+             *  wir den Match-Endpoint automatisch beim ersten Expand. Wenn
+             *  #NNNN im Titel/Body steht, ist's nach 200ms verlinkt. */}
+            {t.source === "mail" && !t.hero_project_id && (
+              <AutoHeroMatch taskId={t.id} expanded={expanded} />
+            )}
             {/* Projekt-Pulse: zeigt letzte 5 Logbuch-Eintraege des Hero-Projekts,
-             *  falls verknuepft. Nur fuer Hero-source-Tasks aktiv (da haben wir
-             *  die hero_project_id). */}
-            {t.source === "hero" && t.hero_project_id && (
+             *  falls verknuepft. */}
+            {t.hero_project_id && (
               <ProjectActivityStrip projectId={t.hero_project_id} />
             )}
             {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
@@ -2888,6 +2893,82 @@ function PrioPanel({
         ))}
       </div>
     </section>
+  );
+}
+
+/* ---------------- Auto-Hero-Match ---------------- */
+/**
+ * Wird in expandiertem TaskCard fuer Mail-Tasks ohne hero_project_id
+ * gerendert. Beim ersten Expand feuert ein POST an match-hero-project.
+ * Wenn ein direkter Treffer (z.B. #9753 im Titel) gefunden wird, refresh
+ * die Page-State damit ProjectActivityStrip nachgeladen wird.
+ *
+ * Sichtbar nur als kleiner Status-Hinweis (Spinner -> Result), kein
+ * Eingriff. Wenn der Match fehlschlaegt, bleibt das Component still.
+ */
+function AutoHeroMatch({
+  taskId,
+  expanded,
+}: {
+  taskId: string;
+  expanded: boolean;
+}) {
+  const triedRef = useRef(false);
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "matched"; projectNumber: string | null; projectName: string | null }
+    | { kind: "no-match" }
+  >({ kind: "idle" });
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!expanded) return;
+    if (triedRef.current) return;
+    triedRef.current = true;
+    setState({ kind: "running" });
+    fetch(`/api/mail-tasks/${taskId}/match-hero-project`, { method: "POST" })
+      .then(async (r) => {
+        if (!r.ok) return setState({ kind: "no-match" });
+        const j = await r.json();
+        if (j.matched && j.project) {
+          setState({
+            kind: "matched",
+            projectNumber: j.project.number ?? null,
+            projectName: j.project.name ?? null,
+          });
+          // Server-State changed -> realtime listener triggert auch refresh,
+          // aber wir nudgen vorsichtig nochmal damit ProjectActivityStrip
+          // den neuen hero_project_id sofort bekommt.
+          setTimeout(() => router.refresh(), 200);
+        } else {
+          setState({ kind: "no-match" });
+        }
+      })
+      .catch(() => setState({ kind: "no-match" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, taskId]);
+
+  if (state.kind === "idle" || state.kind === "no-match") return null;
+  if (state.kind === "running") {
+    return (
+      <div className="text-[11px] text-muted-foreground italic flex items-center gap-1.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500/50 animate-pulse" />
+        Suche Hero-Projekt…
+      </div>
+    );
+  }
+  return (
+    <div className="text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+      Hero-Projekt verknuepft:{" "}
+      {state.projectNumber && (
+        <span className="font-mono">{state.projectNumber}</span>
+      )}
+      {state.projectName && (
+        <span className="text-muted-foreground"> — {state.projectName}</span>
+      )}
+    </div>
   );
 }
 
