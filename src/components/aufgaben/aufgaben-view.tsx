@@ -3207,48 +3207,58 @@ const CATEGORY_OPTIONS: Array<{
   value: NonNullable<MailTask["mail_category"]>;
   label: string;
   className: string;
+  /** Saturated dot color fuer Dropdown-Liste (Pill-bg ist pastell, der dot
+   *  muss ge­saettigt sein damit man die Kategorie auf einen Blick sieht). */
+  dot: string;
 }> = [
   {
     value: "kritisch",
     label: "Kritisch",
     className:
       "text-rose-700 bg-rose-50 ring-rose-200 dark:text-rose-300 dark:bg-rose-950/40 dark:ring-rose-900/40",
+    dot: "bg-rose-500",
   },
   {
     value: "dringend",
     label: "Dringend",
     className:
       "text-orange-700 bg-orange-50 ring-orange-200 dark:text-orange-300 dark:bg-orange-950/40 dark:ring-orange-900/40",
+    dot: "bg-orange-500",
   },
   {
     value: "aufgabe",
     label: "Aufgabe",
     className:
       "text-blue-700 bg-blue-50 ring-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:ring-blue-900/40",
+    dot: "bg-blue-500",
   },
   {
     value: "info",
     label: "Info",
     className:
       "text-slate-600 bg-slate-100 ring-slate-200 dark:text-slate-400 dark:bg-slate-800 dark:ring-slate-700",
+    dot: "bg-slate-400",
   },
   {
     value: "rechnung",
     label: "Rechnung",
     className:
       "text-emerald-700 bg-emerald-50 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:ring-emerald-900/40",
+    dot: "bg-emerald-500",
   },
   {
     value: "bestellung",
     label: "Bestellung",
     className:
       "text-emerald-700 bg-emerald-50 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-950/40 dark:ring-emerald-900/40",
+    dot: "bg-teal-500",
   },
   {
     value: "inbox",
     label: "Inbox",
     className:
       "text-zinc-600 bg-zinc-100 ring-zinc-200 dark:text-zinc-400 dark:bg-zinc-800 dark:ring-zinc-700",
+    dot: "bg-zinc-400",
   },
 ];
 
@@ -3339,7 +3349,7 @@ function TaskQuickEditBar({
               }`}
             >
               <span
-                className={`inline-block w-2.5 h-2.5 rounded-full ring-1 ${c.className.split(" ").filter((cl) => cl.startsWith("bg-")).join(" ")}`}
+                className={`inline-block w-2.5 h-2.5 rounded-full ${c.dot}`}
                 aria-hidden
               />
               {c.label}
