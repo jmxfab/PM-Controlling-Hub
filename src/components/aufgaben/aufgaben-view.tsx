@@ -3997,16 +3997,14 @@ const CATEGORY_OPTIONS: Array<{
       "text-zinc-600 bg-zinc-100 ring-zinc-200 dark:text-zinc-400 dark:bg-zinc-800 dark:ring-zinc-700",
     dot: "bg-zinc-400",
   },
-  {
-    value: "pl_aufgabe",
-    label: "Projektleiter",
-    className:
-      "text-indigo-700 bg-indigo-50 ring-indigo-200 dark:text-indigo-300 dark:bg-indigo-950/40 dark:ring-indigo-900/40",
-    dot: "bg-indigo-500",
-  },
+  /* pl_aufgabe absichtlich NICHT als User-Quick-Edit Option:
+   *  - aufgabe und pl_aufgabe sind im UI gemerged (beide -> Projektleiter-Tab)
+   *  - Doppelter "Projektleiter"-Eintrag im Dropdown war verwirrend
+   *  - Der Auto-Klassifizierer kann weiterhin pl_aufgabe vergeben
+   *  - Bestehende pl_aufgabe Tasks bleiben sichtbar im Projektleiter-Tab */
   {
     value: "gf_aufgabe",
-    label: "Geschäftsführung",
+    label: "Geschäftsführer",
     className:
       "text-violet-700 bg-violet-50 ring-violet-200 dark:text-violet-300 dark:bg-violet-950/40 dark:ring-violet-900/40",
     dot: "bg-violet-500",
