@@ -119,6 +119,53 @@ export function TaskComposer({
   const [selectedTplId, setSelectedTplId] = useState<string>("");
   const [tplVars, setTplVars] = useState<Record<string, string>>({});
   const [tplRawBody, setTplRawBody] = useState<string>("");
+  /** Entwurf-Indikator: zeigt "Entwurf gespeichert" kurz an. */
+  const [draftSaved, setDraftSaved] = useState<boolean>(false);
+
+  /** Entwurf-Persistenz: localStorage Key pro Task.
+   *  Sowohl Mail-Antwort als auch Hero-Logbuch-Entwurf teilen sich das Feld
+   *  (alternative Aktionen auf demselben Text). Ein Key reicht.
+   *  Bei Hero-Tasks gibt's keine Persistenz (read-only Comments). */
+  const draftKey = source === "mail" ? `draft:task:${taskId}:composer` : null;
+
+  // 1) Beim Mount / Task-Wechsel: gespeicherten Entwurf laden
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      const saved = window.localStorage.getItem(draftKey);
+      if (saved && saved.length > 0) {
+        setText(saved);
+      }
+    } catch {
+      // localStorage kann disabled sein (Private-Modus, Quotas) — ignorieren
+    }
+    // Nur beim Wechsel der draftKey laden, nicht bei jedem text-Change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // 2) Beim Tippen: debounced als Entwurf speichern (500ms)
+  useEffect(() => {
+    if (!draftKey) return;
+    // Leer-Text -> Eintrag loeschen (Cleanup)
+    if (text.length === 0) {
+      try {
+        window.localStorage.removeItem(draftKey);
+      } catch {}
+      setDraftSaved(false);
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftKey, text);
+        setDraftSaved(true);
+        // Indikator nach 1.5s wieder ausblenden
+        window.setTimeout(() => setDraftSaved(false), 1500);
+      } catch {
+        // Quota voll oder disabled — silent fail
+      }
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [text, draftKey]);
 
   // Templates beim Mount lazy laden — leichtgewichtig, gecached
   useEffect(() => {
@@ -789,6 +836,14 @@ export function TaskComposer({
           >
             <Trash2 size={11} /> Verwerfen
           </Button>
+        )}
+        {draftSaved && (
+          <span
+            className="text-[10px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1"
+            title="Dein Entwurf wird automatisch lokal gespeichert. Beim naechsten Aufruf der Aufgabe ist er wieder da."
+          >
+            ● Entwurf gespeichert
+          </span>
         )}
       </div>
 
