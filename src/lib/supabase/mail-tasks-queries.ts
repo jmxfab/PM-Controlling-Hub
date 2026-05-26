@@ -120,11 +120,15 @@ export type MailTabFilter =
 const CATEGORIES_PER_TAB: Record<MailTabFilter, string[]> = {
   my_day:        [], // Mein Tag filtert NICHT nach Kategorie sondern in_my_day_at IS NOT NULL
   kritisch:      ["kritisch"],
-  aufgaben:      ["aufgabe", "dringend"],
+  /** "Projektleiter"-Tab (UI-Label) — vereint operative Aufgaben +
+   *  klassische PL-Tasks aus Hero (Baustelle, Material, Termine). */
+  aufgaben:      ["aufgabe", "dringend", "pl_aufgabe"],
   infos:         ["info"],
   inbox:         ["inbox"],
   rechnungen:    ["rechnung", "bestellung"],
   aufgeschoben:  [], // filtert nach remind_at > now() — kategorie-uebergreifend
+  /** Legacy "pl"-Filter behalten fuer URL-/API-Kompat, leitet auf gleiche
+   *  Kategorien wie "aufgaben" um. UI-Tab existiert nicht mehr (gemerged). */
   pl:            ["pl_aufgabe"],
   gf:            ["gf_aufgabe"],
   controlling:   [], // filtert nach assigned_to IS NOT NULL — kategorie-uebergreifend
@@ -202,7 +206,11 @@ export async function loadMailTaskCounts(): Promise<MailTaskCounts> {
   return {
     my_day: Number(mailCounts.my_day) || 0,
     kritisch: Number(mailCounts.kritisch) || 0,
-    aufgaben: (Number(mailCounts.aufgaben) || 0) + heroCounts.aufgaben,
+    /** Operativ/PL-Tab vereint: aufgabe + dringend + pl_aufgabe + Hero-Comments */
+    aufgaben:
+      (Number(mailCounts.aufgaben) || 0) +
+      (plRes.count ?? 0) +
+      heroCounts.aufgaben,
     infos: (Number(mailCounts.infos) || 0) + heroCounts.infos,
     inbox: Number(mailCounts.inbox) || 0,
     rechnungen: Number(mailCounts.rechnungen) || 0,

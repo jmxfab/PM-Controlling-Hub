@@ -168,10 +168,10 @@ const TAB_META: Record<
     icon: AlertTriangle,
   },
   aufgaben: {
-    label: "Operativ",
-    emptyTitle: "Keine offenen operativen Aufgaben",
+    label: "Projektleiter",
+    emptyTitle: "Keine offenen Projektleiter-Aufgaben",
     emptyHint:
-      "Operative Aufgaben (alles außerhalb PL/GF) erscheinen hier. Sobald neue Mails oder Hero-Erwähnungen reinkommen, landen sie hier.",
+      "Projektleiter-Aufgaben (Baustelle, Material, Technik, Termine, allgemeines Operatives) erscheinen hier. Sobald neue Mails oder Hero-Erwähnungen reinkommen, landen sie hier.",
     icon: Mail,
   },
   infos: {
@@ -629,14 +629,26 @@ export function AufgabenView({
             />
           )}
         </TabsTrigger>
+        {/* Projektleiter-Tab (frueher "Operativ") — vereint aufgabe + dringend +
+         *  pl_aufgabe. Sammelt alles was operativ / projektbezogen ist. */}
         <TabsTrigger
           value="aufgaben"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          title="Operative Aufgaben (alles außerhalb PL und GF)"
+          title="Projektleiter-Aufgaben (operative + Hero-PL Aufgaben)"
         >
-          <Mail size={14} />
-          <span className="flex-1 text-left">Operativ</span>
-          <CountPill value={counts.aufgaben} />
+          <HardHat size={14} />
+          <span className="flex-1 text-left">Projektleiter</span>
+          <CountPill value={counts.aufgaben} tone="indigo" />
+        </TabsTrigger>
+        {/* Geschaeftsfuehrer-Tab — strategisch/finanziell/rechtlich/HR */}
+        <TabsTrigger
+          value="gf"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+          title="Geschaeftsfuehrer-Aufgaben (Angebote, Finanzen, Vertraege, HR, Strategie)"
+        >
+          <Briefcase size={14} />
+          <span className="flex-1 text-left">Geschäftsführer</span>
+          <CountPill value={counts.gf} tone="violet" />
         </TabsTrigger>
         <TabsTrigger
           value="infos"
@@ -646,16 +658,15 @@ export function AufgabenView({
           <span className="flex-1 text-left">Infos</span>
           <CountPill value={counts.infos} />
         </TabsTrigger>
-        {(counts.inbox > 0 || activeTab === "inbox") && (
-          <TabsTrigger
-            value="inbox"
-            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          >
-            <Inbox size={14} />
-            <span className="flex-1 text-left">Inbox</span>
-            <CountPill value={counts.inbox} highlight />
-          </TabsTrigger>
-        )}
+        {/* Inbox: immer sichtbar (User-Wunsch) */}
+        <TabsTrigger
+          value="inbox"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Inbox size={14} />
+          <span className="flex-1 text-left">Inbox</span>
+          <CountPill value={counts.inbox} highlight={counts.inbox > 0} />
+        </TabsTrigger>
         <TabsTrigger
           value="rechnungen"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -664,49 +675,24 @@ export function AufgabenView({
           <span className="flex-1 text-left">Rechnungen</span>
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
-        {(counts.aufgeschoben > 0 || activeTab === "aufgeschoben") && (
-          <TabsTrigger
-            value="aufgeschoben"
-            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          >
-            <Clock3 size={14} />
-            <span className="flex-1 text-left">Aufgeschoben</span>
-            <CountPill value={counts.aufgeschoben} tone="amber" />
-          </TabsTrigger>
-        )}
-        {/* PL-Tab: Aufgaben für den Projektleiter */}
-        {(counts.pl > 0 || activeTab === "pl") && (
-          <TabsTrigger
-            value="pl"
-            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          >
-            <HardHat size={14} />
-            <span className="flex-1 text-left">Projektleiter</span>
-            <CountPill value={counts.pl} tone="indigo" />
-          </TabsTrigger>
-        )}
-        {/* GF-Tab: Aufgaben für die Geschäftsführung */}
-        {(counts.gf > 0 || activeTab === "gf") && (
-          <TabsTrigger
-            value="gf"
-            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          >
-            <Briefcase size={14} />
-            <span className="flex-1 text-left">Geschäftsführung</span>
-            <CountPill value={counts.gf} tone="violet" />
-          </TabsTrigger>
-        )}
-        {/* Controlling-Tab: delegierte Aufgaben die noch offen sind */}
-        {(counts.controlling > 0 || activeTab === "controlling") && (
-          <TabsTrigger
-            value="controlling"
-            className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-          >
-            <Users2 size={14} />
-            <span className="flex-1 text-left">Controlling</span>
-            <CountPill value={counts.controlling} tone="teal" />
-          </TabsTrigger>
-        )}
+        {/* Aufgeschoben: immer sichtbar (User-Wunsch) */}
+        <TabsTrigger
+          value="aufgeschoben"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Clock3 size={14} />
+          <span className="flex-1 text-left">Aufgeschoben</span>
+          <CountPill value={counts.aufgeschoben} tone="amber" />
+        </TabsTrigger>
+        {/* Controlling-Tab: immer sichtbar (User-Wunsch) */}
+        <TabsTrigger
+          value="controlling"
+          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
+        >
+          <Users2 size={14} />
+          <span className="flex-1 text-left">Controlling</span>
+          <CountPill value={counts.controlling} tone="teal" />
+        </TabsTrigger>
         <TabsTrigger
           value="heizlast"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -744,15 +730,14 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
-      {(counts.inbox > 0 || activeTab === "inbox") && (
-        <TabsContent value="inbox">
-          <MailTab
-            initial={{ entries: [], total: 0 }}
-            filter="inbox"
-            heroProjectLinkTemplate={heroProjectLinkTemplate}
-          />
-        </TabsContent>
-      )}
+      {/* Alle TabsContent immer rendern (User-Wunsch: konsistente Sidebar) */}
+      <TabsContent value="inbox">
+        <MailTab
+          initial={{ entries: [], total: 0 }}
+          filter="inbox"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      </TabsContent>
       <TabsContent value="rechnungen">
         <MailTab
           initial={{ entries: [], total: 0 }}
@@ -767,33 +752,23 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
-      {(counts.pl > 0 || activeTab === "pl") && (
-        <TabsContent value="pl">
-          <MailTab
-            initial={{ entries: [], total: 0 }}
-            filter="pl"
-            heroProjectLinkTemplate={heroProjectLinkTemplate}
-          />
-        </TabsContent>
-      )}
-      {(counts.gf > 0 || activeTab === "gf") && (
-        <TabsContent value="gf">
-          <MailTab
-            initial={{ entries: [], total: 0 }}
-            filter="gf"
-            heroProjectLinkTemplate={heroProjectLinkTemplate}
-          />
-        </TabsContent>
-      )}
-      {(counts.controlling > 0 || activeTab === "controlling") && (
-        <TabsContent value="controlling">
-          <MailTab
-            initial={{ entries: [], total: 0 }}
-            filter="controlling"
-            heroProjectLinkTemplate={heroProjectLinkTemplate}
-          />
-        </TabsContent>
-      )}
+      {/* Legacy "pl" Content fuer URL-/API-Kompat (Tab-Trigger weg, aber
+       *  alte Bookmarks landen jetzt im Operativ-Tab — siehe initialTab
+       *  Logik). Hier kein eigener TabsContent mehr noetig. */}
+      <TabsContent value="gf">
+        <MailTab
+          initial={{ entries: [], total: 0 }}
+          filter="gf"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      </TabsContent>
+      <TabsContent value="controlling">
+        <MailTab
+          initial={{ entries: [], total: 0 }}
+          filter="controlling"
+          heroProjectLinkTemplate={heroProjectLinkTemplate}
+        />
+      </TabsContent>
       <TabsContent value="heizlast">
         <HeizlastView
           projects={heizlastProjects}
@@ -3876,7 +3851,7 @@ const CATEGORY_OPTIONS: Array<{
   },
   {
     value: "aufgabe",
-    label: "Operativ",
+    label: "Projektleiter",
     className:
       "text-blue-700 bg-blue-50 ring-blue-200 dark:text-blue-300 dark:bg-blue-950/40 dark:ring-blue-900/40",
     dot: "bg-blue-500",
