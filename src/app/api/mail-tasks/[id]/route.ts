@@ -80,6 +80,12 @@ export async function PATCH(
       }
       update.status = body.status;
       update.completed_at = body.status === "done" ? new Date().toISOString() : null;
+      // Erledigt -> automatisch aus 'Mein Tag' nehmen.
+      // Sonst zeigt Mein Tag erledigte Tasks als 'heute zu tun' an —
+      // verwirrt den User. Der explizite Caller kann in_my_day uebersteuern.
+      if (body.status === "done" && body.in_my_day === undefined) {
+        update.in_my_day_at = null;
+      }
     }
 
     if (body.due_date !== undefined) update.due_date = body.due_date;
