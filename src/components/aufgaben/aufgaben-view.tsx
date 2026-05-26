@@ -1204,6 +1204,10 @@ function MailTab({
       }
       if (removeFromList) {
         markRecentlyRemoved(taskId);
+        // Detail-Pane schliessen wenn die gerade selektierte Task aus der
+        // Liste verschwindet (z.B. nach Erledigt-Klick auf Offen-Filter).
+        // Sonst bleibt der Pane mit Empty-State stehen — unschoen.
+        setExpanded((cur) => (cur === taskId ? null : cur));
       }
       setData((prev) => ({
         ...prev,
