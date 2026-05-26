@@ -1899,7 +1899,14 @@ function MailTab({
               />
             </div>
           ) : (
-          groupByDate(visibleEntries).map((group) => (
+          /* Outlook-Style Master-Detail Layout fuer alle non-my_day Tabs:
+           * - Links: kompakte Liste (Karten ohne Inline-Expand, compact=true)
+           * - Rechts: Detail-Pane mit voll expandierter Karte (sticky position)
+           * - Mobile: Detail-Pane wandert nach unten (1-Spalte, kein sticky)
+           * - Sortable-Buckets bleiben funktional in der Liste */
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:gap-4 items-start space-y-6 lg:space-y-0">
+          <div className="space-y-6 min-w-0">
+          {groupByDate(visibleEntries).map((group) => (
             <section key={group.bucket} className="space-y-2">
               <div className="flex items-baseline gap-2 px-1">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1919,6 +1926,7 @@ function MailTab({
                     tab={filter}
                     expanded={expanded === t.id}
                     busy={busyTaskId === t.id}
+                    compact
                     onToggle={() =>
                       setExpanded((cur) => (cur === t.id ? null : t.id))
                     }
@@ -1941,7 +1949,72 @@ function MailTab({
                 )}
               />
             </section>
-          ))
+          ))}
+          </div>
+          {/* DETAIL-PANE rechts (Outlook-Style):
+           * - Desktop (lg+): sticky neben der Liste, scrollt mit
+           * - Mobile/Tablet: unter der Liste (1-Spalte)
+           * - selectedTask aus visibleEntries gepickt via expanded-ID
+           * - Empty-State wenn nichts ausgewaehlt */}
+          {(() => {
+            const selectedTask = expanded
+              ? visibleEntries.find((t) => t.id === expanded) ?? null
+              : null;
+            return (
+              <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-xl border bg-card/40 p-3 sm:p-4 min-w-0">
+                {selectedTask ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        Details
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(null)}
+                        className="text-[11px] text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-md hover:bg-muted/60"
+                        title="Detail-Pane schliessen"
+                      >
+                        Schliessen ×
+                      </button>
+                    </div>
+                    <TaskCard
+                      key={`detail-${selectedTask.id}`}
+                      task={selectedTask}
+                      tab={filter}
+                      expanded
+                      busy={busyTaskId === selectedTask.id}
+                      onToggle={() => setExpanded(null)}
+                      onMarkDone={() => markDone(selectedTask)}
+                      onMarkAsRead={() => markAsRead(selectedTask)}
+                      onMoveToAufgaben={() => moveToAufgaben(selectedTask)}
+                      onSnooze={(ms) => snoozeBy(selectedTask, ms)}
+                      onSubtasksChange={(next) => updateTaskSubtasks(selectedTask.id, next)}
+                      onDelegationChange={(next) => updateTaskDelegation(selectedTask.id, next)}
+                      onSenderClick={(email) => setHistoryEmail(email)}
+                      onToggleMyDay={() => toggleMyDay(selectedTask)}
+                      onToggleImportant={() => toggleImportant(selectedTask)}
+                      onChangePriority={(p) => changePriority(selectedTask, p)}
+                      onChangeCategory={(c) => changeCategory(selectedTask, c)}
+                      buildMailto={buildMailto}
+                      buildOutlookDesktopLink={buildOutlookDesktopLink}
+                      heroProjectLinkTemplate={heroProjectLinkTemplate}
+                      onHeroMatched={(patch) => updateTaskHeroLink(selectedTask.id, patch)}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-10 px-4 text-muted-foreground">
+                    <div className="text-2xl mb-2">📋</div>
+                    <p className="text-sm">
+                      Waehle links eine Aufgabe aus,
+                      <br />
+                      um sie hier zu bearbeiten.
+                    </p>
+                  </div>
+                )}
+              </aside>
+            );
+          })()}
+          </div>
           )}
           {snoozedCount > 0 && filter !== "aufgeschoben" && (
             <div className="flex justify-center pt-1">
@@ -2207,6 +2280,7 @@ function TaskCard({
   buildOutlookDesktopLink,
   heroProjectLinkTemplate,
   onHeroMatched,
+  compact = false,
 }: {
   task: MailTask;
   tab: MailTabFilter;
@@ -2232,6 +2306,10 @@ function TaskCard({
   heroProjectLinkTemplate: string | null;
   /** Callback wenn AutoHeroMatch ein Projekt gefunden hat — updated lokalen State sofort. */
   onHeroMatched?: (patch: HeroMatchPatch) => void;
+  /** Outlook-Style: wenn true rendert die Karte NIE den expanded-Body inline.
+   *  Verwendet in der Sidebar — der Detail-Pane rechts uebernimmt die Anzeige
+   *  des selektierten Items. */
+  compact?: boolean;
 }) {
   const t = task;
   const prio = t.priority ? PRIORITY_CONFIG[t.priority] : null;
@@ -2633,11 +2711,11 @@ function TaskCard({
        *  mit 200 Karten ~600 unnoetige Component-Mounts beim Initial-Render. */}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          expanded && !compact ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
       >
         <div className="overflow-hidden">
-          {expanded && (
+          {expanded && !compact && (
           <div className="border-t bg-gradient-to-b from-muted/30 to-muted/10 px-3 py-3 sm:px-5 sm:py-4 space-y-3 sm:space-y-4">
             {/* Schnell-Edit: Priorität + Kategorie. Nur fuer mail-source-Tasks,
                 Hero-Items sind read-only. */}
