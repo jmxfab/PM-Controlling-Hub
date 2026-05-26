@@ -1750,13 +1750,14 @@ function MailTab({
         <SkeletonList />
       ) : visibleEntries.length === 0 && snoozedCount === 0 && prioEntries.length === 0 ? (
         <EmptyState
-          icon={meta.icon}
-          title={meta.emptyTitle}
+          icon={search ? Search : meta.icon}
+          title={search ? "Keine Treffer" : meta.emptyTitle}
           hint={
             search
-              ? "Suche liefert keine Treffer. Versuche andere Begriffe."
+              ? `Keine Aufgabe enthält „${search}". Andere Begriffe probieren — oder den Filter zurücksetzen.`
               : meta.emptyHint
           }
+          tone={search ? "default" : statusFilter === "done" ? "success" : "calm"}
         />
       ) : (
         <div className="space-y-6">
@@ -1771,6 +1772,7 @@ function MailTab({
                       snoozedCount === 1 ? "" : "n"
                     } warten auf ihre Erinnerung. Klick auf den Button unten um sie trotzdem zu sehen.`
               }
+              tone="calm"
             />
           )}
           {/* Im Mein-Tag Tab: flache Liste mit DnD. In anderen Tabs: nach Datum gruppiert. */}
@@ -2242,9 +2244,8 @@ function TaskCard({
                 </div>
               )}
               <div className="flex items-center gap-2">
-              {/* Wichtig-Star (Microsoft-To-Do-Style).
-               *  Pinnt Task oben in der Liste + Visual-Highlight. Nur fuer
-               *  mail-source Tasks (Hero ist read-only). */}
+              {/* Wichtig-Star (Microsoft-To-Do-Style) — pinnt oben + Visual-Highlight.
+               *  IMMER sichtbar (vorher opacity:0 versteckt war nicht entdeckbar). */}
               {t.source === "mail" && (
                 <button
                   type="button"
@@ -2255,26 +2256,27 @@ function TaskCard({
                   title={
                     t.is_important
                       ? "Wichtig-Markierung entfernen"
-                      : "Als wichtig markieren"
+                      : "Als wichtig markieren (pinnt diese Aufgabe oben)"
                   }
-                  className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
+                  className={`grid place-items-center w-7 h-7 rounded-md transition-all ${
                     t.is_important
                       ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      : "text-muted-foreground/30 hover:text-amber-500 hover:bg-amber-50/60 dark:hover:bg-amber-950/30"
                   }`}
                   aria-label={
                     t.is_important ? "Nicht mehr wichtig" : "Wichtig markieren"
                   }
+                  aria-pressed={t.is_important}
                 >
                   <Star
-                    size={14}
+                    size={15}
                     className={t.is_important ? "fill-amber-400" : ""}
                   />
                 </button>
               )}
-              {/* Sun-Toggle (Microsoft-To-Do-Style 'Mein Tag').
-               *  Nur fuer echte mail-source Tasks (Hero-Items sind in unserer
-               *  DB nicht persistent, kein in_my_day_at moeglich). */}
+              {/* Sun-Toggle "Mein Tag" — visuell DEUTLICH anders als Star.
+               *  Aktiv: sky-blue gefuellt (Tag/Himmel-Metaphor).
+               *  Inaktiv: muted (immer sichtbar). */}
               {t.source === "mail" && (
                 <button
                   type="button"
@@ -2285,22 +2287,23 @@ function TaskCard({
                   title={
                     t.in_my_day_at
                       ? "Aus 'Mein Tag' entfernen"
-                      : "Zu 'Mein Tag' hinzufügen"
+                      : "Heute erledigen — zu 'Mein Tag' hinzufügen"
                   }
-                  className={`grid place-items-center w-6 h-6 rounded-md transition-all ${
+                  className={`grid place-items-center w-7 h-7 rounded-md transition-all ${
                     t.in_my_day_at
-                      ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                      : "text-muted-foreground/40 hover:text-amber-500 hover:bg-muted/60 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      ? "text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                      : "text-muted-foreground/30 hover:text-sky-500 hover:bg-sky-50/60 dark:hover:bg-sky-950/30"
                   }`}
                   aria-label={
                     t.in_my_day_at
                       ? "Aus Mein Tag entfernen"
                       : "Zu Mein Tag hinzufügen"
                   }
+                  aria-pressed={Boolean(t.in_my_day_at)}
                 >
                   <Sun
-                    size={14}
-                    className={t.in_my_day_at ? "fill-amber-400/60" : ""}
+                    size={15}
+                    className={t.in_my_day_at ? "fill-sky-300/70" : ""}
                   />
                 </button>
               )}
@@ -2919,18 +2922,34 @@ function EmptyState({
   icon: Icon,
   title,
   hint,
+  tone = "default",
 }: {
   icon: typeof Mail;
   title: string;
   hint: string;
+  /** Farb-Akzent — passt zur jeweiligen Tab-Identitaet (kritisch=rot, etc).
+   *  "default" = neutral grau, "calm" = freundliches Teal-Pastell. */
+  tone?: "default" | "calm" | "success";
 }) {
+  const toneCls = {
+    default:
+      "from-muted/30 to-muted/10 ring-border/40 [&_.eicon-bubble]:bg-muted/70 [&_.eicon-bubble]:text-muted-foreground",
+    calm: "from-teal-50/60 to-sky-50/40 dark:from-teal-950/30 dark:to-sky-950/20 ring-teal-200/40 dark:ring-teal-900/30 [&_.eicon-bubble]:bg-teal-100 dark:[&_.eicon-bubble]:bg-teal-900/40 [&_.eicon-bubble]:text-teal-700 dark:[&_.eicon-bubble]:text-teal-300",
+    success:
+      "from-emerald-50/60 to-lime-50/40 dark:from-emerald-950/30 dark:to-lime-950/20 ring-emerald-200/40 dark:ring-emerald-900/30 [&_.eicon-bubble]:bg-emerald-100 dark:[&_.eicon-bubble]:bg-emerald-900/40 [&_.eicon-bubble]:text-emerald-700 dark:[&_.eicon-bubble]:text-emerald-300",
+  }[tone];
+
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 py-16 px-4 text-center">
-      <div className="rounded-full bg-muted/60 p-3 mb-3">
-        <Icon size={22} className="text-muted-foreground/70" />
+    <div
+      className={`flex flex-col items-center justify-center rounded-2xl border bg-gradient-to-b py-14 sm:py-20 px-6 text-center ring-1 ring-inset ${toneCls}`}
+    >
+      <div className="eicon-bubble rounded-full p-5 mb-4 shadow-sm">
+        <Icon size={28} strokeWidth={1.75} />
       </div>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-xs text-muted-foreground mt-1 max-w-sm">{hint}</p>
+      <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+      <p className="text-[13px] text-muted-foreground mt-1.5 max-w-md leading-relaxed">
+        {hint}
+      </p>
     </div>
   );
 }
