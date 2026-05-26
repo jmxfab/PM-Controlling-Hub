@@ -473,6 +473,12 @@ export function AufgabenView({
   const [counts, setCounts] = useState<MailTaskCounts>(initialCounts);
   const defaultTab: MailTabFilter =
     initialTab ?? (initialCounts.kritisch > 0 ? "kritisch" : "aufgaben");
+  // Controlled active tab — sonst springt Radix automatisch weg sobald
+  // counts.pl/gf/inbox/etc. auf 0 fallen (Tab-Trigger wird unconditional
+  // ausgeblendet). Mit controlled state bleibt der User auf seinem Tab
+  // auch wenn der Count auf 0 faellt (Conditional unten beruecksichtigt
+  // activeTab als Sticky-Override).
+  const [activeTab, setActiveTab] = useState<MailTabFilter>(defaultTab);
 
   // Realtime-Subscriber: bei jeder DB-Aenderung an tasks oder task_notes
   // re-fetchen wir die Counts. MailTab subscribed sich separat und
@@ -568,7 +574,8 @@ export function AufgabenView({
 
   return (
     <Tabs
-      defaultValue={defaultTab}
+      value={activeTab}
+      onValueChange={(v) => setActiveTab(v as MailTabFilter)}
       orientation="vertical"
       // MS-To-Do-Style Sidebar-Layout: links Liste der Tabs, rechts Content.
       // Auf Mobile bricht das Grid auf eine einzige Spalte um, Sidebar landet oben.
@@ -637,7 +644,7 @@ export function AufgabenView({
           <span className="flex-1 text-left">Infos</span>
           <CountPill value={counts.infos} />
         </TabsTrigger>
-        {counts.inbox > 0 && (
+        {(counts.inbox > 0 || activeTab === "inbox") && (
           <TabsTrigger
             value="inbox"
             className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -655,7 +662,7 @@ export function AufgabenView({
           <span className="flex-1 text-left">Rechnungen</span>
           <CountPill value={counts.rechnungen} />
         </TabsTrigger>
-        {counts.aufgeschoben > 0 && (
+        {(counts.aufgeschoben > 0 || activeTab === "aufgeschoben") && (
           <TabsTrigger
             value="aufgeschoben"
             className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -666,7 +673,7 @@ export function AufgabenView({
           </TabsTrigger>
         )}
         {/* PL-Tab: Aufgaben für den Projektleiter */}
-        {counts.pl > 0 && (
+        {(counts.pl > 0 || activeTab === "pl") && (
           <TabsTrigger
             value="pl"
             className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -677,7 +684,7 @@ export function AufgabenView({
           </TabsTrigger>
         )}
         {/* GF-Tab: Aufgaben für die Geschäftsführung */}
-        {counts.gf > 0 && (
+        {(counts.gf > 0 || activeTab === "gf") && (
           <TabsTrigger
             value="gf"
             className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -688,7 +695,7 @@ export function AufgabenView({
           </TabsTrigger>
         )}
         {/* Controlling-Tab: delegierte Aufgaben die noch offen sind */}
-        {counts.controlling > 0 && (
+        {(counts.controlling > 0 || activeTab === "controlling") && (
           <TabsTrigger
             value="controlling"
             className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
@@ -735,7 +742,7 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
-      {counts.inbox > 0 && (
+      {(counts.inbox > 0 || activeTab === "inbox") && (
         <TabsContent value="inbox">
           <MailTab
             initial={{ entries: [], total: 0 }}
@@ -758,7 +765,7 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
-      {counts.pl > 0 && (
+      {(counts.pl > 0 || activeTab === "pl") && (
         <TabsContent value="pl">
           <MailTab
             initial={{ entries: [], total: 0 }}
@@ -767,7 +774,7 @@ export function AufgabenView({
           />
         </TabsContent>
       )}
-      {counts.gf > 0 && (
+      {(counts.gf > 0 || activeTab === "gf") && (
         <TabsContent value="gf">
           <MailTab
             initial={{ entries: [], total: 0 }}
@@ -776,7 +783,7 @@ export function AufgabenView({
           />
         </TabsContent>
       )}
-      {counts.controlling > 0 && (
+      {(counts.controlling > 0 || activeTab === "controlling") && (
         <TabsContent value="controlling">
           <MailTab
             initial={{ entries: [], total: 0 }}
