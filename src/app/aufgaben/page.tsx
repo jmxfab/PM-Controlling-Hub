@@ -69,7 +69,7 @@ export default async function AufgabenPage() {
   const initialData = defaultTab === "kritisch" ? kritischData : aufgabenData;
 
   return (
-    <div className="flex-1 space-y-6 p-3 sm:p-6 md:p-8 max-w-[1600px] mx-auto min-w-0 overflow-x-hidden">
+    <div className="flex-1 space-y-6 p-3 sm:p-6 md:p-8 min-w-0 overflow-x-hidden">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">

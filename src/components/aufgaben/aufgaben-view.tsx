@@ -1833,7 +1833,7 @@ function MailTab({
            * - Rechts: Detail-Pane mit voll expandierter Karte (sticky position)
            * - Mobile: Detail-Pane wandert nach unten (1-Spalte, kein sticky)
            * - Sortable-Buckets bleiben funktional in der Liste */
-          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:gap-4 items-start space-y-6 lg:space-y-0">
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_640px] xl:grid-cols-[minmax(0,1fr)_720px] 2xl:grid-cols-[minmax(0,1fr)_800px] lg:gap-4 items-start space-y-6 lg:space-y-0">
           <div className="space-y-6 min-w-0">
           {/* Wenn sortMode != default: Datum-Gruppen ignorieren und EINEN
            *  flachen Bucket mit allen Tasks rendern. So sortiert die Liste
