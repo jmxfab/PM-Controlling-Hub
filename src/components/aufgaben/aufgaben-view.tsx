@@ -97,6 +97,59 @@ import {
 const PAGE_SIZE = 500;
 
 type StatusFilter = "all" | "open" | "done";
+/** Sortier-Modus pro Tab:
+ *  - "default": Wichtig-Star + manueller sort_order + neueste Aktivitaet (Standard)
+ *  - "priority": Dringlichkeit zuerst (urgent > high > medium > low)
+ *  - "date": Datum, neueste oben (created_at DESC)
+ *  Erledigte werden in jedem Modus ans Ende sortiert wenn sichtbar.
+ */
+type SortMode = "default" | "priority" | "date";
+
+/** Numerischer Rank pro Prio fuer die Sortierung. Niedriger = wichtiger. */
+const PRIO_RANK: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+/** Liefert eine sort()-Comparator-Funktion fuer den gewaehlten SortMode.
+ *  Erledigte werden in jedem Modus ans Ende sortiert. */
+function compileSortComparator(mode: SortMode): (a: MailTask, b: MailTask) => number {
+  return (a, b) => {
+    // 1) Erledigte ans Ende
+    const aDone = a.status === "done" ? 1 : 0;
+    const bDone = b.status === "done" ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+
+    if (mode === "priority") {
+      const ra = PRIO_RANK[a.priority ?? "medium"] ?? 4;
+      const rb = PRIO_RANK[b.priority ?? "medium"] ?? 4;
+      if (ra !== rb) return ra - rb;
+      // Tiebreaker: neueste zuerst
+      return sortByDate(a, b);
+    }
+
+    if (mode === "date") {
+      return sortByDate(a, b);
+    }
+
+    // default: Server-Reihenfolge respektieren (is_important + sort_order +
+    // thread_last_message + created_at) — wir lassen die Original-Order
+    // ungeaendert. Stable sort: zurueck zu 0 = gleicher Rang.
+    // Nur is_important nochmal hochziehen falls Server-Order anders ist.
+    const aImp = a.is_important ? 0 : 1;
+    const bImp = b.is_important ? 0 : 1;
+    if (aImp !== bImp) return aImp - bImp;
+    return 0;
+  };
+}
+
+function sortByDate(a: MailTask, b: MailTask): number {
+  const aDate = a.thread_last_message_at ?? a.created_at ?? "";
+  const bDate = b.thread_last_message_at ?? b.created_at ?? "";
+  return bDate.localeCompare(aDate); // neueste zuerst
+}
 type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
 type AgeFilter = "30" | "90" | "all";
 
@@ -989,6 +1042,36 @@ function MailTab({
   // Altersfilter (Default 30 Tage) — sorgt dafuer dass alte Karteileichen
   // standardmaessig nicht stoeren. User kann auf 90 oder 'Alle' umschalten.
   const [ageFilter, setAgeFilterRaw] = useState<AgeFilter>(persistedFilters.age);
+  /** Sortier-Modus pro Tab. Client-Side angewandt in visibleEntries.
+   *  Persistiert via localStorage analog zu Status/Prio/Alter. */
+  const [sortMode, setSortModeRaw] = useState<SortMode>(() => {
+    if (typeof window === "undefined") return "default";
+    try {
+      const raw = window.localStorage.getItem(`aufgaben-sort:${filter}`);
+      if (raw === "priority" || raw === "date" || raw === "default") return raw;
+    } catch {}
+    return "default";
+  });
+  const setSortMode = useCallback(
+    (v: SortMode) => {
+      setSortModeRaw(v);
+      try {
+        window.localStorage.setItem(`aufgaben-sort:${filter}`, v);
+      } catch {}
+    },
+    [filter],
+  );
+  // Tab-Wechsel: Sort-Mode neu laden
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(`aufgaben-sort:${filter}`);
+      if (raw === "priority" || raw === "date" || raw === "default") {
+        setSortModeRaw(raw);
+      } else {
+        setSortModeRaw("default");
+      }
+    } catch {}
+  }, [filter]);
   // Bei Tab-Wechsel: Filter aus localStorage neu laden
   useEffect(() => {
     const next = readPersistedFilters(filter, tabFilters.defaultStatus);
@@ -1070,13 +1153,10 @@ function MailTab({
     const prio: MailTask[] = [];
     let snoozed = 0;
     for (const t of data.entries) {
-      // 1) Erledigte raus — Item 3.1 (sofortiges Ausblenden nach Mark-Done)
-      // Nur ausblenden wenn:
-      // - Task ist "done" UND
-      // - Filter ist auf "open" (zeige nur offene) ODER Filter ist auf "all" (zeige nur unvollständige mit Snooze-Logic)
-      // Wenn Filter auf "done" ist, zeige nur "done"-Tasks. Wenn Filter auf "all" ist...
-      // actually, "all" sollte alles zeigen UNABHÄNGIG von Status
-      if (t.status === "done" && statusFilter === "open") continue;
+      // 1) Erledigte werden NUR gezeigt wenn explizit nach "done" gefiltert.
+      // Sonst (open / all) ausblenden — User-Wunsch: erledigte verschwinden
+      // ueberall, auch im Kritisch-Tab, bis sie aktiv aufgerufen werden.
+      if (t.status === "done" && statusFilter !== "done") continue;
       // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt.
       //    Im "Aufgeschoben"-Tab zeigen wir sie IMMER (der Tab ist genau dafuer da).
       if (t.status !== "done" && t.remind_at && filter !== "aufgeschoben") {
@@ -1095,12 +1175,25 @@ function MailTab({
       }
       visible.push(t);
     }
+
+    // Client-Side Sortierung:
+    // - Erledigte IMMER ans Ende (auch wenn statusFilter=done — Erledigt-Liste
+    //   wird mit Datum DESC sortiert, neueste zuerst)
+    // - Sonst je nach sortMode:
+    //   * default: is_important + sort_order + thread_last_message_at + created_at
+    //     (das macht die Server-Query bereits — wir behalten die Reihenfolge bei)
+    //   * priority: PRIO_RANK + dann Datum DESC
+    //   * date: created_at DESC (oder thread_last_message_at falls vorhanden)
+    const sortByCompiled = compileSortComparator(sortMode);
+    visible.sort(sortByCompiled);
+    prio.sort(sortByCompiled);
+
     return {
       visibleEntries: visible,
       snoozedCount: snoozed,
       prioEntries: prio,
     };
-  }, [data.entries, showSnoozed, statusFilter, filter]);
+  }, [data.entries, showSnoozed, statusFilter, filter, sortMode]);
 
   const fetchData = useCallback(
     async (
@@ -1756,7 +1849,9 @@ function MailTab({
         setPrioFilter={setPrioFilter}
         ageFilter={ageFilter}
         setAgeFilter={setAgeFilter}
-        hasFilters={!!hasFilters || ageFilter !== "30"}
+        sortMode={sortMode}
+        setSortMode={setSortMode}
+        hasFilters={!!hasFilters || ageFilter !== "30" || sortMode !== "default"}
         defaultStatus={tabFilters.defaultStatus}
         loading={loading}
         showStatus={tabFilters.status}
@@ -2095,6 +2190,8 @@ function FilterBar({
   setPrioFilter,
   ageFilter,
   setAgeFilter,
+  sortMode,
+  setSortMode,
   hasFilters,
   defaultStatus,
   loading,
@@ -2110,6 +2207,8 @@ function FilterBar({
   setPrioFilter: (v: PrioFilter) => void;
   ageFilter: AgeFilter;
   setAgeFilter: (v: AgeFilter) => void;
+  sortMode: SortMode;
+  setSortMode: (v: SortMode) => void;
   hasFilters: boolean;
   defaultStatus: StatusFilter;
   loading: boolean;
@@ -2192,6 +2291,19 @@ function FilterBar({
         </>
       )}
 
+      {/* Sortierung — Client-Side. Persistiert pro Tab in localStorage. */}
+      <div className="h-5 w-px bg-border" />
+      <PillGroup
+        label="Sort"
+        value={sortMode}
+        options={[
+          { value: "default", label: "Reihenfolge" },
+          { value: "priority", label: "Dringlichkeit" },
+          { value: "date", label: "Datum" },
+        ]}
+        onChange={(v) => setSortMode(v as SortMode)}
+      />
+
       {hasFilters && (
         <Button
           variant="ghost"
@@ -2202,6 +2314,7 @@ function FilterBar({
             setStatusFilter(defaultStatus);
             setPrioFilter("all");
             setAgeFilter("30");
+            setSortMode("default");
           }}
         >
           <X size={13} /> Reset
