@@ -1926,7 +1926,19 @@ function MailTab({
               waehrend des Drags eine "Zu Mein Tag"-Drop-Zone oben — User
               kann die Karte einfach dort ablegen statt Sun-Icon zu klicken. */}
           {filter === "my_day" ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+            /* Mein-Tag Layout (User-Wunsch: Vorschlaege OBEN, Liste DARUNTER).
+             * - Vorschlaege-Panel ueber der eigentlichen Mein-Tag-Liste —
+             *   so sieht der User direkt was er heute noch reinziehen koennte
+             * - Drunter dann die flache DnD-sortierbare Liste */
+            <div className="space-y-4">
+              {/* MS-To-Do-Style Vorschläge-Panel oben (vorher rechts).
+                  Zeigt offene Tasks die noch NICHT in Mein Tag sind.
+                  Refresh-Trigger: mutationTick + visibleEntries-IDs. */}
+              <MyDaySuggestionsPanel
+                refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
+                onAdd={addSuggestionToMyDay}
+                busyTaskId={busyTaskId}
+              />
               <SortableBucket
                 tasks={visibleEntries}
                 renderCard={(t) => (
@@ -1956,18 +1968,6 @@ function MailTab({
                     onHeroMatched={(patch) => updateTaskHeroLink(t.id, patch)}
                   />
                 )}
-              />
-              {/* MS-To-Do-Style Vorschläge-Panel rechts.
-                  Zeigt offene Tasks die noch NICHT in Mein Tag sind.
-                  Refresh-Trigger: mutationTick (bumpt bei jeder Mutation)
-                  + visibleEntries-IDs (Fallback bei Realtime-Sync). */}
-              <MyDaySuggestionsPanel
-                /* refreshKey: nur Mutationen + welche IDs in Mein Tag sind,
-                   nicht ihre Reihenfolge (DnD-Sort triggert sonst Refetch).
-                   IDs sortiert verkettet -> stabil bei Reorder. */
-                refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
-                onAdd={addSuggestionToMyDay}
-                busyTaskId={busyTaskId}
               />
             </div>
           ) : (
