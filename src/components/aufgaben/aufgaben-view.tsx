@@ -49,6 +49,8 @@ import type {
   Subtask,
 } from "@/lib/supabase/mail-tasks-queries";
 import dynamic from "next/dynamic";
+import { HeroLogbuchPanel } from "@/components/aufgaben/hero-logbuch-panel";
+import { HeroRemindersPanel } from "@/components/aufgaben/hero-reminders-panel";
 // HeizlastView (492 LOC) wird nur im Heizlast-Tab gebraucht — lazy laden
 // damit der Haupt-Bundle der /aufgaben-Page kleiner ist.
 const HeizlastView = dynamic(
@@ -2000,6 +2002,28 @@ function MailTab({
                       heroProjectLinkTemplate={heroProjectLinkTemplate}
                       onHeroMatched={(patch) => updateTaskHeroLink(selectedTask.id, patch)}
                     />
+                    {/* Hero-Erinnerungen: bevorstehende Hero-Termine + Reminder
+                     *  fuer dieses Projekt. Versteckt sich automatisch wenn nichts da. */}
+                    {selectedTask.hero_project_id && (
+                      <HeroRemindersPanel
+                        heroProjectId={selectedTask.hero_project_id}
+                        projectNumber={selectedTask.hero_project_number}
+                      />
+                    )}
+                    {/* Hero-Logbuch inline: wenn die Aufgabe mit einem Hero-Projekt
+                     *  verknuepft ist, zeigen wir die letzten Logbuch-Eintraege
+                     *  direkt hier — User muss nicht in Hero wechseln. */}
+                    {selectedTask.hero_project_id && (
+                      <HeroLogbuchPanel
+                        heroProjectId={selectedTask.hero_project_id}
+                        heroProjectHref={buildHeroProjectHref(
+                          heroProjectLinkTemplate,
+                          selectedTask.hero_project_id,
+                          selectedTask.hero_project_number,
+                        )}
+                        projectNumber={selectedTask.hero_project_number}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-10 px-4 text-muted-foreground">
