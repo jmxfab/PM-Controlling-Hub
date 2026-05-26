@@ -140,10 +140,12 @@ export function TaskComposer({
       // localStorage kann disabled sein (Private-Modus, Quotas) — ignorieren
     }
     // Nur beim Wechsel der draftKey laden, nicht bei jedem text-Change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
-  // 2) Beim Tippen: debounced als Entwurf speichern (500ms)
+  // 2) Beim Tippen: debounced als Entwurf speichern (500ms).
+  //    WICHTIG: Bei Unmount / Task-Wechsel muss der pending Save SOFORT
+  //    in localStorage geschrieben werden — sonst geht der Text verloren
+  //    wenn der User zwischen Tippen und 500ms-Tick die Karte wechselt.
   useEffect(() => {
     if (!draftKey) return;
     // Leer-Text -> Eintrag loeschen (Cleanup)
@@ -164,7 +166,14 @@ export function TaskComposer({
         // Quota voll oder disabled — silent fail
       }
     }, 500);
-    return () => window.clearTimeout(handle);
+    return () => {
+      window.clearTimeout(handle);
+      // Synchron flushen vor Unmount/Task-Wechsel — sonst geht Text verloren
+      // bei schneller Task-Auswahl waehrend des 500ms-Debounce.
+      try {
+        window.localStorage.setItem(draftKey, text);
+      } catch {}
+    };
   }, [text, draftKey]);
 
   // Templates beim Mount lazy laden — leichtgewichtig, gecached
