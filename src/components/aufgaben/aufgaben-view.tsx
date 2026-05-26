@@ -104,6 +104,9 @@ type StatusFilter = "all" | "open" | "done";
  *  Erledigte werden in jedem Modus ans Ende sortiert wenn sichtbar.
  */
 type SortMode = "default" | "priority" | "date";
+/** Sortier-Richtung — aufsteigend oder absteigend.
+ *  Wirkt auf priority (asc=urgent first) und date (desc=neueste first). */
+type SortDirection = "asc" | "desc";
 
 /** Numerischer Rank pro Prio fuer die Sortierung. Niedriger = wichtiger. */
 const PRIO_RANK: Record<string, number> = {
@@ -115,9 +118,13 @@ const PRIO_RANK: Record<string, number> = {
 
 /** Liefert eine sort()-Comparator-Funktion fuer den gewaehlten SortMode.
  *  Erledigte werden in jedem Modus ans Ende sortiert. */
-function compileSortComparator(mode: SortMode): (a: MailTask, b: MailTask) => number {
+function compileSortComparator(
+  mode: SortMode,
+  direction: SortDirection,
+): (a: MailTask, b: MailTask) => number {
+  const dirFactor = direction === "asc" ? 1 : -1;
   return (a, b) => {
-    // 1) Erledigte ans Ende
+    // 1) Erledigte ans Ende (immer, unabhaengig von direction)
     const aDone = a.status === "done" ? 1 : 0;
     const bDone = b.status === "done" ? 1 : 0;
     if (aDone !== bDone) return aDone - bDone;
@@ -125,19 +132,20 @@ function compileSortComparator(mode: SortMode): (a: MailTask, b: MailTask) => nu
     if (mode === "priority") {
       const ra = PRIO_RANK[a.priority ?? "medium"] ?? 4;
       const rb = PRIO_RANK[b.priority ?? "medium"] ?? 4;
-      if (ra !== rb) return ra - rb;
-      // Tiebreaker: neueste zuerst
+      // asc: urgent zuerst (ra-rb, niedriger Rank=oben)
+      // desc: low zuerst (rb-ra)
+      if (ra !== rb) return (ra - rb) * dirFactor;
+      // Tiebreaker: immer neueste zuerst
       return sortByDate(a, b);
     }
 
     if (mode === "date") {
-      return sortByDate(a, b);
+      // sortByDate liefert neueste-zuerst (desc).
+      // asc dreht um -> aelteste zuerst.
+      return sortByDate(a, b) * dirFactor * -1;
     }
 
-    // default: Server-Reihenfolge respektieren (is_important + sort_order +
-    // thread_last_message + created_at) — wir lassen die Original-Order
-    // ungeaendert. Stable sort: zurueck zu 0 = gleicher Rang.
-    // Nur is_important nochmal hochziehen falls Server-Order anders ist.
+    // default: Server-Reihenfolge respektieren, nur is_important hochziehen
     const aImp = a.is_important ? 0 : 1;
     const bImp = b.is_important ? 0 : 1;
     if (aImp !== bImp) return aImp - bImp;
@@ -148,7 +156,7 @@ function compileSortComparator(mode: SortMode): (a: MailTask, b: MailTask) => nu
 function sortByDate(a: MailTask, b: MailTask): number {
   const aDate = a.thread_last_message_at ?? a.created_at ?? "";
   const bDate = b.thread_last_message_at ?? b.created_at ?? "";
-  return bDate.localeCompare(aDate); // neueste zuerst
+  return bDate.localeCompare(aDate); // neueste zuerst (desc default)
 }
 type PrioFilter = "all" | "urgent" | "high" | "medium" | "low";
 type AgeFilter = "30" | "90" | "all";
@@ -1063,7 +1071,25 @@ function MailTab({
     },
     [filter],
   );
-  // Tab-Wechsel: Sort-Mode neu laden
+  /** Sortier-Richtung (asc / desc). Persistiert. */
+  const [sortDirection, setSortDirectionRaw] = useState<SortDirection>(() => {
+    if (typeof window === "undefined") return "desc";
+    try {
+      const raw = window.localStorage.getItem(`aufgaben-sort-dir:${filter}`);
+      if (raw === "asc" || raw === "desc") return raw;
+    } catch {}
+    return "desc";
+  });
+  const setSortDirection = useCallback(
+    (v: SortDirection) => {
+      setSortDirectionRaw(v);
+      try {
+        window.localStorage.setItem(`aufgaben-sort-dir:${filter}`, v);
+      } catch {}
+    },
+    [filter],
+  );
+  // Tab-Wechsel: Sort-Mode + Direction neu laden
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(`aufgaben-sort:${filter}`);
@@ -1071,6 +1097,12 @@ function MailTab({
         setSortModeRaw(raw);
       } else {
         setSortModeRaw("default");
+      }
+      const rawDir = window.localStorage.getItem(`aufgaben-sort-dir:${filter}`);
+      if (rawDir === "asc" || rawDir === "desc") {
+        setSortDirectionRaw(rawDir);
+      } else {
+        setSortDirectionRaw("desc");
       }
     } catch {}
   }, [filter]);
@@ -1155,10 +1187,11 @@ function MailTab({
     const prio: MailTask[] = [];
     let snoozed = 0;
     for (const t of data.entries) {
-      // 1) Erledigte werden NUR gezeigt wenn explizit nach "done" gefiltert.
-      // Sonst (open / all) ausblenden — User-Wunsch: erledigte verschwinden
-      // ueberall, auch im Kritisch-Tab, bis sie aktiv aufgerufen werden.
-      if (t.status === "done" && statusFilter !== "done") continue;
+      // 1) Status-Filter:
+      //    - "Offen": done ausgeblendet
+      //    - "Alle": done sichtbar, aber via sortComparator ans Ende
+      //    - "Erledigt": nur done (server-side bereits gefiltert)
+      if (t.status === "done" && statusFilter === "open") continue;
       // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt.
       //    Im "Aufgeschoben"-Tab zeigen wir sie IMMER (der Tab ist genau dafuer da).
       if (t.status !== "done" && t.remind_at && filter !== "aufgeschoben") {
@@ -1186,7 +1219,7 @@ function MailTab({
     //     (das macht die Server-Query bereits — wir behalten die Reihenfolge bei)
     //   * priority: PRIO_RANK + dann Datum DESC
     //   * date: created_at DESC (oder thread_last_message_at falls vorhanden)
-    const sortByCompiled = compileSortComparator(sortMode);
+    const sortByCompiled = compileSortComparator(sortMode, sortDirection);
     visible.sort(sortByCompiled);
     prio.sort(sortByCompiled);
 
@@ -1195,7 +1228,7 @@ function MailTab({
       snoozedCount: snoozed,
       prioEntries: prio,
     };
-  }, [data.entries, showSnoozed, statusFilter, filter, sortMode]);
+  }, [data.entries, showSnoozed, statusFilter, filter, sortMode, sortDirection]);
 
   const fetchData = useCallback(
     async (
@@ -1858,6 +1891,8 @@ function MailTab({
         setAgeFilter={setAgeFilter}
         sortMode={sortMode}
         setSortMode={setSortMode}
+        sortDirection={sortDirection}
+        setSortDirection={setSortDirection}
         hasFilters={!!hasFilters || ageFilter !== "30" || sortMode !== "default"}
         defaultStatus={tabFilters.defaultStatus}
         loading={loading}
@@ -1933,19 +1968,11 @@ function MailTab({
               waehrend des Drags eine "Zu Mein Tag"-Drop-Zone oben — User
               kann die Karte einfach dort ablegen statt Sun-Icon zu klicken. */}
           {filter === "my_day" ? (
-            /* Mein-Tag Layout (User-Wunsch: Vorschlaege OBEN, Liste DARUNTER).
-             * - Vorschlaege-Panel ueber der eigentlichen Mein-Tag-Liste —
-             *   so sieht der User direkt was er heute noch reinziehen koennte
-             * - Drunter dann die flache DnD-sortierbare Liste */
-            <div className="space-y-4">
-              {/* MS-To-Do-Style Vorschläge-Panel oben (vorher rechts).
-                  Zeigt offene Tasks die noch NICHT in Mein Tag sind.
-                  Refresh-Trigger: mutationTick + visibleEntries-IDs. */}
-              <MyDaySuggestionsPanel
-                refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
-                onAdd={addSuggestionToMyDay}
-                busyTaskId={busyTaskId}
-              />
+            /* Mein-Tag Layout (User-Wunsch: Vorschlaege als rechte Seitenleiste).
+             * - Links: Mein-Tag-Liste (DnD)
+             * - Rechts: Vorschlaege-Panel (Tasks zum Hinzufuegen), sticky
+             * - Mobile: stacked (Vorschlaege unter der Liste) */
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-4 items-start">
               <SortableBucket
                 tasks={visibleEntries}
                 renderCard={(t) => (
@@ -1976,6 +2003,15 @@ function MailTab({
                   />
                 )}
               />
+              {/* Vorschlaege-Panel rechts als Sticky-Sidebar.
+                  Tasks die noch NICHT in Mein Tag sind, klickbar = Add. */}
+              <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+                <MyDaySuggestionsPanel
+                  refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
+                  onAdd={addSuggestionToMyDay}
+                  busyTaskId={busyTaskId}
+                />
+              </aside>
             </div>
           ) : (
           /* Outlook-Style Master-Detail Layout fuer alle non-my_day Tabs:
@@ -1985,11 +2021,22 @@ function MailTab({
            * - Sortable-Buckets bleiben funktional in der Liste */
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_520px] lg:gap-4 items-start space-y-6 lg:space-y-0">
           <div className="space-y-6 min-w-0">
-          {groupByDate(visibleEntries).map((group) => (
+          {/* Wenn sortMode != default: Datum-Gruppen ignorieren und EINEN
+           *  flachen Bucket mit allen Tasks rendern. So sortiert die Liste
+           *  nach Dringlichkeit / Datum komplett durch, ohne dass die
+           *  Heute/Gestern/Diese-Woche-Header die Reihenfolge zerhacken. */}
+          {(sortMode !== "default"
+            ? [{ bucket: "all" as const, tasks: visibleEntries }]
+            : groupByDate(visibleEntries)
+          ).map((group) => (
             <section key={group.bucket} className="space-y-2">
               <div className="flex items-baseline gap-2 px-1">
                 <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {BUCKET_LABEL[group.bucket]}
+                  {sortMode !== "default"
+                    ? sortMode === "priority"
+                      ? `Nach Dringlichkeit ${sortDirection === "asc" ? "↑" : "↓"}`
+                      : `Nach Datum ${sortDirection === "asc" ? "↑" : "↓"}`
+                    : BUCKET_LABEL[group.bucket as keyof typeof BUCKET_LABEL]}
                 </h2>
                 <span className="text-[11px] tabular-nums text-muted-foreground/60">
                   {group.tasks.length}
@@ -2199,6 +2246,8 @@ function FilterBar({
   setAgeFilter,
   sortMode,
   setSortMode,
+  sortDirection,
+  setSortDirection,
   hasFilters,
   defaultStatus,
   loading,
@@ -2216,6 +2265,8 @@ function FilterBar({
   setAgeFilter: (v: AgeFilter) => void;
   sortMode: SortMode;
   setSortMode: (v: SortMode) => void;
+  sortDirection: SortDirection;
+  setSortDirection: (v: SortDirection) => void;
   hasFilters: boolean;
   defaultStatus: StatusFilter;
   loading: boolean;
@@ -2310,6 +2361,31 @@ function FilterBar({
         ]}
         onChange={(v) => setSortMode(v as SortMode)}
       />
+      {/* Sortier-Richtung: nur sinnvoll bei priority/date.
+       *  Bei default (manueller DnD) macht asc/desc keinen Unterschied. */}
+      {sortMode !== "default" && (
+        <button
+          type="button"
+          onClick={() =>
+            setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+          }
+          className="h-7 px-2 inline-flex items-center gap-1 text-[11px] rounded-md border border-border bg-card hover:bg-muted/60 transition-colors"
+          title={
+            sortDirection === "asc"
+              ? sortMode === "priority"
+                ? "Aufsteigend (urgent zuerst → niedrig). Klick fuer absteigend."
+                : "Aufsteigend (aelteste zuerst). Klick fuer neueste zuerst."
+              : sortMode === "priority"
+                ? "Absteigend (niedrig zuerst → urgent). Klick fuer urgent zuerst."
+                : "Absteigend (neueste zuerst). Klick fuer aelteste zuerst."
+          }
+        >
+          {sortDirection === "asc" ? "↑" : "↓"}
+          <span className="text-muted-foreground">
+            {sortDirection === "asc" ? "Asc" : "Desc"}
+          </span>
+        </button>
+      )}
 
       {hasFilters && (
         <Button
@@ -2322,6 +2398,7 @@ function FilterBar({
             setPrioFilter("all");
             setAgeFilter("30");
             setSortMode("default");
+            setSortDirection("desc");
           }}
         >
           <X size={13} /> Reset
@@ -4190,6 +4267,9 @@ function MyDaySuggestionsPanel({
   // Auf Mobile defaultmaessig kollabiert — sonst sitzt das Panel unter der
   // Liste und nimmt viel Platz. User kann es ausklappen wenn er will.
   const [mobileExpanded, setMobileExpanded] = useState(false);
+  /** Aufklapp-State pro Vorschlag — beim Klick auf Titel zeigt sich
+   *  description + due_date. Pro Karte/Klick einer auf, andere bleiben zu. */
+  const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -4282,50 +4362,88 @@ function MyDaySuggestionsPanel({
       >
         {visible.map((s) => {
           const isBusy = busyTaskId === s.id;
+          const isOpen = expandedSuggestionId === s.id;
+          // Description ist im "Von: name <email>\nbody" Format aus loadMailTasks
+          // — body extrahieren fuer schoenere Anzeige
+          const descMatch = (s.description ?? "").match(/^Von:\s*[^\n]+\n+([\s\S]*)$/);
+          const body = (descMatch?.[1] ?? s.description ?? "").trim();
           return (
             <div
               key={s.id}
-              className="group flex items-start gap-2 rounded-lg border border-border/50 bg-background/40 px-2.5 py-2 hover:border-foreground/15 hover:bg-background/80 transition-colors"
+              className="group rounded-lg border border-border/50 bg-background/40 hover:border-foreground/15 hover:bg-background/80 transition-colors"
             >
-              <button
-                type="button"
-                onClick={() => handleAdd(s)}
-                disabled={isBusy}
-                className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-muted-foreground/40 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 grid place-items-center disabled:opacity-50"
-                title="Zu Mein Tag hinzufügen"
-                aria-label="Zu Mein Tag hinzufügen"
-              >
-                <span className="text-amber-600 dark:text-amber-400 text-[14px] leading-none font-bold">
-                  +
-                </span>
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] font-medium leading-snug text-foreground/90 line-clamp-2">
-                  {s.title}
-                </div>
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                  {/* Grund-Badge: warum schlagen wir das vor? */}
-                  <span
-                    className={`inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                      reasonStyle(s.reason).className
-                    }`}
-                  >
-                    {s.is_important && (
-                      <Star
-                        size={9}
-                        className="fill-current"
-                        aria-hidden
-                      />
-                    )}
-                    {s.reason}
+              <div className="flex items-start gap-2 px-2.5 py-2">
+                <button
+                  type="button"
+                  onClick={() => handleAdd(s)}
+                  disabled={isBusy}
+                  className="shrink-0 mt-0.5 w-5 h-5 rounded-full border border-muted-foreground/40 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 grid place-items-center disabled:opacity-50"
+                  title="Zu Mein Tag hinzufügen"
+                  aria-label="Zu Mein Tag hinzufügen"
+                >
+                  <span className="text-amber-600 dark:text-amber-400 text-[14px] leading-none font-bold">
+                    +
                   </span>
-                  {s.mail_category && s.mail_category !== "aufgabe" && (
-                    <span className="text-[10px] text-muted-foreground/70 capitalize">
-                      {s.mail_category}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedSuggestionId((cur) => (cur === s.id ? null : s.id))
+                  }
+                  className="flex-1 min-w-0 text-left"
+                  title={isOpen ? "Zuklappen" : "Mehr Details anzeigen"}
+                >
+                  <div className="text-[12.5px] font-medium leading-snug text-foreground/90 line-clamp-2">
+                    {s.title}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                        reasonStyle(s.reason).className
+                      }`}
+                    >
+                      {s.is_important && (
+                        <Star size={9} className="fill-current" aria-hidden />
+                      )}
+                      {s.reason}
                     </span>
-                  )}
-                </div>
+                    {s.mail_category && s.mail_category !== "aufgabe" && (
+                      <span className="text-[10px] text-muted-foreground/70 capitalize">
+                        {s.mail_category}
+                      </span>
+                    )}
+                    {s.priority && s.priority !== "medium" && (
+                      <span className="text-[10px] text-muted-foreground/70 capitalize">
+                        {s.priority}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <ChevronDown
+                  size={12}
+                  className={`shrink-0 mt-1 text-muted-foreground/40 transition-transform ${
+                    isOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden
+                />
               </div>
+              {isOpen && (
+                <div className="border-t border-border/40 px-2.5 py-2 space-y-1.5 bg-muted/20">
+                  {body && (
+                    <p className="text-[11.5px] text-foreground/80 leading-relaxed whitespace-pre-wrap break-words line-clamp-6">
+                      {body}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
+                    {s.due_date && (
+                      <span>📅 Fällig: {new Date(s.due_date).toLocaleDateString("de-AT")}</span>
+                    )}
+                    <span>
+                      Erstellt: {new Date(s.created_at).toLocaleDateString("de-AT")}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
