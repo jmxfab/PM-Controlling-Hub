@@ -122,11 +122,11 @@ export async function GET(request: NextRequest) {
       },
       {
         headers: {
-          // Browser-Cache: 15s frische Daten, 60s stale-while-revalidate.
-          // Bei Tab-zurueck oder Hard-Refresh innerhalb 15s = kein Server-Hit.
-          // Innerhalb 60s = stale Content sofort + Refresh in Background.
-          "Cache-Control":
-            "private, max-age=30, stale-while-revalidate=120",
+          // KEIN Browser-Cache. Tasks koennen jederzeit ihren Status aendern
+          // (mark-done, kategorie-wechsel, snooze, etc) — gecachte Listen
+          // zeigen sonst veraltete Daten bis der TTL durch ist.
+          // Realtime + visibility-poll im Client kuemmern sich ums Refresh.
+          "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       },
     );

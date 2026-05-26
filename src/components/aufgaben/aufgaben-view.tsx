@@ -587,7 +587,9 @@ export function AufgabenView({
           page_size: String(PAGE_SIZE),
           status,
         });
-        const res = await window.fetch(`/api/mail-tasks?${params}`);
+        const res = await window.fetch(`/api/mail-tasks?${params}`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const json = await res.json();
         RESPONSE_CACHE.set(k, {
@@ -1238,7 +1240,12 @@ function MailTab({
         if (st !== "all") params.set("status", st);
         if (pr !== "all") params.set("priority", pr);
         if (ag !== "30") params.set("age", ag); // 30 = default, weglassen
-        const res = await window.fetch(`/api/mail-tasks?${params}`);
+        // cache: 'no-store' verhindert dass der Browser eine veraltete
+        // Liste zurueckliefert nachdem wir gerade einen Task auf done
+        // gesetzt haben — sonst sieht der User die Aufgabe noch.
+        const res = await window.fetch(`/api/mail-tasks?${params}`, {
+          cache: "no-store",
+        });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           setError(
