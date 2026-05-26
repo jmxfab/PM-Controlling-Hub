@@ -45,8 +45,11 @@ export function HeroLogbuchPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // setState im Effect: Sync mit Fetch-Lifecycle, bewusst gewollt.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true);
     setError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     fetch(
       `/api/logbuch?project_id=${encodeURIComponent(heroProjectId)}&page_size=${maxEntries}`,
       { cache: "no-store" },

@@ -41,8 +41,11 @@ export function HeroRemindersPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // setState im Effect: Sync mit Fetch-Lifecycle, bewusst gewollt.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true);
     setError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     fetch(
       `/api/hero/reminders?projectId=${encodeURIComponent(heroProjectId)}&limit=${maxItems}`,
       { cache: "no-store" },
@@ -121,6 +124,9 @@ function ReminderItem({ reminder }: { reminder: HeroReminder }) {
   const hasReminder = Boolean(reminder.reminder_at);
   const eventStart = reminder.event_start ? new Date(reminder.event_start) : null;
   const reminderAt = reminder.reminder_at ? new Date(reminder.reminder_at) : null;
+  // Vergleich gegen "now" ist semantisch impure — wir nehmen es bewusst in
+  // Kauf weil die Erinnerungs-Liste bei Mount/Refetch ohnehin neu rendert.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
   // "naechste relevante Zeit" — bevorzugt reminder_at, sonst event_start

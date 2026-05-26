@@ -2869,6 +2869,9 @@ function TaskCard({
             )}
             {t.remind_at && (() => {
               const remDate = new Date(t.remind_at);
+              // Datum-Vergleich ist semantisch korrekt impure (Zeit-Vergleich),
+              // aber harmlos weil der Render bei jedem t.remind_at-Change neu laeuft.
+              // eslint-disable-next-line react-hooks/purity
               const isFuture = remDate.getTime() > Date.now();
               return (
                 <span
@@ -3501,7 +3504,7 @@ function PrioPanel({
         </span>
         <span className="text-[10px] text-muted-foreground/70 font-medium">
           {tasks.length} {tasks.length === 1 ? "Vorgang" : "Vorgänge"} mit
-          „Angebotsprüfung", „Freigabe", „Bitte prüfen" oder „Auftragsbestätigung"
+          {' „Angebotsprüfung", „Freigabe", „Bitte prüfen" oder „Auftragsbestätigung"'}
         </span>
         <div className="flex-1 h-px bg-amber-300/40 dark:bg-amber-700/30 ml-2" />
       </div>
@@ -4273,6 +4276,8 @@ function MyDaySuggestionsPanel({
 
   useEffect(() => {
     let cancelled = false;
+    // setState im Effect: Synchronisation mit Fetch-Lifecycle — bewusst.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     window
       .fetch("/api/mail-tasks/my-day-suggestions")
