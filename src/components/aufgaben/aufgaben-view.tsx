@@ -1087,7 +1087,12 @@ function MailTab({
     let snoozed = 0;
     for (const t of data.entries) {
       // 1) Erledigte raus — Item 3.1 (sofortiges Ausblenden nach Mark-Done)
-      if (t.status === "done" && statusFilter !== "done") continue;
+      // Nur ausblenden wenn:
+      // - Task ist "done" UND
+      // - Filter ist auf "open" (zeige nur offene) ODER Filter ist auf "all" (zeige nur unvollständige mit Snooze-Logic)
+      // Wenn Filter auf "done" ist, zeige nur "done"-Tasks. Wenn Filter auf "all" ist...
+      // actually, "all" sollte alles zeigen UNABHÄNGIG von Status
+      if (t.status === "done" && statusFilter === "open") continue;
       // 2) Snooze: Tasks mit remind_at > jetzt werden versteckt.
       //    Im "Aufgeschoben"-Tab zeigen wir sie IMMER (der Tab ist genau dafuer da).
       if (t.status !== "done" && t.remind_at && filter !== "aufgeschoben") {
