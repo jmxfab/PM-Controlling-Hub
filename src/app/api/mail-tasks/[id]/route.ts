@@ -127,6 +127,14 @@ export async function PATCH(
         update.remind_at = d.toISOString();
       } else {
         update.remind_at = null;
+        // Snooze geloescht -> Status zurueck auf 'open' wenn er aktuell
+        // 'waiting' ist. Sonst bleiben Tasks als "irgendwie wartend"
+        // haengen ohne Snooze und tauchen im Offen-Filter auf — verwirrt.
+        // Caller kann explizit anderen Status mitschicken um das zu uebersteuern.
+        if (body.status === undefined) {
+          update.status = "open";
+          update.completed_at = null;
+        }
       }
     }
 
