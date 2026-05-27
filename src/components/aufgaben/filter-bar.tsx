@@ -1,8 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, X } from "lucide-react";
+import { Search, X, ArrowDownUp, SlidersHorizontal, Check } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { MailTabFilter } from "@/lib/supabase/mail-tasks-queries";
 
 export type StatusFilter = "all" | "open" | "done";
@@ -109,58 +115,24 @@ export function FilterBar({
         </>
       )}
 
-      {/* Altersfilter — Default 30 Tage versteckt alte Karteileichen. */}
-      {tab !== "my_day" && (
-        <>
-          <div className="h-5 w-px bg-border" />
-          <PillGroup
-            label="Alter"
-            value={ageFilter}
-            options={[
-              { value: "30", label: "30 Tage" },
-              { value: "90", label: "90 Tage" },
-              { value: "all", label: "Alle" },
-            ]}
-            onChange={(v) => setAgeFilter(v as AgeFilter)}
-          />
-        </>
-      )}
-
-      {/* Sortierung — Client-Side. Persistiert pro Tab in localStorage. */}
+      {/* Sortierung — Dropdown-Style (Linear/Notion-Pattern) statt mehrerer
+       *  Pill-Reihen. Spart visuell Platz und macht Optionen erweiterbar. */}
       <div className="h-5 w-px bg-border" />
-      <PillGroup
-        label="Sort"
-        value={sortMode}
-        options={[
-          { value: "default", label: "Reihenfolge" },
-          { value: "priority", label: "Dringlichkeit" },
-          { value: "date", label: "Datum" },
-        ]}
-        onChange={(v) => setSortMode(v as SortMode)}
+      <SortDropdown
+        sortMode={sortMode}
+        setSortMode={setSortMode}
+        sortDirection={sortDirection}
+        setSortDirection={setSortDirection}
       />
-      {/* Sortier-Richtung: nur sinnvoll bei priority/date. */}
-      {sortMode !== "default" && (
-        <button
-          type="button"
-          onClick={() =>
-            setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-          }
-          className="h-7 px-2 inline-flex items-center gap-1 text-[11px] rounded-md border border-border bg-card hover:bg-muted/60 transition-colors"
-          title={
-            sortDirection === "asc"
-              ? sortMode === "priority"
-                ? "Aufsteigend (urgent zuerst → niedrig). Klick fuer absteigend."
-                : "Aufsteigend (aelteste zuerst). Klick fuer neueste zuerst."
-              : sortMode === "priority"
-                ? "Absteigend (niedrig zuerst → urgent). Klick fuer urgent zuerst."
-                : "Absteigend (neueste zuerst). Klick fuer aelteste zuerst."
-          }
-        >
-          {sortDirection === "asc" ? "↑" : "↓"}
-          <span className="text-muted-foreground">
-            {sortDirection === "asc" ? "Asc" : "Desc"}
-          </span>
-        </button>
+
+      {/* Altersfilter + Erweitert-Bereich — eingeklappt hinter einem Icon-Button.
+       *  90% der User wollen 30 Tage Default + nichts anpassen. Wer mehr will,
+       *  klickt explizit auf den Slider-Icon-Button. */}
+      {tab !== "my_day" && (
+        <AdvancedFiltersPopover
+          ageFilter={ageFilter}
+          setAgeFilter={setAgeFilter}
+        />
       )}
 
       {hasFilters && (
@@ -226,5 +198,192 @@ export function PillGroup({
         );
       })}
     </div>
+  );
+}
+
+/* ============================================================
+ * SortDropdown — kompakte Single-Button-UI fuer Sort + Direction
+ * (Linear/Notion-Pattern statt 4 Pills nebeneinander)
+ * ============================================================ */
+
+function SortDropdown({
+  sortMode,
+  setSortMode,
+  sortDirection,
+  setSortDirection,
+}: {
+  sortMode: SortMode;
+  setSortMode: (v: SortMode) => void;
+  sortDirection: SortDirection;
+  setSortDirection: (v: SortDirection) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const sortLabels: Record<SortMode, string> = {
+    default: "Reihenfolge",
+    priority: "Dringlichkeit",
+    date: "Datum",
+  };
+
+  // Direction-Label kontextabhaengig
+  const dirHint =
+    sortMode === "default"
+      ? ""
+      : sortMode === "priority"
+        ? sortDirection === "asc"
+          ? "urgent → niedrig"
+          : "niedrig → urgent"
+        : sortDirection === "asc"
+          ? "alt → neu"
+          : "neu → alt";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-md border border-border bg-card hover:bg-muted/60 transition-colors"
+          title="Sortierung ändern"
+        >
+          <ArrowDownUp size={11} className="text-muted-foreground" />
+          <span className="font-medium">{sortLabels[sortMode]}</span>
+          {sortMode !== "default" && (
+            <span className="text-muted-foreground">
+              {sortDirection === "asc" ? "↑" : "↓"}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          Sortieren nach
+        </div>
+        {(["default", "priority", "date"] as SortMode[]).map((mode) => {
+          const active = sortMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setSortMode(mode);
+                // Bei default: direction zurücksetzen
+                if (mode === "default") setSortDirection("desc");
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[12.5px] hover:bg-muted ${
+                active ? "bg-muted/60 font-medium" : ""
+              }`}
+            >
+              {active ? (
+                <Check size={12} className="text-foreground/70" />
+              ) : (
+                <span className="w-3" />
+              )}
+              {sortLabels[mode]}
+            </button>
+          );
+        })}
+        {sortMode !== "default" && (
+          <>
+            <div className="my-1 h-px bg-border/60" />
+            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              Richtung
+            </div>
+            {(["asc", "desc"] as SortDirection[]).map((dir) => {
+              const active = sortDirection === dir;
+              const label =
+                dir === "asc"
+                  ? `↑ Aufsteigend${dirHint ? ` (${sortMode === "priority" ? "urgent → niedrig" : "alt → neu"})` : ""}`
+                  : `↓ Absteigend${dirHint ? ` (${sortMode === "priority" ? "niedrig → urgent" : "neu → alt"})` : ""}`;
+              return (
+                <button
+                  key={dir}
+                  type="button"
+                  onClick={() => setSortDirection(dir)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[11.5px] hover:bg-muted ${
+                    active ? "bg-muted/60 font-medium" : ""
+                  }`}
+                >
+                  {active ? (
+                    <Check size={12} className="text-foreground/70" />
+                  ) : (
+                    <span className="w-3" />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ============================================================
+ * AdvancedFiltersPopover — Alter-Filter + zukuenftige Filter
+ * eingeklappt hinter einem Slider-Icon. Default 30 Tage ist meistens
+ * richtig — wer mehr will, klickt drauf.
+ * ============================================================ */
+
+function AdvancedFiltersPopover({
+  ageFilter,
+  setAgeFilter,
+}: {
+  ageFilter: AgeFilter;
+  setAgeFilter: (v: AgeFilter) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasChanges = ageFilter !== "30";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`h-7 px-2 inline-flex items-center gap-1.5 text-[11px] rounded-md border transition-colors ${
+            hasChanges
+              ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+              : "border-border bg-card hover:bg-muted/60"
+          }`}
+          title="Erweiterte Filter (Alter, etc.)"
+        >
+          <SlidersHorizontal size={11} />
+          {hasChanges && (
+            <span className="text-[10px]">
+              {ageFilter === "90" ? "90 Tage" : "Alle"}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          Alter — Tasks juenger als
+        </div>
+        {(["30", "90", "all"] as AgeFilter[]).map((v) => {
+          const active = ageFilter === v;
+          const label = v === "30" ? "30 Tage" : v === "90" ? "90 Tage" : "Alle (kein Limit)";
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => {
+                setAgeFilter(v);
+                setOpen(false);
+              }}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-[12.5px] hover:bg-muted ${
+                active ? "bg-muted/60 font-medium" : ""
+              }`}
+            >
+              {active ? (
+                <Check size={12} className="text-foreground/70" />
+              ) : (
+                <span className="w-3" />
+              )}
+              {label}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
   );
 }
