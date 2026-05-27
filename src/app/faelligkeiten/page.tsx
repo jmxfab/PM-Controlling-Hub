@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { UpcomingView, type UpcomingWindow } from "@/components/dashboard/upcoming-view";
+import { ProjectRemindersPanel } from "@/components/dashboard/project-reminders-panel";
 import { loadUpcomingProjects } from "@/lib/supabase/hero-maturity-queries";
 import {
   type Department,
@@ -131,6 +132,9 @@ export default async function FaelligkeitenPage({ searchParams }: PageProps) {
           Projekte mit Fälligkeit in Sicht · Überfällig, Heute, Morgen, nächste Tage
         </p>
       </header>
+      {/* Eigene Erinnerungen ueber den Hero-Projekten — Faellige oben (rot),
+       *  Kommende drunter. Schliessen via X, Snooze mit Quickpicks + Freifeld. */}
+      <ProjectRemindersPanel heroProjectLinkTemplate={heroProjectLinkTemplate} />
       <UpcomingView
         department={department}
         window={win}
