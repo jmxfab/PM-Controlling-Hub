@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, Clock, X, ExternalLink, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cleanHeroProjectName } from "@/components/aufgaben/task-utils";
 
 interface ProjectReminder {
   id: string;
@@ -273,9 +274,12 @@ function ReminderCard({
               <Clock size={10} />
               {dateText} {!r.note ? timeText : ""}
             </span>
-            {r.hero_project_name && (
-              <span className="truncate opacity-70">{r.hero_project_name}</span>
-            )}
+            {(() => {
+              // Hero liefert oft Muell-Platzhalter wie "-9678 | --, --, --"
+              // — cleanHeroProjectName entfernt die.
+              const clean = cleanHeroProjectName(r.hero_project_name, r.hero_project_number);
+              return clean ? <span className="truncate opacity-70">{clean}</span> : null;
+            })()}
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
