@@ -39,6 +39,8 @@ import {
   HardHat,
   Briefcase,
   Users2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { HeizlastProject } from "@/lib/supabase/hero-heizlast-queries";
 import type {
@@ -351,6 +353,29 @@ export function AufgabenView({
   // activeTab als Sticky-Override).
   const [activeTab, setActiveTab] = useState<MailTabFilter>(defaultTab);
 
+  /** Sidebar einklappbar — wenn true, nur Icons sichtbar (~56px Breite).
+   *  Persistiert in localStorage damit die Praeferenz ueber Reloads bleibt. */
+  const [sidebarCollapsed, setSidebarCollapsedRaw] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem("aufgaben-sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsedRaw((cur) => {
+      const next = !cur;
+      try {
+        window.localStorage.setItem(
+          "aufgaben-sidebar-collapsed",
+          next ? "1" : "0",
+        );
+      } catch {}
+      return next;
+    });
+  }, []);
+
   // Realtime-Subscriber: bei jeder DB-Aenderung an tasks oder task_notes
   // re-fetchen wir die Counts. MailTab subscribed sich separat und
   // invalidiert seinen eigenen Cache.
@@ -451,12 +476,45 @@ export function AufgabenView({
       onValueChange={(v) => setActiveTab(v as MailTabFilter)}
       orientation="vertical"
       // MS-To-Do-Style Sidebar-Layout: links Liste der Tabs, rechts Content.
+      // Sidebar einklappbar: ausgeklappt 240px, eingeklappt 56px (nur Icons).
       // Auf Mobile bricht das Grid auf eine einzige Spalte um, Sidebar landet oben.
-      className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-3 sm:gap-5 items-start"
+      className={`grid grid-cols-1 ${
+        sidebarCollapsed
+          ? "md:grid-cols-[56px_1fr]"
+          : "md:grid-cols-[240px_1fr]"
+      } gap-3 sm:gap-5 items-start`}
     >
+      <div className="relative md:contents">
       <TabsList
-        className="h-auto p-1.5 sm:p-2 bg-muted/40 rounded-xl gap-1 flex md:flex-col md:items-stretch w-full overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap scrollbar-thin"
+        data-collapsed={sidebarCollapsed ? "true" : "false"}
+        className={`h-auto p-1.5 sm:p-2 bg-muted/40 rounded-xl gap-1 flex md:flex-col md:items-stretch w-full overflow-x-auto md:overflow-visible flex-nowrap md:flex-wrap scrollbar-thin ${
+          sidebarCollapsed
+            ? // collapsed: nur Icons, Labels+Pills via CSS-Selektor ausblenden.
+              // [&_button_>*:not(svg)]:hidden — alle nicht-svg-Kinder jedes
+              // Buttons ausblenden (Labels-span + CountPill-span verschwinden,
+              // SVG-Icon bleibt). Buttons werden zentriert.
+              "md:items-center md:[&_button]:!justify-center md:[&_button>*:not(svg)]:hidden md:[&_button]:!px-2"
+            : ""
+        }`}
       >
+      {/* Toggle-Button oben in der Sidebar (md+ only).
+        *  Klick: ausklappen/einklappen. Persistiert in localStorage. */}
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className="hidden md:inline-flex items-center justify-end w-full h-7 px-2 text-[10px] text-muted-foreground/60 hover:text-foreground hover:bg-muted/40 rounded-md transition-colors mb-1"
+        title={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+        aria-label={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+      >
+        {sidebarCollapsed ? (
+          <ChevronRight size={14} />
+        ) : (
+          <>
+            <span className="flex-1 text-left opacity-60">Einklappen</span>
+            <ChevronLeft size={14} />
+          </>
+        )}
+      </button>
         {/* Mein Tag — Microsoft-To-Do-Style "My Day". Manuell kuratierte
          *  Liste der Aufgaben fuer heute. Sonnen-Icon ist das MS-Symbol. */}
         <TabsTrigger
@@ -473,6 +531,7 @@ export function AufgabenView({
         </TabsTrigger>
         <TabsTrigger
           value="kritisch"
+          title="Kritisch — eskalierte / dringende Faelle"
           className={
             counts.kritisch > 0
               ? "group relative justify-start gap-2 rounded-lg font-semibold text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30 bg-gradient-to-b from-rose-50 to-rose-100/70 hover:from-rose-100 hover:to-rose-200/80 dark:from-rose-500/10 dark:to-rose-600/5 dark:hover:from-rose-500/15 dark:hover:to-rose-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-rose-500 data-[state=active]:via-red-600 data-[state=active]:to-rose-700 data-[state=active]:text-white data-[state=active]:ring-rose-500/0 data-[state=active]:shadow-[0_4px_18px_-2px_hsl(0_84%_55%/0.5)] dark:data-[state=active]:shadow-[0_6px_24px_-4px_hsl(0_84%_60%/0.6)] transition-all duration-200"
@@ -523,6 +582,7 @@ export function AufgabenView({
         </TabsTrigger>
         <TabsTrigger
           value="infos"
+          title="Infos — Newsletter / Bestätigungen / Status-Updates"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Sparkles size={14} />
@@ -532,6 +592,7 @@ export function AufgabenView({
         {/* Inbox: immer sichtbar (User-Wunsch) */}
         <TabsTrigger
           value="inbox"
+          title="Inbox — unklassifizierte Mails"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Inbox size={14} />
@@ -540,6 +601,7 @@ export function AufgabenView({
         </TabsTrigger>
         <TabsTrigger
           value="rechnungen"
+          title="Rechnungen & Bestellungen"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Euro size={14} />
@@ -549,6 +611,7 @@ export function AufgabenView({
         {/* Aufgeschoben: immer sichtbar (User-Wunsch) */}
         <TabsTrigger
           value="aufgeschoben"
+          title="Aufgeschoben — Tasks mit aktiver Erinnerung"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Clock3 size={14} />
@@ -558,6 +621,7 @@ export function AufgabenView({
         {/* Controlling-Tab: immer sichtbar (User-Wunsch) */}
         <TabsTrigger
           value="controlling"
+          title="Controlling — delegierte Tasks"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Users2 size={14} />
@@ -566,6 +630,7 @@ export function AufgabenView({
         </TabsTrigger>
         <TabsTrigger
           value="heizlast"
+          title="Heizlast — Hero-Projekte im Heizlastberechnungs-Step"
           className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
         >
           <Flame size={14} />
@@ -573,6 +638,7 @@ export function AufgabenView({
           <CountPill value={heizlastProjects.length} />
         </TabsTrigger>
       </TabsList>
+      </div>
       <TabsContent value="my_day">
         <MailTab
           initial={defaultTab === "my_day" ? initialAufgaben : { entries: [], total: 0 }}
