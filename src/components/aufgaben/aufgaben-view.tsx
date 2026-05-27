@@ -3094,6 +3094,7 @@ function PrioPanel({
   heroProjectLinkTemplate,
   tab,
   onHeroMatched,
+  compact = false,
 }: {
   tasks: MailTask[];
   expanded: string | null;
