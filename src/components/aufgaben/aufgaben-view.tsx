@@ -1738,6 +1738,9 @@ function MailTab({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
           tab={filter}
           onHeroMatched={updateTaskHeroLink}
+          /* compact = true in allen non-my_day Tabs: PRIO-Karten klappen
+           *  nicht inline auf, sondern selektieren fuer Detail-Pane rechts */
+          compact={filter !== "my_day"}
         />
       )}
 
@@ -1897,8 +1900,12 @@ function MailTab({
            * - selectedTask aus visibleEntries gepickt via expanded-ID
            * - Empty-State wenn nichts ausgewaehlt */}
           {(() => {
+            // Auch prioEntries durchsuchen — PRIO-Karten sollen ebenfalls
+            // im Detail-Pane rechts geoeffnet werden koennen.
             const selectedTask = expanded
-              ? visibleEntries.find((t) => t.id === expanded) ?? null
+              ? (visibleEntries.find((t) => t.id === expanded) ??
+                  prioEntries.find((t) => t.id === expanded)) ??
+                null
               : null;
             return (
               <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-xl border bg-card/40 p-3 sm:p-4 min-w-0">
@@ -3111,6 +3118,9 @@ function PrioPanel({
   heroProjectLinkTemplate: string | null;
   tab: MailTabFilter;
   onHeroMatched?: (taskId: string, patch: HeroMatchPatch) => void;
+  /** Outlook-Master-Detail: wenn true, rendern PRIO-Karten ohne Inline-
+   *  Expand. Klick selektiert die Karte fuer den Detail-Pane rechts. */
+  compact?: boolean;
 }) {
   return (
     <section className="relative rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-amber-950/30 dark:via-orange-950/20 dark:to-card/40 dark:border-amber-700/40 p-3 space-y-2 shadow-[0_4px_24px_-4px_hsl(35_95%_55%/0.25)]">
@@ -3132,6 +3142,7 @@ function PrioPanel({
             tab={tab}
             expanded={expanded === t.id}
             busy={busyTaskId === t.id}
+            compact={compact}
             onToggle={() =>
               onToggle((cur) => (cur === t.id ? null : t.id))
             }
