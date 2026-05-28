@@ -1888,7 +1888,7 @@ function MailTab({
               />
               {/* Vorschlaege-Panel rechts als Sticky-Sidebar.
                   Tasks die noch NICHT in Mein Tag sind, klickbar = Add. */}
-              <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+              <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
                 <MyDaySuggestionsPanel
                   refreshKey={`${mutationTick}|${[...visibleEntries.map((t) => t.id)].sort().join(",")}`}
                   onAdd={addSuggestionToMyDay}
@@ -1974,7 +1974,7 @@ function MailTab({
                 null
               : null;
             return (
-              <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-xl border bg-card/40 p-3 sm:p-4 min-w-0">
+              <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto rounded-xl border bg-card/40 p-3 sm:p-4 min-w-0">
                 {selectedTask ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
