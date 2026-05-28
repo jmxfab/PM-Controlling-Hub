@@ -69,7 +69,10 @@ export default async function AufgabenPage() {
   const initialData = defaultTab === "kritisch" ? kritischData : aufgabenData;
 
   return (
-    <div className="flex-1 space-y-6 p-3 sm:p-6 md:p-8 min-w-0 overflow-x-hidden">
+    {/* overflow-x-clip statt -hidden: verhindert horizontalen Scroll OHNE
+     *  einen Scroll-Container zu erzeugen — sonst bricht position:sticky
+     *  des Detail-Panes (es wuerde am Container statt am Viewport kleben). */}
+    <div className="flex-1 space-y-6 p-3 sm:p-6 md:p-8 min-w-0 overflow-x-clip">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
