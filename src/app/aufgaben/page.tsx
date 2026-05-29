@@ -78,9 +78,6 @@ export default async function AufgabenPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
             Aufgaben
           </h1>
-          <p className="text-sm text-muted-foreground">
-            E-Mail-Aufgaben automatisch klassifiziert von Claude · Hero-Kommentare · Heizlast-Projekte
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <VoiceTaskDialog />
