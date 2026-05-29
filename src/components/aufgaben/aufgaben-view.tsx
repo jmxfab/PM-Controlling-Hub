@@ -1015,6 +1015,10 @@ function MailTab({
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  /** Undo-Toast nach Erledigt: haelt die zuletzt abgehakte Task als Snapshot,
+   *  damit ein Fehlklick mit "Rueckgaengig" in 5s wiederhergestellt werden kann. */
+  const [undoTask, setUndoTask] = useState<MailTask | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // focusTask aus URL: Karte direkt expanden + in den Viewport scrollen.
   // Wird nach dem ersten Treffer geleert (zurueck zur normalen Bedienung).
   useEffect(() => {
@@ -1468,6 +1472,13 @@ function MailTab({
         : markHeroAsRead(task);
     }
     const markingDone = task.status !== "done";
+    // Undo-Snapshot: nur beim Abhaken (nicht beim Wieder-Oeffnen) + nur wenn
+    // die Karte aus der Liste verschwindet (statusFilter open).
+    if (markingDone && statusFilter === "open") {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      setUndoTask(task);
+      undoTimerRef.current = setTimeout(() => setUndoTask(null), 5000);
+    }
     // removeFromList=true wenn wir "erledigt" setzen UND der Tab nur offene
     // Items zeigt — dann verschwindet die Karte sofort ohne Page-Reload.
     return patchTask(
@@ -1475,6 +1486,40 @@ function MailTab({
       { status: markingDone ? "done" : "open" },
       markingDone && statusFilter === "open",
     );
+  }
+
+  /** Macht das letzte Erledigt rueckgaengig: Status zurueck auf open +
+   *  Task wieder lokal in die Liste einfuegen (optimistic). */
+  async function undoMarkDone() {
+    const task = undoTask;
+    if (!task) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoTask(null);
+    // Task sofort lokal zurueck in die Liste (optimistic) — falls sie schon
+    // raus ist. Status auf open.
+    setData((prev) => {
+      const exists = prev.entries.some((t) => t.id === task.id);
+      const restored = { ...task, status: "open" as const, completed_at: null };
+      return {
+        ...prev,
+        entries: exists
+          ? prev.entries.map((t) => (t.id === task.id ? restored : t))
+          : [restored, ...prev.entries],
+        total: exists ? prev.total : prev.total + 1,
+      };
+    });
+    // recently-removed Eintrag loeschen damit der Refetch sie nicht filtert
+    recentlyRemovedRef.current.delete(task.id);
+    try {
+      await window.fetch(`/api/mail-tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "open" }),
+      });
+      invalidateCacheForFilter(filter);
+    } catch {
+      fetchData(search, 0, statusFilter, prioFilter, ageFilter);
+    }
   }
 
   function toggleMyDay(task: MailTask) {
@@ -1974,9 +2019,10 @@ function MailTab({
                 null
               : null;
             return (
-              <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto rounded-xl border bg-card/40 p-3 sm:p-4 min-w-0">
+              <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:flex lg:flex-col overflow-hidden rounded-xl border bg-card/40 min-w-0">
                 {selectedTask ? (
-                  <div className="space-y-2">
+                  <>
+                  <div className="space-y-2 p-3 sm:p-4 lg:flex-1 lg:overflow-y-auto">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                         Details
@@ -2036,6 +2082,45 @@ function MailTab({
                       />
                     )}
                   </div>
+                  {/* Sticky Action-Bar unten — bleibt sichtbar waehrend man
+                   *  den Mail-Text/Composer im Detail-Pane scrollt. */}
+                  {selectedTask.source !== "hero" && (
+                    <div className="shrink-0 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 px-3 py-2 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={selectedTask.status === "done" ? "outline" : "default"}
+                        className="h-8 gap-1.5 flex-1"
+                        disabled={busyTaskId === selectedTask.id}
+                        onClick={() => markDone(selectedTask)}
+                      >
+                        <Check size={14} />
+                        {selectedTask.status === "done" ? "Wieder offen" : "Erledigt"}
+                      </Button>
+                      {selectedTask.source_email_web_link ? (
+                        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+                          <a
+                            href={selectedTask.source_email_web_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Original-Mail in Outlook öffnen"
+                          >
+                            <Reply size={14} /> Mail
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5"
+                          onClick={() => snoozeBy(selectedTask, 3 * 60 * 60 * 1000)}
+                          title="3 Stunden zurückstellen"
+                        >
+                          <Clock3 size={14} /> +3 Std
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  </>
                 ) : (
                   <div className="text-center py-10 px-4 text-muted-foreground">
                     <div className="text-2xl mb-2">📋</div>
@@ -2090,6 +2175,36 @@ function MailTab({
           if (!open) setHistoryEmail(null);
         }}
       />
+      {/* Undo-Toast nach Erledigt — fixed unten mittig, 5s sichtbar. */}
+      {undoTask && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-3 rounded-full bg-foreground text-background shadow-lg px-4 py-2.5 text-[13px]">
+            <Check size={15} className="text-emerald-400" />
+            <span className="font-medium">Erledigt</span>
+            <span className="text-background/60 truncate max-w-[200px] hidden sm:inline">
+              {undoTask.title}
+            </span>
+            <button
+              type="button"
+              onClick={undoMarkDone}
+              className="ml-1 inline-flex items-center gap-1 font-semibold text-emerald-300 hover:text-emerald-200 transition-colors"
+            >
+              <History size={13} /> Rückgängig
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+                setUndoTask(null);
+              }}
+              className="ml-1 grid place-items-center w-5 h-5 rounded-full hover:bg-background/15 transition-colors"
+              aria-label="Schliessen"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
     {/* Drop-Zone fuer 'Zu Mein Tag' — sichtbar waehrend ein Drag laeuft,
         UND wir nicht schon im my_day-Tab sind (sonst sinnlos). Position
