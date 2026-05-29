@@ -1,0 +1,124 @@
+{
+  "name": "Jumax – Microsoft Mail → Controlling Hub",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Alle 5 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 30,
+        "filtersUI": {
+          "values": {
+            "filterQuery": "isRead eq false"
+          }
+        },
+        "options": {
+          "fields": [
+            "id",
+            "subject",
+            "bodyPreview",
+            "body",
+            "receivedDateTime",
+            "from"
+          ]
+        }
+      },
+      "id": "outlook-get",
+      "name": "Outlook: ungelesene Mails",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "PLACEHOLDER_CREDENTIAL_ID",
+          "name": "Microsoft Outlook (Jumax)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://PLACEHOLDER_APP_DOMAIN/api/emails/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PLACEHOLDER_INGEST_SECRET"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"emails\": [\n    {\n      \"message_id\": $json.id,\n      \"subject\": $json.subject,\n      \"sender_email\": $json.from?.emailAddress?.address,\n      \"sender_name\": $json.from?.emailAddress?.name,\n      \"received_at\": $json.receivedDateTime,\n      \"body\": $json.body?.content,\n      \"body_preview\": $json.bodyPreview\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "post-ingest",
+      "name": "POST → Controlling Hub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "update",
+        "messageId": "={{ $('Outlook: ungelesene Mails').item.json.id }}",
+        "updateFields": {
+          "isRead": true
+        }
+      },
+      "id": "outlook-mark-read",
+      "name": "Outlook: als gelesen markieren",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [960, 300],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "PLACEHOLDER_CREDENTIAL_ID",
+          "name": "Microsoft Outlook (Jumax)"
+        }
+      },
+      "notes": "Optional. Braucht Mail.ReadWrite-Berechtigung. Knoten löschen, wenn Mails ungelesen bleiben sollen."
+    }
+  ],
+  "connections": {
+    "Alle 5 Min": {
+      "main": [[{ "node": "Outlook: ungelesene Mails", "type": "main", "index": 0 }]]
+    },
+    "Outlook: ungelesene Mails": {
+      "main": [[{ "node": "POST → Controlling Hub", "type": "main", "index": 0 }]]
+    },
+    "POST → Controlling Hub": {
+      "main": [[{ "node": "Outlook: als gelesen markieren", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateDescription": "Liest ungelesene Mails aus Microsoft Outlook und schickt sie an den Jumax Controlling Hub (/api/emails/ingest). Platzhalter ersetzen: PLACEHOLDER_APP_DOMAIN, PLACEHOLDER_INGEST_SECRET, PLACEHOLDER_CREDENTIAL_ID."
+  }
+}
