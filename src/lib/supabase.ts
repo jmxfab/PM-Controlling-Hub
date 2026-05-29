@@ -42,10 +42,13 @@ export const supabase = new Proxy({} as SupabaseClient, {
  * Specifically used for capturing snapshots.
  */
 export const getSupabaseAdmin = () => {
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Konsistent mit den uebrigen Routen (z.B. mail-tasks): bevorzugt das neue
+  // SUPABASE_SECRET_KEY, faellt auf SUPABASE_SERVICE_ROLE_KEY zurueck.
+  const supabaseServiceKey =
+    process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseServiceKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing.");
+    throw new Error("SUPABASE_SECRET_KEY oder SUPABASE_SERVICE_ROLE_KEY ist erforderlich.");
   }
 
   return createClient(
