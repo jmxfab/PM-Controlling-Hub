@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run start:*)",
+      "Bash(git add *)",
+      "Bash(git status *)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-files:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"/c/Users/FabianWagenleitner/OneDrive - Jumax Elektrotechnik GmbH/Dokumente/Code/Side Projekts/Controlling-Hub/Jumax-Controlling-Hub\" && git status --porcelain | grep -q . && git add -A && git commit -m \"auto: Claude $(date '+%Y-%m-%d %H:%M')\" && git push origin main 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Änderungen nach GitHub pushen..."
+          }
+        ]
+      }
+    ]
+  }
+}

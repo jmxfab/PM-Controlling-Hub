@@ -1,0 +1,197 @@
+import { createClient } from "@supabase/supabase-js";
+import { cleanProjectName } from "@/lib/hero/project-title";
+
+function supabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key);
+}
+
+/**
+ * Altdaten-Cutoff fuer Hero-Notifications (Item 7.1 + 7.2).
+ * Notifications aelter als HERO_NOTIFICATIONS_MAX_AGE_DAYS Tage werden
+ * komplett ignoriert — das raeumt den Aufgaben-/Infos-Tab von April-2025-
+ * Altlasten und alten Checklisten-Pings auf.
+ *
+ * Override per ENV-Var moeglich (HERO_NOTIFICATIONS_MAX_AGE_DAYS=14).
+ * Hartes Floor "8 Tage" weil drunter alles relevant ist.
+ */
+const HERO_NOTIFICATIONS_MAX_AGE_DAYS = (() => {
+  const env = process.env.HERO_NOTIFICATIONS_MAX_AGE_DAYS;
+  const parsed = env ? parseInt(env, 10) : NaN;
+  return Number.isFinite(parsed) && parsed >= 8 ? parsed : 30;
+})();
+
+function heroAgeCutoffIso(): string {
+  return new Date(
+    Date.now() - HERO_NOTIFICATIONS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+}
+
+export interface HeroCommentItem {
+  id: string;
+  title: string | null;
+  body: string | null;
+  is_read: boolean | null;
+  category: string | null;
+  notification_date: string | null;
+  target_id: string | null;
+  project_number: string | null;
+  project_name: string | null;
+  /** true wenn Domenic in Titel/Body genannt oder ihm zugewiesen wurde */
+  is_for_domenic: boolean;
+}
+
+/**
+ * Bestimmt ob eine Hero-Notification fuer Domenic eine AUFGABE ist
+ * (echte Erwaehnung mit Handlungserwartung).
+ *
+ * NICHT als Aufgabe zaehlen:
+ * - "Ihnen wurde das Projekt zugewiesen" -> reine Status-Info, kein To-Do
+ *   (Hero-Zuweisungen sind Buchhalter-Workflow, keine Arbeitsaufforderung)
+ */
+function isForDomenic(title: string | null, body: string | null): boolean {
+  const txt = `${title ?? ""} ${body ?? ""}`.toLowerCase();
+  // Mention-Trigger: nur direkte Nennung im Kommentar
+  return (
+    txt.includes("@d.wagenleitner") ||
+    txt.includes("@domenic") ||
+    // Frei stehender Name (Vor- oder Nachname) zaehlt als Erwaehnung,
+    // aber nur ausserhalb der Zuweisungs-Phrase
+    ((txt.includes("domenic") || txt.includes("wagenleitner")) &&
+      !txt.includes("zugewiesen") &&
+      !txt.includes("zuweisung"))
+  );
+}
+
+/**
+ * Laedt Hero-Notifications die in Aufgaben (Domenic erwaehnt/zugewiesen)
+ * oder Infos (alles andere) gehoeren.
+ */
+export async function loadHeroComments(
+  tab: "aufgaben" | "infos",
+  limit = 200,
+): Promise<HeroCommentItem[]> {
+  const supabase = supabaseAdmin();
+
+  const { data, error } = await supabase
+    .from("hero_notifications")
+    .select("id, title, body, is_read, category, notification_date, target_id")
+    .eq("is_deleted", false)
+    // Altdaten-Cutoff (Item 7.1+7.2): keine Notifications aelter als N Tage
+    .gte("notification_date", heroAgeCutoffIso())
+    .order("notification_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+
+  // Filter nach Tab-Logik:
+  // aufgaben: Domenic erwaehnt
+  // infos: alles andere (Hero-Kommentare die nicht Domenic betreffen)
+  const filtered = rows.filter((r) => {
+    const forD = isForDomenic(r.title, r.body);
+    return tab === "aufgaben" ? forD : !forD;
+  });
+
+  // Project + Override Lookup PARALLEL ausfuehren (statt sequenziell)
+  // → spart einen Roundtrip ~50-100ms pro API-Call
+  const projectIds = [...new Set(filtered.map((e) => e.target_id).filter(Boolean) as string[])];
+  const heroIds = filtered.map((e) => e.id);
+
+  const [projectsRes, overridesRes] = await Promise.all([
+    projectIds.length > 0
+      ? supabase
+          .from("hero_projects")
+          .select("id, project_number, project_name")
+          .in("id", projectIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; project_number: string | null; project_name: string | null }> }),
+    heroIds.length > 0
+      ? supabase.from("hero_read_overrides").select("hero_id").in("hero_id", heroIds)
+      : Promise.resolve({ data: [] as Array<{ hero_id: string }> }),
+  ]);
+
+  const projectMap: Record<string, { project_number: string | null; project_name: string | null }> = {};
+  for (const p of projectsRes.data ?? []) {
+    projectMap[p.id] = { project_number: p.project_number ?? null, project_name: p.project_name ?? null };
+  }
+
+  const overrideSet = new Set<string>();
+  for (const o of overridesRes.data ?? []) {
+    overrideSet.add(o.hero_id);
+  }
+
+  return filtered.map((e) => {
+    const heroReadFlag = e.is_read === true;
+    const localOverride = overrideSet.has(e.id);
+    return {
+      id: e.id,
+      title: e.title ?? null,
+      body: e.body ?? null,
+      // is_read = entweder Hero hat's selbst gelesen ODER lokal markiert
+      is_read: heroReadFlag || localOverride,
+      category: e.category ?? null,
+      notification_date: e.notification_date ?? null,
+      target_id: e.target_id ?? null,
+      project_number: projectMap[e.target_id ?? ""]?.project_number ?? null,
+      project_name: cleanProjectName(projectMap[e.target_id ?? ""]?.project_name),
+      is_for_domenic: isForDomenic(e.title, e.body),
+    };
+  });
+}
+
+export async function countHeroComments(
+  tab: "aufgaben" | "infos",
+  onlyUnread = true,
+): Promise<number> {
+  const items = await loadHeroComments(tab, 1000);
+  if (onlyUnread) return items.filter((i) => i.is_read !== true).length;
+  return items.length;
+}
+
+/**
+ * Lightweight counts fuer BEIDE Tabs (aufgaben + infos) in EINEM DB-Roundtrip.
+ * Vorher rief loadMailTaskCounts zweimal countHeroComments auf → 2× 1000-Zeilen-
+ * Fetch + 2× Project-Lookup + 2× Override-Lookup. Jetzt: 1× fetch (minimal cols),
+ * 1× Override-Lookup, dann in-memory split. ~3× schneller bei vielen Hero-Items.
+ */
+export async function countHeroCommentsBoth(): Promise<{
+  aufgaben: number;
+  infos: number;
+}> {
+  const supabase = supabaseAdmin();
+  const limit = 1000;
+
+  const { data, error } = await supabase
+    .from("hero_notifications")
+    .select("id, title, body, is_read")
+    .eq("is_deleted", false)
+    // Altdaten-Cutoff (Item 7.1+7.2): keine Notifications aelter als N Tage
+    .gte("notification_date", heroAgeCutoffIso())
+    .order("notification_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) return { aufgaben: 0, infos: 0 };
+  const rows = data ?? [];
+
+  // Override-Lookup nur fuer ungelesene-Filter
+  const heroIds = rows.map((r) => r.id);
+  const overrideSet = new Set<string>();
+  if (heroIds.length > 0) {
+    const { data: overrides } = await supabase
+      .from("hero_read_overrides")
+      .select("hero_id")
+      .in("hero_id", heroIds);
+    for (const o of overrides ?? []) overrideSet.add(o.hero_id);
+  }
+
+  let aufgaben = 0;
+  let infos = 0;
+  for (const r of rows) {
+    const isUnread = r.is_read !== true && !overrideSet.has(r.id);
+    if (!isUnread) continue;
+    if (isForDomenic(r.title, r.body)) aufgaben++;
+    else infos++;
+  }
+  return { aufgaben, infos };
+}

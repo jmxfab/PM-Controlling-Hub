@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="jmx-gradient" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09090B" />
+      <stop offset="1" stop-color="#3F3F46" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#jmx-gradient)" />
+  <path
+    d="M17 14H27V39.25C27 46.57 22.3 50 16.2 50H13V41H15.16C16.39 41 17 40.35 17 39V14ZM36.34 14L42.33 24.95L48.41 14H58.89L48.42 31.87L59.92 50H49.03L42.33 38.95L35.63 50H24.74L36.24 31.87L25.77 14H36.34Z"
+    fill="#FAFAFA"
+  />
+</svg>

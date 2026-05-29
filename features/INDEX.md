@@ -1,0 +1,24 @@
+# Feature Index
+
+> Central tracking for all features. Updated by skills automatically.
+
+## Status Legend
+- **Planned** - `/requirements` done, spec written, architecture not yet designed
+- **Architected** - `/architecture` done, tech design approved, ready to build
+- **In Progress** - `/frontend` or `/backend` active or completed, not yet in QA
+- **In Review** - `/qa` active, testing in progress
+- **Approved** - `/qa` passed, no critical/high bugs, ready to deploy
+- **Deployed** - `/deploy` done, live in production
+
+## Features
+
+| ID | Feature | Status | Spec | Created |
+|----|---------|--------|------|---------|
+| PROJ-1 | Read-only controlling dashboard baseline | In Progress | [Spec](./PROJ-1-controlling-dashboard-read-only-baseline.md) | 2026-04-17 |
+| PROJ-2 | Hero API Key UI Management | In Progress | [Spec](./PROJ-2-hero-api-key-ui-management.md) | 2026-04-21 |
+| PROJ-3 | Hero → Supabase Mirror | In Progress | [Spec](./PROJ-3-hero-supabase-mirror.md) | 2026-04-22 |
+| PROJ-4 | Zusätzliche KPIs (Bewertungspool, Monteur, kWp, Deckungsbeitrag) | In Progress | [Spec](./PROJ-4-additional-kpis.md) | 2026-04-22 |
+
+<!-- Add features above this line -->
+
+## Next Available ID: PROJ-5

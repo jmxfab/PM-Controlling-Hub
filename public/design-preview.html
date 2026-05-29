@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jumax Design Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f14; color: #fff; }
+
+  .page { padding: 32px; }
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #666; margin-bottom: 16px;
+  }
+  .design-block { margin-bottom: 56px; }
+
+  /* ─── CURRENT DESIGN ─────────────────────────────── */
+  .current { --bg: #161b27; --card: #1c2130; --border: #252d3f; --text: #e8eaf0; --muted: #6b7280; --active-pill: #ffffff; --active-pill-text: #0f1117; --amber: #f59e0b; --red: #ef4444; --green: #22c55e; --radius: 8px; }
+
+  /* ─── OPTION A: Quick Polish ─────────────────────── */
+  .option-a { --bg: #161b27; --card: #1c2130; --border: #252d3f; --text: #e8eaf0; --muted: #6b7280; --active-pill: transparent; --active-pill-text: #f59e0b; --amber: #f59e0b; --red: #ef4444; --green: #22c55e; --radius: 8px; }
+
+  /* ─── OPTION B: Amber Brand ──────────────────────── */
+  .option-b { --bg: #13181f; --card: #1a2030; --border: #1e2a3a; --text: #f0f4ff; --muted: #64748b; --active-pill: #f59e0b; --active-pill-text: #0f1117; --amber: #f59e0b; --red: #f87171; --green: #34d399; --radius: 10px; }
+
+  /* ─── OPTION C: System Redesign ─────────────────── */
+  .option-c { --bg: #0d1117; --card: #161b22; --border: #21262d; --text: #e6edf3; --muted: #8b949e; --active-pill: #3b82f6; --active-pill-text: #fff; --amber: #f59e0b; --red: #f85149; --green: #3fb950; --radius: 6px; }
+
+  /* ─── SHARED COMPONENT STYLES ────────────────────── */
+  .mockup {
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  /* NAV */
+  .nav {
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+  }
+  .current .nav, .option-a .nav { border-top: 2px solid; border-image: linear-gradient(90deg, #92400e, #f59e0b, #78350f) 1; }
+  .option-b .nav { border-top: 2px solid #f59e0b; }
+  .option-c .nav { border-top: 2px solid #3b82f6; }
+
+  .logo { font-weight: 800; font-size: 15px; letter-spacing: 0.05em; color: #f59e0b; margin-right: 20px; display: flex; align-items: center; gap: 6px; }
+  .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+  .nav-item {
+    padding: 6px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
+    color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  /* Current: white pill */
+  .current .nav-item.active { background: var(--active-pill); color: var(--active-pill-text); }
+  /* Option A: amber underline */
+  .option-a .nav-item.active { color: var(--active-pill-text); border-bottom: 2px solid #f59e0b; border-radius: 0; padding-bottom: 4px; }
+  /* Option B: amber pill */
+  .option-b .nav-item { border-radius: 8px; }
+  .option-b .nav-item.active { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+  /* Option C: blue pill */
+  .option-c .nav-item.active { background: var(--active-pill); color: var(--active-pill-text); }
+
+  /* CONTENT */
+  .content { padding: 24px; }
+  .page-title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .page-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+
+  /* TIMEFRAME PILLS */
+  .pills { display: flex; gap: 4px; padding: 6px; background: var(--card); border-radius: calc(var(--radius) + 2px); border: 1px solid var(--border); margin-bottom: 16px; width: fit-content; }
+  .pill { padding: 5px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 500; color: var(--muted); }
+  .pill.active { background: var(--active-pill); color: var(--active-pill-text); font-weight: 600; }
+  .option-a .pill.active { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .option-b .pill.active { background: #f59e0b; color: #0f1117; }
+  .option-c .pill.active { background: #3b82f6; color: #fff; }
+
+  /* DEPARTMENT TABS */
+  .dept-tabs { display: flex; gap: 2px; padding: 4px; background: var(--card); border-radius: calc(var(--radius) + 2px); border: 1px solid var(--border); margin-bottom: 20px; }
+  .dept-tab { flex: 1; padding: 8px 10px; border-radius: var(--radius); font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .dept-tab.active { color: var(--text); }
+
+  .current .dept-tab.active { background: rgba(255,255,255,0.08); }
+  .option-a .dept-tab.active { background: rgba(255,255,255,0.06); border-bottom: 2px solid #f59e0b; border-radius: 0; color: #f59e0b; }
+  .option-b .dept-tab.active { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); }
+  .option-c .dept-tab.active { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .kpi-label { font-size: 11px; color: var(--muted); font-weight: 500; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; line-height: 1; }
+  .kpi-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .v-neutral { color: var(--text); }
+  .v-warn { color: var(--amber); }
+  .v-danger { color: var(--red); }
+  .v-good { color: var(--green); }
+
+  /* Current: plain cards */
+  /* Option A: left border for warn/danger */
+  .option-a .kpi-card.warn { border-left: 3px solid #f59e0b; }
+  .option-a .kpi-card.danger { border-left: 3px solid #ef4444; }
+  .option-a .kpi-card.good { border-left: 3px solid #22c55e; }
+
+  /* Option B: subtle colored glow + thicker border */
+  .option-b .kpi-card.warn { border-color: rgba(245,158,11,0.3); box-shadow: 0 0 0 1px rgba(245,158,11,0.1) inset; }
+  .option-b .kpi-card.danger { border-color: rgba(248,113,113,0.3); box-shadow: 0 0 0 1px rgba(248,113,113,0.08) inset; }
+  .option-b .kpi-card.good { border-color: rgba(52,211,153,0.3); }
+  .option-b .kpi-card { box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+  /* Option C: top accent bar */
+  .option-c .kpi-card.warn::before { content:''; display:block; height:2px; background:#f59e0b; border-radius:2px; margin:-14px -16px 12px; }
+  .option-c .kpi-card.danger::before { content:''; display:block; height:2px; background:#f85149; border-radius:2px; margin:-14px -16px 12px; }
+  .option-c .kpi-card.good::before { content:''; display:block; height:2px; background:#3fb950; border-radius:2px; margin:-14px -16px 12px; }
+  .option-c .kpi-card { box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+
+  /* TABLE */
+  .table-area { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+  .table-head { display: grid; grid-template-columns: 100px 110px 1fr 160px 80px; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .table-row { display: grid; grid-template-columns: 100px 110px 1fr 160px 80px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text); align-items: center; }
+  .table-row:last-child { border-bottom: none; }
+  .table-row:hover { background: rgba(255,255,255,0.03); }
+  .date-overdue { color: var(--red); font-weight: 600; font-size: 12px; }
+  .date-ok { color: var(--text); font-size: 12px; }
+  .proj-nr { font-family: monospace; font-size: 12px; color: var(--muted); }
+  .badge {
+    display: inline-flex; align-items: center; padding: 2px 8px;
+    border-radius: 4px; font-size: 11px; font-weight: 600;
+  }
+  .badge-wp { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .badge-pv { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .badge-klima { background: rgba(6,182,212,0.15); color: #22d3ee; }
+
+  /* SIDEBAR (Option C only) */
+  .sidebar-layout { display: flex; }
+  .sidebar {
+    width: 200px; min-height: 340px; background: #0d1117;
+    border-right: 1px solid #21262d; padding: 16px 12px; flex-shrink: 0;
+  }
+  .sidebar-logo { font-weight: 800; font-size: 14px; color: #f59e0b; margin-bottom: 24px; padding: 0 8px; display: flex; align-items: center; gap: 8px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: #8b949e; margin-bottom: 2px; }
+  .sidebar-item.active { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+  .sidebar-main { flex: 1; padding: 20px; }
+
+  /* LAYOUT */
+  .designs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div style="margin-bottom:32px;">
+    <div style="font-size:24px;font-weight:800;color:#f0f4ff;margin-bottom:6px;">Design-Vorschläge — Jumax Controlling Hub</div>
+    <div style="font-size:14px;color:#6b7280;">4 Varianten zum Vergleich: Current · Option A · Option B · Option C</div>
+  </div>
+
+  <div class="designs-grid">
+
+    <!-- ══════ CURRENT ══════ -->
+    <div class="design-block current">
+      <div class="section-label">Current — Status quo</div>
+      <div class="mockup">
+        <div class="nav">
+          <div class="logo"><div class="logo-icon">J</div>JUMAX</div>
+          <div class="nav-item">Controlling</div>
+          <div class="nav-item active">Fälligkeiten</div>
+          <div class="nav-item">Insights</div>
+          <div class="nav-item">Cash</div>
+          <div class="nav-item">Einstellungen</div>
+        </div>
+        <div class="content">
+          <div class="page-title">Fälligkeiten</div>
+          <div class="page-sub">Projekte mit Fälligkeitsdatum — Basis: current_project_match_status.maturity_date</div>
+          <div class="pills">
+            <div class="pill">Überfällig</div>
+            <div class="pill">Heute</div>
+            <div class="pill active">Nächste Woche</div>
+            <div class="pill">30 Tage</div>
+          </div>
+          <div class="dept-tabs">
+            <div class="dept-tab active">🏢 Gesamt</div>
+            <div class="dept-tab">☀️ PV</div>
+            <div class="dept-tab">🌅 PV Gew.</div>
+            <div class="dept-tab">♻️ WP</div>
+            <div class="dept-tab">❄️ Klima</div>
+            <div class="dept-tab">🔧 Gebäude</div>
+          </div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="kpi-card warn"><div class="kpi-label">Überfällig</div><div class="kpi-value v-warn">3</div></div>
+            <div class="kpi-card"><div class="kpi-label">Heute fällig</div><div class="kpi-value v-danger">0</div></div>
+            <div class="kpi-card"><div class="kpi-label">Im Fenster</div><div class="kpi-value v-neutral">82</div></div>
+          </div>
+          <div class="table-area">
+            <div class="table-head"><span>Fällig</span><span>Projekt-Nr.</span><span>Titel / Kunde</span><span>Step</span><span>Sparte</span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">WÄP-9916</span><span>Brigitte Schrewe</span><span>⌛ BZA</span><span>WP</span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">PVS-7160</span><span>Subir Dhar</span><span>🔧 Zählermontage</span><span>PV</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ OPTION A ══════ -->
+    <div class="design-block option-a">
+      <div class="section-label">Option A — Quick Polish (Amber Underline)</div>
+      <div class="mockup">
+        <div class="nav" style="align-items:flex-end;padding-bottom:0;">
+          <div class="logo" style="margin-bottom:12px;"><div class="logo-icon">J</div>JUMAX</div>
+          <div class="nav-item" style="margin-bottom:0;">Controlling</div>
+          <div class="nav-item active" style="margin-bottom:0;border-bottom:2px solid #f59e0b;border-radius:0;padding-bottom:12px;color:#f59e0b;">Fälligkeiten</div>
+          <div class="nav-item" style="margin-bottom:0;">Insights</div>
+          <div class="nav-item" style="margin-bottom:0;">Cash</div>
+          <div class="nav-item" style="margin-bottom:0;">Einstellungen</div>
+        </div>
+        <div class="content">
+          <div class="page-title">Fälligkeiten</div>
+          <div class="page-sub" style="color:#6b7280;">Projekte mit Fälligkeitsdatum im gewählten Zeitfenster</div>
+          <div class="pills">
+            <div class="pill">Überfällig</div>
+            <div class="pill">Heute</div>
+            <div class="pill active" style="background:rgba(245,158,11,0.15);color:#f59e0b;">Nächste Woche</div>
+            <div class="pill">30 Tage</div>
+          </div>
+          <div class="dept-tabs">
+            <div class="dept-tab active" style="border-bottom:2px solid #f59e0b;border-radius:0;color:#f59e0b;">🏢 Gesamt</div>
+            <div class="dept-tab">☀️ PV</div>
+            <div class="dept-tab">🌅 PV Gew.</div>
+            <div class="dept-tab">♻️ WP</div>
+            <div class="dept-tab">❄️ Klima</div>
+            <div class="dept-tab">🔧 Gebäude</div>
+          </div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="kpi-card warn" style="border-left:3px solid #f59e0b;"><div class="kpi-label">Überfällig</div><div class="kpi-value v-warn">3</div></div>
+            <div class="kpi-card danger" style="border-left:3px solid #ef4444;"><div class="kpi-label">Heute fällig</div><div class="kpi-value v-danger">0</div></div>
+            <div class="kpi-card"><div class="kpi-label">Im Fenster</div><div class="kpi-value v-neutral">82</div></div>
+          </div>
+          <div class="table-area">
+            <div class="table-head"><span>Fällig</span><span>Projekt-Nr.</span><span>Titel / Kunde</span><span>Step</span><span>Sparte</span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">WÄP-9916</span><span>Brigitte Schrewe</span><span>⌛ BZA</span><span><span class="badge badge-wp">WP</span></span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">PVS-7160</span><span>Subir Dhar</span><span>🔧 Zählermontage</span><span><span class="badge badge-pv">PV</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ OPTION B ══════ -->
+    <div class="design-block option-b">
+      <div class="section-label">Option B — Amber Brand Identity</div>
+      <div class="mockup">
+        <div class="nav">
+          <div class="logo"><div class="logo-icon">J</div>JUMAX</div>
+          <div class="nav-item">Controlling</div>
+          <div class="nav-item active">Fälligkeiten</div>
+          <div class="nav-item">Insights</div>
+          <div class="nav-item">Cash</div>
+          <div class="nav-item">Einstellungen</div>
+        </div>
+        <div class="content">
+          <div class="page-title">Fälligkeiten</div>
+          <div class="page-sub">Projekte mit Fälligkeitsdatum im gewählten Zeitfenster</div>
+          <div class="pills">
+            <div class="pill">Überfällig</div>
+            <div class="pill">Heute</div>
+            <div class="pill active">Nächste Woche</div>
+            <div class="pill">30 Tage</div>
+          </div>
+          <div class="dept-tabs">
+            <div class="dept-tab active">🏢 Gesamt</div>
+            <div class="dept-tab">☀️ PV</div>
+            <div class="dept-tab">🌅 PV Gew.</div>
+            <div class="dept-tab">♻️ WP</div>
+            <div class="dept-tab">❄️ Klima</div>
+            <div class="dept-tab">🔧 Gebäude</div>
+          </div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="kpi-card warn"><div class="kpi-label">Überfällig</div><div class="kpi-value v-warn">3</div></div>
+            <div class="kpi-card danger"><div class="kpi-label">Heute fällig</div><div class="kpi-value v-danger">0</div></div>
+            <div class="kpi-card"><div class="kpi-label">Im Fenster</div><div class="kpi-value v-neutral">82</div></div>
+          </div>
+          <div class="table-area">
+            <div class="table-head"><span>Fällig</span><span>Projekt-Nr.</span><span>Titel / Kunde</span><span>Step</span><span>Sparte</span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">WÄP-9916</span><span>Brigitte Schrewe</span><span>⌛ BZA</span><span><span class="badge badge-wp">WP</span></span></div>
+            <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">PVS-7160</span><span>Subir Dhar</span><span>🔧 Zählermontage</span><span><span class="badge badge-pv">PV</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ OPTION C ══════ -->
+    <div class="design-block option-c">
+      <div class="section-label">Option C — System Redesign (Sidebar + Blue)</div>
+      <div class="mockup">
+        <div class="sidebar-layout">
+          <div class="sidebar">
+            <div class="sidebar-logo"><div class="logo-icon">J</div>JUMAX</div>
+            <div class="sidebar-item">📊 Controlling</div>
+            <div class="sidebar-item active">📅 Fälligkeiten</div>
+            <div class="sidebar-item">💡 Insights</div>
+            <div class="sidebar-item">💶 Cash</div>
+            <div class="sidebar-item">✉️ E-Mails</div>
+            <div style="margin-top:auto;padding-top:16px;border-top:1px solid #21262d;margin-top:16px;">
+              <div class="sidebar-item">⚙️ Einstellungen</div>
+            </div>
+          </div>
+          <div class="sidebar-main">
+            <div style="border-top:2px solid #3b82f6;margin:-20px -20px 20px;"></div>
+            <div class="page-title">Fälligkeiten</div>
+            <div class="page-sub">Projekte mit Fälligkeitsdatum im gewählten Zeitfenster</div>
+            <div class="pills" style="margin-bottom:12px;">
+              <div class="pill">Überfällig</div>
+              <div class="pill">Heute</div>
+              <div class="pill active">Nächste Woche</div>
+              <div class="pill">30 Tage</div>
+            </div>
+            <div class="dept-tabs" style="margin-bottom:16px;">
+              <div class="dept-tab active">Gesamt</div>
+              <div class="dept-tab">PV</div>
+              <div class="dept-tab">PV Gew.</div>
+              <div class="dept-tab">WP</div>
+              <div class="dept-tab">Klima</div>
+              <div class="dept-tab">Gebäude</div>
+            </div>
+            <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+              <div class="kpi-card warn"><div class="kpi-label">Überfällig</div><div class="kpi-value v-warn">3</div></div>
+              <div class="kpi-card danger"><div class="kpi-label">Heute fällig</div><div class="kpi-value v-danger">0</div></div>
+              <div class="kpi-card"><div class="kpi-label">Im Fenster</div><div class="kpi-value v-neutral">82</div></div>
+            </div>
+            <div class="table-area">
+              <div class="table-head"><span>Fällig</span><span>Projekt-Nr.</span><span>Titel / Kunde</span><span>Step</span><span>Sparte</span></div>
+              <div class="table-row"><span class="date-overdue">22.4.2026<br><small>vor 0 Tg</small></span><span class="proj-nr">WÄP-9916</span><span>Brigitte Schrewe</span><span>⌛ BZA</span><span><span class="badge badge-wp">WP</span></span></div>
+              <div class="table-row"><span class="date-overdue">22.4.2026</span><span class="proj-nr">PVS-7160</span><span>Subir Dhar</span><span>🔧 Zählermontage</span><span><span class="badge badge-pv">PV</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SUMMARY TABLE -->
+  <div style="margin-top:48px;padding:24px;background:#1a1f2e;border-radius:12px;border:1px solid #252d3f;">
+    <div style="font-size:14px;font-weight:700;color:#f0f4ff;margin-bottom:16px;">Zusammenfassung der Änderungen</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #252d3f;">Element</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #252d3f;">Current</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #252d3f;">A — Quick Polish</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #252d3f;">B — Amber Brand</th>
+          <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #252d3f;">C — System Redesign</th>
+        </tr>
+      </thead>
+      <tbody style="color:#c9d1d9;">
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Navigation</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#6b7280;">Weißes Pill</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#f59e0b;">Amber Underline</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#f59e0b;">Amber Pill</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#60a5fa;">Sidebar + Blue Pill</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">KPI-Cards</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#6b7280;">Alle gleich</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Left-Border (warn/danger)</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Colored Border + Glow</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Top Accent Bar</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Sparte-Badges</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#6b7280;">Plain Text</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Farbige Badges</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Farbige Badges</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Farbige Badges</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Subtitel</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#6b7280;">DB-Feldname sichtbar</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Bereinigt</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Bereinigt</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Bereinigt</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">Aufwand</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;">—</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#34d399;">~2h</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#fbbf24;">~1 Tag</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #1e2330;color:#f87171;">~3 Tage</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

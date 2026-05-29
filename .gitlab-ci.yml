@@ -1,0 +1,159 @@
+# CI/CD fuer app-dev (GitLab Free)
+# Pipeline: install -> lint -> test -> build -> deploy_dev
+# Zusatzjobs (manuell / scheduled): sync_from_lovable, promote_release
+#
+# Erwartete CI/CD Variables (Settings -> CI/CD -> Variables):
+#   COOLIFY_WEBHOOK_DEV          (Protected, Masked)   Coolify Deploy-Webhook fuer dev-Stack
+#   LOVABLE_GITHUB_URL           (Protected)           z.B. https://github.com/<org>/<lovable-repo>.git
+#   LOVABLE_GITHUB_PAT           (Protected, Masked)   Fine-grained PAT mit Read-Access
+#   RELEASE_DEPLOY_SSH_KEY       (Protected, File)     SSH-Privatekey mit Push-Recht auf app-release
+#   RELEASE_REPO_SSH             (Protected)           z.B. git@gitlab.com:<group>/app-release.git
+#   GITLAB_TOKEN_APP_RELEASE     (Protected, Masked)   Project Access Token (api-Scope) fuer app-release, fuer glab MR
+
+default:
+  image: node:20-alpine
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - apk add --no-cache git bash
+
+stages:
+  - install
+  - lint
+  - test
+  - build
+  - deploy
+  - sync
+  - promote
+
+variables:
+  NEXT_TELEMETRY_DISABLED: "1"
+  npm_config_cache: ".npm"
+
+install:
+  stage: install
+  script:
+    - npm ci --no-audit --no-fund
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\//
+    - if: $CI_COMMIT_BRANCH =~ /^bugfix\//
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - npm run lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\//
+    - if: $CI_COMMIT_BRANCH =~ /^bugfix\//
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+test:
+  stage: test
+  needs: [install]
+  script:
+    - npm test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\//
+    - if: $CI_COMMIT_BRANCH =~ /^bugfix\//
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+build:
+  stage: build
+  needs: [install, lint, test]
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+    expire_in: 1 day
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\//
+    - if: $CI_COMMIT_BRANCH =~ /^bugfix\//
+
+deploy_dev:
+  stage: deploy
+  image: alpine:3.20
+  needs: [build]
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - 'curl -fsSL -X POST "$COOLIFY_WEBHOOK_DEV"'
+  environment:
+    name: dev
+    url: https://dev.deine-domain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+
+# ---------------------------------------------------------------------------
+# Scheduled: pull changes from Lovable GitHub repo into app-dev/dev
+# Trigger: GitLab -> CI/CD -> Schedules, z.B. taeglich 06:00 auf branch "dev"
+# Benoetigt Variable CI_PUSH_TOKEN: Project Access Token mit write_repository Scope
+# ---------------------------------------------------------------------------
+sync_from_lovable:
+  stage: sync
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache git bash
+  script:
+    - |
+      set -euo pipefail
+      if [ -z "${LOVABLE_GITHUB_URL:-}" ] || [ -z "${LOVABLE_GITHUB_PAT:-}" ]; then
+        echo "LOVABLE_GITHUB_URL oder LOVABLE_GITHUB_PAT fehlt"; exit 1
+      fi
+      git config --global user.email "ci@jumax-elektro.de"
+      git config --global user.name "GitLab CI (Lovable Sync)"
+      # Authentifizierter Push-URL fuer GitLab
+      PUSH_URL=$(echo "$CI_REPOSITORY_URL" | sed -E "s#https://[^@]+@#https://oauth2:${CI_PUSH_TOKEN}@#")
+      git clone --branch dev "$PUSH_URL" repo
+      cd repo
+      # Lovable-Remote hinzufuegen (Repo liegt in GitHub, main ist dort Default)
+      AUTH_LOVABLE=$(echo "$LOVABLE_GITHUB_URL" | sed -E "s#https://#https://x-access-token:${LOVABLE_GITHUB_PAT}@#")
+      git remote add lovable "$AUTH_LOVABLE"
+      git fetch lovable main
+      # Merge Lovable/main in lokales dev. Bei Konflikt faellt Job mit non-zero exit aus -> manuell aufloesen.
+      git merge --no-edit lovable/main || (echo "Merge-Konflikt. Bitte lokal aufloesen." && exit 2)
+      git push origin dev
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# ---------------------------------------------------------------------------
+# Manuell: Promote aktuellen dev-Stand als release/rc-* nach app-release
+# Oeffnet automatisch einen MR nach alpha in app-release
+# ---------------------------------------------------------------------------
+promote_release:
+  stage: promote
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache git bash openssh-client curl
+    # glab-CLI via static binary
+    - |
+      GLAB_VERSION="1.45.0"
+      curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.tar.gz" \
+        | tar -xz -C /usr/local/bin glab
+  script:
+    - ./scripts/promote-to-release.sh
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+      when: manual

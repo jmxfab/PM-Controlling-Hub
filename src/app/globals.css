@@ -1,0 +1,451 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-Safety: html + body buchstaeblich nie horizontal scrollen lassen.
+   Falls irgendein Child versehentlich ueberlauft, wird's hart gekappt
+   statt eine Scroll-Leiste zu erzeugen die das Layout zerschiesst. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Brand accent stops — used by gradient utilities below */
+    --brand-1: 217 91% 60%; /* blue-500 */
+    --brand-2: 262 83% 58%; /* violet-500 */
+  }
+
+  .dark {
+    /* Softer dark palette — grounded in a dark slate (222) rather than
+       near-black (240 10% 3.9%). Cards sit slightly above the page
+       background so the grid is readable. */
+    --background: 222 24% 11%;
+    --foreground: 210 20% 96%;
+    --card: 222 22% 14%;
+    --card-foreground: 210 20% 96%;
+    --popover: 222 22% 14%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 210 20% 96%;
+    --primary-foreground: 222 24% 11%;
+    --secondary: 222 18% 20%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 222 18% 20%;
+    --muted-foreground: 215 15% 70%;
+    --accent: 222 18% 22%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 16% 22%;
+    --input: 222 16% 22%;
+    --ring: 222 20% 60%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --brand-1: 217 91% 65%;
+    --brand-2: 262 83% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+    /* Geist Sans / Mono via next/font CSS variables */
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", Roboto, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numerics inside finance/dashboard surfaces — keeps columns aligned */
+  table,
+  [data-numeric],
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "cv11";
+  }
+
+  /* Premium selection color tied to brand */
+  ::selection {
+    background: hsl(var(--brand-1) / 0.25);
+    color: hsl(var(--foreground));
+  }
+
+  /* Refined focus-visible — visible but not chunky */
+  :focus-visible {
+    outline: 2px solid hsl(var(--brand-1) / 0.65);
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) - 2px);
+  }
+  /* shadcn components manage their own ring — don't double up there */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    outline-offset: 3px;
+  }
+
+  /* Headings: slightly tighter tracking for that premium feel */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  h1 {
+    letter-spacing: -0.025em;
+  }
+
+  /* === Date / Datetime / Time Inputs ===
+     Native date inputs sehen auf jedem Browser anders aus und meistens
+     billig. Mit diesen Regeln passen sie zum Theme der App und wirken
+     gleich wie normale Text-Inputs.
+  */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  input[type="month"],
+  input[type="week"] {
+    @apply text-foreground;
+    font-variant-numeric: tabular-nums;
+    color-scheme: light dark; /* Browser-natives Dark-Mode-Picker */
+    font-feature-settings: "tnum";
+  }
+
+  /* Leere Date-Inputs (= zeigen Platzhalter "tt.mm.jjjj --:--"):
+     Platzhalter heller machen damit der Input nicht wie "Fehler"
+     wirkt. Trick: wenn :placeholder-shown matched, der Wert ist leer. */
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-text,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-day-field,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-month-field,
+  input[type="date"]:not(:focus):in-range::-webkit-datetime-edit-year-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-text,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-day-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-month-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-year-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-hour-field,
+  input[type="datetime-local"]:not(:focus):in-range::-webkit-datetime-edit-minute-field {
+    @apply text-foreground;
+  }
+
+  /* Komplett leere Inputs (kein Wert gesetzt) wirken oft sehr "grau".
+     Mit :invalid (HTML5 setzt das wenn der Date-String leer ist) krieg
+     ich nur die leeren Felder und kann den Text-Color auf muted-foreground
+     setzen — wie ein dezenter Placeholder. */
+  input[type="date"]:invalid::-webkit-datetime-edit,
+  input[type="datetime-local"]:invalid::-webkit-datetime-edit,
+  input[type="time"]:invalid::-webkit-datetime-edit {
+    @apply text-muted-foreground/60;
+  }
+
+  /* Calendar/Clock-Picker-Icon: viel zu blass im Default. Wir setzen
+     einen Filter der das Icon an die Foreground-Farbe anpasst und
+     beim Hover heller wird. */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="week"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 150ms ease, transform 150ms ease;
+    padding: 2px;
+    border-radius: 6px;
+  }
+  input[type="date"]:hover::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator,
+  input[type="time"]:hover::-webkit-calendar-picker-indicator,
+  input[type="month"]:hover::-webkit-calendar-picker-indicator,
+  input[type="week"]:hover::-webkit-calendar-picker-indicator {
+    opacity: 1;
+    background-color: hsl(var(--accent));
+  }
+
+  /* Dark mode: Picker-Icon ist im default fast unsichtbar — invert filter. */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="month"]::-webkit-calendar-picker-indicator,
+  .dark input[type="week"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.9) brightness(1.2);
+  }
+
+  /* Innere Trennzeichen (Punkt, Doppelpunkt) nicht zu fett */
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="datetime-local"]::-webkit-datetime-edit-text,
+  input[type="time"]::-webkit-datetime-edit-text {
+    @apply text-muted-foreground/70;
+    padding: 0 1px;
+  }
+
+  /* Fokus auf einzelnem Feld (Day/Month/Year) — gleicher Look wie
+     ringed buttons: Brand-Blau, kein Default-Hellblau aus Chrome. */
+  input[type="date"]::-webkit-datetime-edit-day-field:focus,
+  input[type="date"]::-webkit-datetime-edit-month-field:focus,
+  input[type="date"]::-webkit-datetime-edit-year-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-day-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-month-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-year-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-hour-field:focus,
+  input[type="datetime-local"]::-webkit-datetime-edit-minute-field:focus,
+  input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+  input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+    background-color: hsl(var(--brand-1) / 0.18);
+    color: hsl(var(--foreground));
+    border-radius: 3px;
+    outline: none;
+  }
+}
+
+/* Refined scrollbar — passt zum Theme */
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+    border: 2px solid hsl(var(--background));
+    transition: background-color 200ms;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  /* Brand gradient text — used for hero numbers + brand badges */
+  .text-gradient-brand {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--brand-1)),
+      hsl(var(--brand-2))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Glow-Animation für wichtige Akzente */
+  @keyframes subtle-glow {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  .animate-subtle-glow {
+    animation: subtle-glow 2.5s ease-in-out infinite;
+  }
+
+  /* Indeterminate loader bar */
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(200%);
+    }
+  }
+  .animate-indeterminate {
+    animation: indeterminate 1.4s ease-in-out infinite;
+  }
+
+  /* Stagger Fade-In für Cards beim ersten Render */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-up {
+    animation: fade-in-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Page-level entrance — used by <main> wrapper in root layout */
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+  .animate-page-in {
+    animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Soft pulse for live-data dots (Hero Live etc.) */
+  @keyframes soft-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 hsl(var(--brand-1) / 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 6px hsl(var(--brand-1) / 0);
+    }
+  }
+  .animate-soft-pulse {
+    animation: soft-pulse 2s ease-out infinite;
+  }
+
+  /* Shimmer für Skeleton-States */
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.04) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Respect prefers-reduced-motion across all decorative animations */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-subtle-glow,
+    .animate-indeterminate,
+    .animate-fade-in-up,
+    .animate-page-in,
+    .animate-soft-pulse,
+    .shimmer::after {
+      animation: none !important;
+    }
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   react-day-picker — Kontrast-Fix fuer Dark-Mode + bessere Hierarchie.
+   Defaults waren auf hellem BG ausgelegt — auf dunkler Popover-Karte sind
+   die Outside-Days und normale Tagesnummern kaum lesbar.
+   ─────────────────────────────────────────────────────────────────────────── */
+/* Jumax-Brand-Yellow (Amber 500) statt generischem Blau — passt zum
+   gelb-schwarzen Branding der Webseite (jumax-elektro.de). */
+.rdp-jumax {
+  --rdp-accent-color: hsl(38 92% 50%); /* Amber 500 */
+  --rdp-background-color: hsl(var(--accent));
+  font-size: 13px;
+}
+.rdp-jumax .rdp-day {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+.rdp-jumax .rdp-day_outside {
+  color: hsl(var(--muted-foreground) / 0.55);
+}
+.rdp-jumax .rdp-day_today:not(.rdp-day_selected) {
+  color: hsl(38 92% 50%); /* Amber 500 */
+  font-weight: 700;
+}
+.rdp-jumax .rdp-head_cell {
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  text-transform: none;
+  font-size: 11px;
+}
+.rdp-jumax .rdp-day:hover:not(.rdp-day_selected):not(.rdp-day_disabled) {
+  background-color: hsl(38 92% 50% / 0.15);
+  color: hsl(var(--foreground));
+}
+.rdp-jumax .rdp-day_selected,
+.rdp-jumax .rdp-day_selected:hover {
+  background-color: hsl(38 92% 50%); /* Amber 500 */
+  color: hsl(20 14% 4%); /* near-black fuer Kontrast auf gelb */
+  font-weight: 700;
+}
+.rdp-jumax .rdp-caption_label {
+  font-weight: 600;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+.rdp-jumax .rdp-nav_button {
+  color: hsl(38 92% 50%); /* Amber 500 */
+  opacity: 0.85;
+}
+.rdp-jumax .rdp-nav_button:hover {
+  opacity: 1;
+  background-color: hsl(38 92% 50% / 0.15);
+}

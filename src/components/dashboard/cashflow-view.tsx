@@ -1,0 +1,1041 @@
+"use client";
+
+import { Fragment, useState } from "react";
+import { AlertTriangle, ChevronDown, Euro, Percent } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type {
+  CashflowDto,
+  ForecastProjectRow,
+  InvoiceAgingRow,
+  InvoiceDetailRow,
+} from "@/lib/supabase/hero-insights-queries";
+import type { HeroPipelineDto } from "@/lib/supabase/hero-pipeline-queries";
+import type { PvCashInvoiceKpis } from "@/lib/supabase/hero-pv-cash-invoice-kpis";
+import { HeroPipelinePanel } from "./hero-pipeline-panel";
+import { PvCashInvoiceKpisCard } from "./pv-cash-invoice-kpis";
+import { HeroProjectLink } from "./hero-project-link";
+import {
+  DASHBOARD_DEPARTMENT_NAMES,
+  type Department,
+} from "@/lib/dashboard/dashboard-types";
+import {
+  DataErrorBanner,
+  type DataErrorEntry,
+} from "./data-error-banner";
+
+function formatEur(v: number): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(v);
+}
+
+export function CashflowView({
+  department,
+  dto,
+  pipeline,
+  pvInvoiceKpis,
+  pvInvoiceKpisLabel,
+  heroProjectLinkTemplate,
+  loadErrors,
+}: {
+  department: Department;
+  dto: CashflowDto | null;
+  pipeline?: HeroPipelineDto | null;
+  pvInvoiceKpis?: PvCashInvoiceKpis | null;
+  pvInvoiceKpisLabel?: string;
+  heroProjectLinkTemplate?: string | null;
+  loadErrors?: DataErrorEntry[];
+}) {
+  const deptName = DASHBOARD_DEPARTMENT_NAMES[department];
+  const hasInvoiceKpis =
+    department === "PV" || department === "WP" || department === "GESAMT";
+  const showInvoiceKpis = hasInvoiceKpis && !!pvInvoiceKpis;
+
+  return (
+    <div className="space-y-6">
+      {loadErrors && loadErrors.length > 0 ? (
+        <DataErrorBanner
+          errors={loadErrors}
+          hint="Wenn das nach 1-2 Minuten und einem Reload immer noch erscheint, bitte Admin informieren."
+        />
+      ) : null}
+      {showInvoiceKpis && pvInvoiceKpis ? (
+        <PvCashInvoiceKpisCard
+          kpis={pvInvoiceKpis}
+          windowLabel={pvInvoiceKpisLabel ?? ""}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          department={department}
+        />
+      ) : null}
+      {pipeline ? (
+        <HeroPipelinePanel
+          department={department}
+          pipeline={pipeline}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          variant="cash"
+          hideTimeframeDelta={hasInvoiceKpis}
+          hideTopKpis={hasInvoiceKpis}
+        />
+      ) : null}
+      {!dto ? (
+        <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground text-center">
+          Cashflow-KPIs (Aging, Pipeline-Umsatz, Monatsumsatz) konnten nicht
+          geladen werden. Die Pipeline-Sicht oben ist davon unabhängig.
+        </div>
+      ) : null}
+      {dto ? (
+      <>
+      {/* Top-KPIs — alle klickbar, scrollen zum jeweiligen Detail-Panel */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi
+          label="Offene Forderungen gesamt"
+          valueText={formatEur(dto.totalOpenEur)}
+          hint={`${dto.totalOpenCount} offene Rechnungen`}
+          icon={<Euro className="h-4 w-4" />}
+          scrollTargetId="cash-aging-breakdown"
+        />
+        <Kpi
+          label="Pipeline-Umsatz"
+          valueText={formatEur(dto.pipelineRevenueEur)}
+          hint={`${dto.pipelineRevenueInvoices} Rechnungen in Abschluss-/Montage-Step`}
+          icon={<Euro className="h-4 w-4" />}
+          tone="good"
+          scrollTargetId="cash-forecast"
+        />
+        <Kpi
+          label="Abrechnungsquote"
+          valueText={`${dto.billingRate.percent.toLocaleString("de-DE")} %`}
+          hint={`${dto.billingRate.billed} von ${dto.billingRate.completed} abgeschlossenen Projekten haben eine Rechnung`}
+          icon={<Percent className="h-4 w-4" />}
+          tone={dto.billingRate.percent < 80 ? "warning" : "good"}
+          scrollTargetId="cash-status-breakdown"
+        />
+        <Kpi
+          label="Überfällig (>30 Tg)"
+          valueText={formatEur(
+            dto.aging
+              .filter((b) => b.minDays >= 30)
+              .reduce((s, b) => s + b.totalEur, 0)
+          )}
+          hint={`${dto.aging
+            .filter((b) => b.minDays >= 30)
+            .reduce((s, b) => s + b.count, 0)} Rechnungen älter als 30 Tage`}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          tone="warning"
+          scrollTargetId="cash-aging-breakdown"
+        />
+      </div>
+
+      {/* Fälligkeits-Forecast: was kommt wann rein */}
+      {dto.forecast && dto.forecast.length > 0 ? (
+        <div id="cash-forecast" className="rounded-lg transition-shadow">
+          <CashflowForecast
+            department={department}
+            deptName={deptName}
+            buckets={dto.forecast}
+            heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          />
+        </div>
+      ) : null}
+
+      {/* Rechnungs-Status — was ist mit den Rechnungen passiert */}
+      {dto.statusBreakdown && dto.statusBreakdown.length > 0 ? (
+        <div id="cash-status-breakdown" className="rounded-lg transition-shadow">
+          <InvoiceStatusBreakdown
+            department={department}
+            deptName={deptName}
+            buckets={dto.statusBreakdown}
+            heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+          />
+        </div>
+      ) : null}
+
+      {/* Aging Buckets */}
+      <div id="cash-aging-breakdown" className="rounded-lg transition-shadow">
+        <InvoiceAgingBreakdown
+          department={department}
+          deptName={deptName}
+          buckets={dto.aging}
+          totalOpenCount={dto.totalOpenCount}
+          totalOpenEur={dto.totalOpenEur}
+          heroProjectLinkTemplate={heroProjectLinkTemplate ?? null}
+        />
+      </div>
+
+      {/* Umsatz nach Sparte + Monat */}
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Umsatz nach Sparte · letzte 12 Monate</CardTitle>
+          <CardDescription className="text-xs">
+            Summe der Rechnungsbeträge pro Monat, nach Sparte aufgeschlüsselt
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[360px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={dto.revenueByMonth}
+                margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="month"
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={11}
+                />
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={11}
+                  tickFormatter={(v: number) =>
+                    v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)
+                  }
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    borderColor: "hsl(var(--border))",
+                    borderRadius: "var(--radius)",
+                  }}
+                  formatter={(value) => formatEur(Number(value))}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="PV" stackId="a" fill="#3b82f6" name="PV" />
+                <Bar dataKey="PV_GEWERBE" stackId="a" fill="#f59e0b" name="PV Gewerbe" />
+                <Bar dataKey="WP" stackId="a" fill="#10b981" name="WP" />
+                <Bar dataKey="KLIMA" stackId="a" fill="#06b6d4" name="Klima" />
+                <Bar dataKey="GEBAEUDETECHNIK" stackId="a" fill="#8b5cf6" name="Gebäudetechnik" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+      </>
+      ) : null}
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  valueText,
+  hint,
+  icon,
+  tone = "neutral",
+  scrollTargetId,
+}: {
+  label: string;
+  valueText: string;
+  hint: string;
+  icon: React.ReactNode;
+  tone?: "neutral" | "good" | "warning";
+  /** Wenn gesetzt: Tile wird klickbar und scrollt smooth zum Element
+   *  mit dieser id (= das jeweilige Detail-Panel weiter unten auf der
+   *  Seite). */
+  scrollTargetId?: string;
+}) {
+  const toneConfig = {
+    neutral: {
+      value: "text-foreground",
+      iconBg: "bg-blue-100 dark:bg-blue-950/50",
+      iconFg: "text-blue-600 dark:text-blue-400",
+      accent: "hover:border-blue-300/50",
+    },
+    good: {
+      value: "text-emerald-700 dark:text-emerald-400",
+      iconBg: "bg-emerald-100 dark:bg-emerald-950/50",
+      iconFg: "text-emerald-600 dark:text-emerald-400",
+      accent: "hover:border-emerald-300/50",
+    },
+    warning: {
+      value: "text-amber-700 dark:text-amber-400",
+      iconBg: "bg-amber-100 dark:bg-amber-950/50",
+      iconFg: "text-amber-600 dark:text-amber-400",
+      accent: "hover:border-amber-300/50",
+    },
+  }[tone];
+
+  const clickable = !!scrollTargetId;
+  function handleClick() {
+    if (!scrollTargetId) return;
+    const el = document.getElementById(scrollTargetId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("ring-2", "ring-primary", "ring-offset-2");
+      window.setTimeout(() => {
+        el.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+      }, 1500);
+    }
+  }
+  return (
+    <div
+      className={`relative h-full overflow-hidden rounded-xl border bg-card p-5 transition-all duration-200 ${
+        clickable
+          ? `cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${toneConfig.accent} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`
+          : ""
+      }`}
+      onClick={clickable ? handleClick : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleClick();
+              }
+            }
+          : undefined
+      }
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${label} — Details anzeigen` : undefined}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 leading-tight">
+          {label}
+        </p>
+        <div
+          className={`shrink-0 grid place-items-center w-10 h-10 rounded-xl ${toneConfig.iconBg} ${toneConfig.iconFg}`}
+        >
+          {icon}
+        </div>
+      </div>
+      <div
+        className={`text-3xl font-bold tabular-nums tracking-tight leading-none mb-1.5 ${toneConfig.value}`}
+      >
+        {valueText}
+      </div>
+      <p className="text-xs text-muted-foreground leading-snug line-clamp-2">{hint}</p>
+      {clickable ? (
+        <p className="text-[10px] text-muted-foreground/60 pt-1.5 mt-1.5 border-t border-border/40">
+          Klick für Details ↓
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Klappbare Rechnungs-Status-Tabelle. Klick auf eine Status-Zeile lädt
+ * die zugehörigen Einzel-Rechnungen (Kunde, Projekt, Betrag, Datum)
+ * via /api/dashboard/invoice-status-details nach und zeigt sie als
+ * Detail-Block unter der Zeile.
+ */
+function InvoiceStatusBreakdown({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["statusBreakdown"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedStatus, setExpandedStatus] = useState<number | null>(null);
+  const [invoicesByStatus, setInvoicesByStatus] = useState<
+    Record<number, InvoiceDetailRow[]>
+  >({});
+  const [loadingStatus, setLoadingStatus] = useState<number | null>(null);
+
+  async function toggleStatus(statusCode: number) {
+    if (expandedStatus === statusCode) {
+      setExpandedStatus(null);
+      return;
+    }
+    setExpandedStatus(statusCode);
+    if (invoicesByStatus[statusCode]) return; // bereits geladen
+    setLoadingStatus(statusCode);
+    try {
+      const response = await fetch(
+        `/api/dashboard/invoice-status-details?department=${department}&status=${statusCode}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceDetailRow[];
+        };
+        setInvoicesByStatus((prev) => ({
+          ...prev,
+          [statusCode]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — die Detail-Tabelle bleibt leer, Header-Zeile bleibt.
+    } finally {
+      setLoadingStatus(null);
+    }
+  }
+
+  return (
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Rechnungs-Status · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Verteilung aller Rechnungen nach Hero-Status · Stornos saldiert
+          · Klick auf Status zeigt Einzel-Rechnungen
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedStatus === b.statusCode;
+              const isLoading = loadingStatus === b.statusCode;
+              const invoices = invoicesByStatus[b.statusCode];
+              return (
+                <Fragment key={b.statusCode}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-accent/40 border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                    onClick={() => toggleStatus(b.statusCode)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={`Rechnungen im Status ${b.label} anzeigen`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleStatus(b.statusCode);
+                      }
+                    }}
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="font-medium">{b.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.description}
+                        </p>
+                        {b.reversalCount > 0 ? (
+                          <p
+                            className="text-[10px] text-yellow-600"
+                            title="Stornorechnungen sind mit negativem Wert bereits in der Summe rechts saldiert."
+                          >
+                            davon {b.reversalCount} Storno
+                            {b.reversalCount === 1 ? "" : "s"}
+                            {" · "}
+                            {formatEur(b.reversalEur)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.totalEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.totalEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen mit diesem Status.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InvoiceDetailsTable({
+  invoices,
+  heroProjectLinkTemplate,
+  showAgeDays = false,
+}: {
+  invoices: (InvoiceDetailRow | InvoiceAgingRow)[];
+  heroProjectLinkTemplate: string | null;
+  /** Wenn true, wird hinter dem Datum zusätzlich "X Tg alt" gezeigt. */
+  showAgeDays?: boolean;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Rechnung</TableHead>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Datum</TableHead>
+          <TableHead className="py-2 text-right">Betrag</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {invoices.map((inv) => {
+          const ageDays =
+            showAgeDays && "ageDays" in inv ? inv.ageDays : null;
+          return (
+            <TableRow key={inv.invoiceId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <p className="font-mono text-xs font-semibold">
+                    {inv.invoiceNr ?? "–"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                    {inv.documentTypeName ?? inv.invoiceType ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={inv.projectMatchId}
+                    projectNumber={inv.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {inv.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {inv.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(inv.documentDate ?? inv.createdAtHero)}</p>
+                  {ageDays != null ? (
+                    <p className="text-[10px] opacity-70">{ageDays} Tg alt</p>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {inv.value === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  formatEur(inv.value)
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * Forderungs-Aging-Tabelle mit Klappmechanik wie der Status-Breakdown.
+ * Klick auf einen Alters-Bucket ruft /api/dashboard/invoice-aging-details
+ * und zeigt die einzelnen offenen Rechnungen im Bucket.
+ */
+function InvoiceAgingBreakdown({
+  department,
+  deptName,
+  buckets,
+  totalOpenCount,
+  totalOpenEur,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["aging"];
+  totalOpenCount: number;
+  totalOpenEur: number;
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [invoicesByBucket, setInvoicesByBucket] = useState<
+    Record<string, InvoiceAgingRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["aging"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (invoicesByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+      });
+      if (bucket.maxDays != null) {
+        params.set("maxDays", String(bucket.maxDays));
+      }
+      const response = await fetch(
+        `/api/dashboard/invoice-aging-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          invoices: InvoiceAgingRow[];
+        };
+        setInvoicesByBucket((prev) => ({
+          ...prev,
+          [key]: payload.invoices ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail — Detail-Tabelle bleibt leer.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  return (
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Forderungs-Aging · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Offene Rechnungen gruppiert nach Tagen seit Erstellung · Stornos
+          saldiert · Klick auf Bucket zeigt Einzel-Rechnungen
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Alter</TableHead>
+              <TableHead className="text-right">Anzahl</TableHead>
+              <TableHead className="text-right">Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const invoices = invoicesByBucket[b.bucket];
+              const hasItems = b.count > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      hasItems ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={hasItems ? () => toggleBucket(b) : undefined}
+                    role={hasItems ? "button" : undefined}
+                    tabIndex={hasItems ? 0 : undefined}
+                    aria-expanded={hasItems ? isExpanded : undefined}
+                    aria-label={
+                      hasItems
+                        ? `Rechnungen im Alters-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      hasItems
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        b.minDays >= 30
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.count.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatEur(b.totalEur)}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {hasItems ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Rechnungen…
+                          </div>
+                        ) : !invoices || invoices.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Rechnungen in diesem Alters-Bucket.
+                          </div>
+                        ) : (
+                          <InvoiceDetailsTable
+                            invoices={invoices}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                            showAgeDays
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalOpenCount.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpenEur)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Fälligkeits-Forecast: welche offenen Rechnungssummen werden nach
+ * Projekt-maturity_date wann zahlungswirksam. Buckets sind klappbar und
+ * zeigen die einzelnen Projekte mit Projekt-Nr, Kunde, Step, Fälligkeit
+ * und offener Rechnungssumme.
+ */
+function CashflowForecast({
+  department,
+  deptName,
+  buckets,
+  heroProjectLinkTemplate,
+}: {
+  department: Department;
+  deptName: string;
+  buckets: CashflowDto["forecast"];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const [expandedBucket, setExpandedBucket] = useState<string | null>(null);
+  const [projectsByBucket, setProjectsByBucket] = useState<
+    Record<string, ForecastProjectRow[]>
+  >({});
+  const [loadingBucket, setLoadingBucket] = useState<string | null>(null);
+
+  async function toggleBucket(bucket: CashflowDto["forecast"][number]) {
+    const key = bucket.bucket;
+    if (expandedBucket === key) {
+      setExpandedBucket(null);
+      return;
+    }
+    setExpandedBucket(key);
+    if (projectsByBucket[key]) return;
+    setLoadingBucket(key);
+    try {
+      const params = new URLSearchParams({
+        department,
+        minDays: String(bucket.minDays),
+        maxDays: String(bucket.maxDays),
+      });
+      const response = await fetch(
+        `/api/dashboard/cashflow-forecast-details?${params.toString()}`
+      );
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          projects: ForecastProjectRow[];
+        };
+        setProjectsByBucket((prev) => ({
+          ...prev,
+          [key]: payload.projects ?? [],
+        }));
+      }
+    } catch {
+      // Silent fail.
+    } finally {
+      setLoadingBucket(null);
+    }
+  }
+
+  const totalProjects = buckets.reduce((s, b) => s + b.projectCount, 0);
+  const totalOpen = buckets.reduce((s, b) => s + b.openEur, 0);
+
+  return (
+    <Card className="rounded-xl shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">Fälligkeits-Forecast · {deptName}</CardTitle>
+        <CardDescription className="text-xs">
+          Offene Rechnungssummen nach Projekt-Fälligkeit · Klick auf Bucket
+          zeigt einzelne Projekte
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fällig in</TableHead>
+              <TableHead className="text-right">Projekte</TableHead>
+              <TableHead className="text-right">Offene Summe (€)</TableHead>
+              <TableHead className="w-8" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {buckets.map((b) => {
+              const isExpanded = expandedBucket === b.bucket;
+              const isLoading = loadingBucket === b.bucket;
+              const projects = projectsByBucket[b.bucket];
+              const isOverdue = b.bucket === "Überfällig";
+              const clickable = b.projectCount > 0;
+              return (
+                <Fragment key={b.bucket}>
+                  <TableRow
+                    className={`border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                      clickable ? "cursor-pointer hover:bg-accent/40" : ""
+                    }`}
+                    onClick={clickable ? () => toggleBucket(b) : undefined}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    aria-expanded={clickable ? isExpanded : undefined}
+                    aria-label={
+                      clickable
+                        ? `Projekte im Forecast-Bucket ${b.bucket} anzeigen`
+                        : undefined
+                    }
+                    onKeyDown={
+                      clickable
+                        ? (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleBucket(b);
+                            }
+                          }
+                        : undefined
+                    }
+                    data-state={isExpanded ? "open" : "closed"}
+                  >
+                    <TableCell
+                      className={
+                        isOverdue
+                          ? "font-medium text-destructive"
+                          : b.minDays <= 14
+                          ? "font-medium text-orange-600"
+                          : "font-medium"
+                      }
+                    >
+                      {b.bucket}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.projectCount.toLocaleString("de-DE")}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {b.openEur === 0 ? (
+                        <span className="text-muted-foreground">0 €</span>
+                      ) : (
+                        formatEur(b.openEur)
+                      )}
+                    </TableCell>
+                    <TableCell className="w-8 text-muted-foreground">
+                      {clickable ? (
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded ? (
+                    <TableRow className="bg-muted/30">
+                      <TableCell colSpan={4} className="py-3">
+                        {isLoading ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center">
+                            Lade Projekte…
+                          </div>
+                        ) : !projects || projects.length === 0 ? (
+                          <div className="text-sm text-muted-foreground py-6 text-center border border-dashed rounded-md">
+                            Keine Projekte in diesem Bucket.
+                          </div>
+                        ) : (
+                          <ForecastProjectsTable
+                            projects={projects}
+                            heroProjectLinkTemplate={heroProjectLinkTemplate}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Gesamt</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {totalProjects.toLocaleString("de-DE")}
+              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {formatEur(totalOpen)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ForecastProjectsTable({
+  projects,
+  heroProjectLinkTemplate,
+}: {
+  projects: ForecastProjectRow[];
+  heroProjectLinkTemplate: string | null;
+}) {
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime())
+      ? "–"
+      : date.toLocaleDateString("de-DE");
+  };
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="py-2">Projekt</TableHead>
+          <TableHead className="py-2">Kunde</TableHead>
+          <TableHead className="py-2">Aktueller Step</TableHead>
+          <TableHead className="py-2">Fällig</TableHead>
+          <TableHead className="py-2 text-right">Offene Summe</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {projects.map((p) => {
+          const ageLabel =
+            p.daysUntil < 0
+              ? `${Math.abs(p.daysUntil)} Tg überfällig`
+              : p.daysUntil === 0
+              ? "heute"
+              : `in ${p.daysUntil} Tg`;
+          return (
+            <TableRow key={p.projectMatchId}>
+              <TableCell className="py-1.5">
+                <div className="space-y-0 leading-tight">
+                  <HeroProjectLink
+                    projectId={p.projectMatchId}
+                    projectNumber={p.projectNumber}
+                    linkTemplate={heroProjectLinkTemplate}
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                    {p.projectName ?? ""}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm text-muted-foreground">
+                <span className="truncate block max-w-[180px]">
+                  {p.customerName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-sm">
+                <span className="truncate block max-w-[200px]">
+                  {p.stepName ?? "–"}
+                </span>
+              </TableCell>
+              <TableCell className="py-1.5 text-xs whitespace-nowrap">
+                <div className="space-y-0 leading-tight">
+                  <p>{formatDate(p.maturityDate)}</p>
+                  <p
+                    className={`text-[10px] ${
+                      p.daysUntil < 0
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {ageLabel}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                {p.openAmount === 0 ? (
+                  <span className="text-muted-foreground">0 €</span>
+                ) : (
+                  <>
+                    {formatEur(p.openAmount)}
+                    {p.openCount > 0 ? (
+                      <span className="block text-[10px] text-muted-foreground">
+                        {p.openCount} RG
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}

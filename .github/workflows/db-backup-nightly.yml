@@ -1,0 +1,88 @@
+name: DB Backup Nightly
+
+# Nightly pg_dump der Supabase-DB -> Backblaze B2 (S3-kompatibel).
+# Kalter Cold-Backup als Safety-Net zusaetzlich zu Supabase-PITR.
+# Encrypted via GPG vor Upload.
+#
+# === SETUP (einmalig) ===
+# 1. Backblaze-Account anlegen (gratis 10 GB Storage)
+#    https://www.backblaze.com/sign-up/cloud-storage
+# 2. Bucket erstellen: "jumax-controlling-hub-backups"
+# 3. Application Key generieren mit Write-Access
+# 4. GitHub Secrets im Repo setzen (Settings -> Secrets -> Actions):
+#    - SUPABASE_DB_URL    = postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
+#    - B2_KEY_ID          = aus Backblaze Application Key
+#    - B2_APPLICATION_KEY = aus Backblaze Application Key
+#    - B2_BUCKET          = jumax-controlling-hub-backups
+#    - B2_ENDPOINT        = z.B. s3.eu-central-003.backblazeb2.com
+#    - GPG_PASSPHRASE     = irgendein langes Passwort fuer Symmetric Encryption
+#                          NICHT VERLIEREN — sonst Backup unwiederherstellbar
+#
+# Restore: dump runterladen -> gpg --decrypt -> psql
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # taeglich 02:00 UTC = 03:00/04:00 in Europa
+  workflow_dispatch: # manueller Trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Setup pg_dump (Postgres 16 Client)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo wget --quiet -O /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: pg_dump
+        env:
+          PGURL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          STAMP=$(date -u +%Y%m%d_%H%M%S)
+          pg_dump "$PGURL" \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-privileges \
+            --schema=public \
+            -f "dump_${STAMP}.sql"
+          ls -lh "dump_${STAMP}.sql"
+          echo "DUMP_FILE=dump_${STAMP}.sql" >> $GITHUB_ENV
+
+      - name: GPG encrypt
+        env:
+          PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$PASSPHRASE" \
+            --output "${DUMP_FILE}.gpg" \
+            "${DUMP_FILE}"
+          rm "${DUMP_FILE}"
+          ls -lh "${DUMP_FILE}.gpg"
+
+      - name: Upload to Backblaze B2 (S3-compatible)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: eu-central-003
+        run: |
+          aws s3 cp \
+            "${DUMP_FILE}.gpg" \
+            "s3://${{ secrets.B2_BUCKET }}/nightly/${DUMP_FILE}.gpg" \
+            --endpoint-url "https://${{ secrets.B2_ENDPOINT }}"
+
+      - name: Rotate (delete dumps > 30 days)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          AWS_DEFAULT_REGION: eu-central-003
+        run: |
+          # B2 macht Versioning - hier nur lokale Datei aufraeumen
+          rm -f "${DUMP_FILE}.gpg"
+          echo "Backup OK"
