@@ -27,9 +27,9 @@ const navItems: NavItem[] = [
   // Vorübergehend ausgeblendet:
   // { href: "/insights", label: "Insights", icon: BarChart3 },
   // { href: "/cash", label: "Cash", icon: Euro },
-  { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
+  // { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
-  { href: "/logbuch", label: "Logbuch", icon: BookOpen },
+  // { href: "/logbuch", label: "Logbuch", icon: BookOpen },
 ];
 
 export function MainNav() {
