@@ -24,8 +24,9 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/insights", label: "Insights", icon: BarChart3 },
-  { href: "/cash", label: "Cash", icon: Euro },
+  // Vorübergehend ausgeblendet:
+  // { href: "/insights", label: "Insights", icon: BarChart3 },
+  // { href: "/cash", label: "Cash", icon: Euro },
   { href: "/faelligkeiten", label: "Geplant", icon: CalendarClock },
   { href: "/aufgaben", label: "Aufgaben", icon: ListTodo },
   { href: "/logbuch", label: "Logbuch", icon: BookOpen },
