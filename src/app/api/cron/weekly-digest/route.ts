@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
           body: JSON.stringify({
             from:
               process.env.DIGEST_FROM_EMAIL ??
-              "Controlling Hub <onboarding@resend.dev>",
+              "Projektmanagement Demo <onboarding@resend.dev>",
             to: [recipient],
             subject: `Wochen-Digest · ${digest.rangeLabel}`,
             html,
@@ -155,6 +155,6 @@ function renderDigestHtml(
         : ""
     }
 
-    <p style="margin-top:32px;font-size:11px;color:#999">Generiert von JMX Controlling Hub · <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://jumax-controlling-hub.vercel.app"}/digest" style="color:#2563eb">Im Browser ansehen</a></p>
+    <p style="margin-top:32px;font-size:11px;color:#999">Generiert von Projektmanagement Demo · <a href="${process.env.NEXT_PUBLIC_APP_URL ?? "https://pm-beta-eight.vercel.app"}/digest" style="color:#2563eb">Im Browser ansehen</a></p>
   </body></html>`;
 }

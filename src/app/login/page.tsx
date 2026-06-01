@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: "Login · JMX Controlling Hub",
+  title: "Login · Projektmanagement Demo",
   description: "Passwort-geschütztes Controlling-Dashboard.",
 };
 
@@ -43,12 +43,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div className="relative mx-auto w-16 h-16">
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-foreground to-foreground/60 blur-md opacity-40" />
             <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-gradient-to-br from-foreground to-foreground/80 text-background shadow-lg">
-              <span className="text-3xl font-bold">J</span>
+              <span className="text-2xl font-bold">PM</span>
             </div>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">
-              JMX Controlling Hub
+              Projektmanagement Demo
             </h1>
             <p className="text-sm text-muted-foreground">
               Passwort eingeben um auf das Dashboard zuzugreifen
@@ -63,7 +63,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         {/* Footer */}
         <p className="text-center text-[11px] text-muted-foreground/60">
-          Jumax Elektrotechnik GmbH · Internes Tool
+          Projektmanagement Demo · Internes Tool
         </p>
       </div>
     </div>

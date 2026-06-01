@@ -12,7 +12,7 @@ import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 import { NewTaskDialog } from "@/components/aufgaben/new-task-dialog";
 
 export const metadata: Metadata = {
-  title: "Aufgaben | JMX",
+  title: "Aufgaben",
   description: "E-Mail-Aufgaben (n8n + Claude), Hero-Kommentare und Heizlast.",
 };
 

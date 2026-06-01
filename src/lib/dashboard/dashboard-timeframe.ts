@@ -224,7 +224,7 @@ export function getDashboardTimeframeLabel(
   }
 
   if (timeframe.mode === "jumax_week") {
-    return "Jumax-Woche (Fr → Do)";
+    return "Berichtswoche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {
@@ -264,7 +264,7 @@ export function getDashboardSnapshotContextLabel(
   }
 
   if (timeframe.mode === "jumax_week") {
-    return "letzten Snapshot der letzten Jumax-Woche (Fr → Do)";
+    return "letzten Snapshot der letzten Berichtswoche (Fr → Do)";
   }
 
   if (timeframe.mode === "14d") {

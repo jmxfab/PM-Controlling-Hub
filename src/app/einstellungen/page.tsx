@@ -11,7 +11,7 @@ import { getHeroApiKeyStatus } from "@/lib/settings/hero-settings";
 export const metadata: Metadata = {
   title: "Einstellungen",
   description:
-    "Hero-Schnittstelle, Sync-Status und API-Key-Verwaltung für den Controlling Hub.",
+    "Hero-Schnittstelle, Sync-Status und API-Key-Verwaltung für die Projektmanagement Demo.",
 };
 
 export const revalidate = 30;

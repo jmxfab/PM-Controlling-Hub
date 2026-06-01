@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -79,28 +78,11 @@ export function MainNav() {
           <Link
             href="/"
             className="group shrink-0 flex items-center gap-2 sm:gap-2.5 transition-transform hover:scale-[1.02] active:scale-95"
-            aria-label="Jumax Controlling · Startseite"
+            aria-label="Projektmanagement Demo · Startseite"
           >
-            <div className="relative">
-              <div
-                aria-hidden
-                className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-400/30 to-violet-500/30 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-              />
-              <Image
-                src="/jumax-logo.png"
-                alt="Jumax Logo"
-                width={72}
-                height={72}
-                priority
-                className="relative block w-12 h-12 sm:w-[72px] sm:h-[72px]"
-              />
-            </div>
-            <div className="hidden lg:flex flex-col leading-tight">
-              <span className="text-[15px] font-bold tracking-tight">
-                Controlling Hub
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-medium">
-                Jumax Elektrotechnik
+            <div className="flex flex-col leading-tight">
+              <span className="text-[15px] sm:text-base font-bold tracking-tight">
+                Projektmanagement Demo
               </span>
             </div>
           </Link>
@@ -142,7 +124,7 @@ export function MainNav() {
           {/* Mobile: aktive Page-Label statt Nav */}
           <div className="md:hidden flex-1 truncate text-[13px] font-semibold">
             {navItems.find((n) => pathname.startsWith(n.href))?.label ??
-              "Controlling Hub"}
+              "Projektmanagement Demo"}
           </div>
 
           {/* Right side: Settings + Logout */}

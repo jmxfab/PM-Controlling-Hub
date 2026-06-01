@@ -9,11 +9,11 @@ import { AiChatPanel } from "@/components/chat/ai-chat-panel";
 
 export const metadata: Metadata = {
   title: {
-    default: "JMX Controlling Hub",
-    template: "%s | JMX Controlling Hub",
+    default: "Projektmanagement Demo",
+    template: "%s | Projektmanagement Demo",
   },
   description:
-    "Controlling Dashboard für PV, Wärmepumpen und Haustechnik mit Hero- und Supabase-Anbindung.",
+    "Projektmanagement-Demo-Dashboard mit Hero- und Supabase-Anbindung.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "16x16" },

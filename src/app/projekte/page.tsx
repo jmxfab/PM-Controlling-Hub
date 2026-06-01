@@ -6,7 +6,7 @@ import { loadProjectPulse } from "@/lib/supabase/hero-project-activity";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 export const metadata: Metadata = {
-  title: "Projekt-Pulse | JMX",
+  title: "Projekt-Pulse",
   description:
     "Aktivste Projekte der letzten 60 Tage — zeigt was lebt und was stagniert.",
 };

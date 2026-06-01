@@ -21,13 +21,13 @@ export function DashboardInitialLoader() {
         <div className="relative flex h-16 w-16 items-center justify-center">
           <div className="absolute inset-0 animate-ping rounded-2xl bg-gradient-to-br from-blue-400 to-violet-500 opacity-30" />
           <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-foreground to-foreground/80 text-background shadow-xl">
-            <span className="text-2xl font-bold">J</span>
+            <span className="text-xl font-bold">PM</span>
           </div>
         </div>
 
         <div className="text-center space-y-1">
           <p className="text-base font-semibold tracking-tight">
-            JMX Controlling Hub
+            Projektmanagement Demo
           </p>
           <p className="text-xs text-muted-foreground">
             Daten werden aus Hero geladen…

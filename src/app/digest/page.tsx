@@ -11,8 +11,8 @@ import {
 import { loadWeeklyDigest } from "@/lib/digest/weekly-digest";
 
 export const metadata: Metadata = {
-  title: "Wochen-Digest | JMX",
-  description: "Was war letzte Jumax-Woche los — Top Mitarbeiter, Events, Projekte, Anomalien.",
+  title: "Wochen-Digest",
+  description: "Was war letzte Woche los — Top Mitarbeiter, Events, Projekte, Anomalien.",
 };
 
 // Jeden Mo morgen frisch — danach 6h Cache (Digest aendert sich kaum waehrend des Tages)
@@ -55,7 +55,7 @@ export default async function DigestPage() {
       <header className="space-y-1">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/60 dark:bg-blue-950/40 text-[11px] font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 ring-1 ring-blue-200/50 dark:ring-blue-900/50">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-subtle-glow" />
-          Letzte Jumax-Woche
+          Letzte Woche
         </div>
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
           Wochen-Digest

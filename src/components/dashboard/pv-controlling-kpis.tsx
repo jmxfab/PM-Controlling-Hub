@@ -76,13 +76,13 @@ const KPIS: KpiDef[] = [
   {
     key: "invoicesSent",
     title: "Rechnungen versendet",
-    description: "diese Jumax-Woche · status_code=200, exkl. Storno",
+    description: "diese Berichtswoche · status_code=200, exkl. Storno",
     icon: Receipt,
   },
   {
     key: "installations",
     title: "Gesamtmontagen",
-    description: "Termine: Gesamtmontage / AC / DC — diese Jumax-Woche",
+    description: "Termine: Gesamtmontage / AC / DC — diese Berichtswoche",
     icon: Hammer,
   },
   {

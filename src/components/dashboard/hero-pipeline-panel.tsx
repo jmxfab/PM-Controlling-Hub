@@ -264,7 +264,7 @@ export function HeroPipelinePanel({
           tone="good"
           icon={<CheckCircle2 className="h-4 w-4" />}
           hint="Fr 00:00 → Do 23:59"
-          explain="Projekte die in der letzten Jumax-Berichtswoche (Freitag 00:00 bis Donnerstag 23:59 der Vorwoche) auf Abgeschlossen/Archiviert gesetzt wurden. Quelle: Hero-Status-Historie, completion_date."
+          explain="Projekte die in der letzten Berichtswoche (Freitag 00:00 bis Donnerstag 23:59 der Vorwoche) auf Abgeschlossen/Archiviert gesetzt wurden. Quelle: Hero-Status-Historie, completion_date."
           onClick={() => openKpi("completed_last_week")}
         />
         <KpiTile
@@ -273,7 +273,7 @@ export function HeroPipelinePanel({
           tone="attention"
           icon={<ArrowDownRight className="h-4 w-4" />}
           hint="Fr 00:00 → heute"
-          explain="Projekte die seit letztem Freitag 00:00 (Beginn der aktuellen Jumax-Woche) in Hero neu angelegt wurden. Quelle: created_at aus Hero (nicht das Supabase-Sync-Datum)."
+          explain="Projekte die seit letztem Freitag 00:00 (Beginn der aktuellen Berichtswoche) in Hero neu angelegt wurden. Quelle: created_at aus Hero (nicht das Supabase-Sync-Datum)."
           onClick={() => openKpi("new_this_week")}
         />
         <KpiTile

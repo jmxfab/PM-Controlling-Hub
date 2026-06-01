@@ -181,19 +181,19 @@ export function DashboardShell({
             </span>
             <TabsList
               className="flex h-auto flex-wrap gap-1 bg-muted/70 p-1 rounded-lg"
-              title="Momentaufnahme + Jumax-Berichtswoche."
+              title="Momentaufnahme + Berichtswoche."
             >
               <TabsTrigger value="current" className="rounded-md">Jetzt</TabsTrigger>
               <TabsTrigger
                 value="jumax_week"
-                title="Jumax-Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
+                title="Berichtswoche: letzte komplette Woche Fr 00:00 → Do 23:59. Die laufende Woche wird bewusst nicht gezeigt — für Reporting mit kompletter Vergleichswoche."
                 className="group relative gap-1.5 rounded-md font-medium ring-1 ring-amber-500/40 bg-gradient-to-b from-amber-50 to-amber-100/60 text-amber-800 hover:ring-amber-500/70 hover:from-amber-100 hover:to-amber-200/70 dark:from-amber-500/10 dark:to-amber-600/5 dark:text-amber-300 dark:hover:from-amber-500/15 dark:hover:to-amber-600/10 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-400 data-[state=active]:via-orange-500 data-[state=active]:to-amber-600 data-[state=active]:text-white data-[state=active]:ring-amber-500/0 data-[state=active]:shadow-[0_4px_16px_-2px_hsl(35_95%_55%/0.45)] dark:data-[state=active]:shadow-[0_6px_22px_-4px_hsl(35_95%_55%/0.55)] transition-all duration-200"
               >
                 <CalendarRange
                   size={13}
                   className="opacity-80 group-data-[state=active]:opacity-100 transition-transform duration-300 group-data-[state=active]:rotate-6"
                 />
-                Jumax-Woche
+                Berichtswoche
                 <span
                   aria-hidden
                   className="hidden group-data-[state=active]:block absolute inset-0 rounded-md pointer-events-none ring-1 ring-inset ring-white/25 dark:ring-white/15"
@@ -300,12 +300,12 @@ function NavigatingOverlay() {
         <div className="relative flex h-16 w-16 items-center justify-center">
           <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
           <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <span className="text-xl font-bold">J</span>
+            <span className="text-xl font-bold">PM</span>
           </div>
         </div>
         <div className="text-center space-y-1">
           <p className="text-lg font-semibold tracking-tight">
-            JMX Controlling Hub
+            Projektmanagement Demo
           </p>
           <p className="text-sm text-muted-foreground">Tab wird geladen…</p>
         </div>
