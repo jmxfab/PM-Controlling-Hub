@@ -56,7 +56,7 @@ function pickProvider(): {
         baseURL: "https://api.aetherapi.dev/v1",
       }),
       // Aether-Modell-ID — kann ueber options.model uebersteuert werden.
-      defaultModel: "claude-haiku-4-5-20251001",
+      defaultModel: "kimi-k2.6",
       provider: "aether",
     };
   }
