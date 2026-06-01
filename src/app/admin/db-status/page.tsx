@@ -57,7 +57,7 @@ export default async function DbStatusPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight">DB-Status</h1>
         <p className="text-sm text-muted-foreground">
-          Supabase Postgres — Projekt oudamptxxncbaorjepqo
+          Supabase Postgres — Projekt xcgrxpowoxbrerltrttj
         </p>
       </header>
 

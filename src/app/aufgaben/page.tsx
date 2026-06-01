@@ -10,7 +10,6 @@ import {
 import { loadHeroComments } from "@/lib/supabase/hero-comments-queries";
 import { AufgabenView } from "@/components/aufgaben/aufgaben-view";
 import { NewTaskDialog } from "@/components/aufgaben/new-task-dialog";
-import { VoiceTaskDialog } from "@/components/aufgaben/voice-task-dialog";
 
 export const metadata: Metadata = {
   title: "Aufgaben | JMX",
@@ -80,7 +79,6 @@ export default async function AufgabenPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <VoiceTaskDialog />
           <NewTaskDialog />
         </div>
       </header>
