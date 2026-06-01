@@ -95,8 +95,6 @@ const HeizlastView = dynamic(
     ),
   },
 );
-import { SubtaskList } from "@/components/aufgaben/subtask-list";
-import { DelegateRemindForm } from "@/components/aufgaben/delegate-remind-form";
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
 import { ProjectHistoryPanel } from "@/components/aufgaben/project-history-panel";
 import { TaskComposer } from "@/components/aufgaben/task-composer";
@@ -2766,29 +2764,8 @@ function TaskCard({
                 projectName={t.hero_project_name ?? null}
               />
             )}
-            {/* Subtask-Checkliste — nur fuer handlungs-relevante Tabs.
-             *  NICHT bei Infos (reine Lese-Items, keine Action) und nicht
-             *  bei Hero-Items (read-only). */}
-            {t.source === "mail" && tab !== "infos" && (
-              <SubtaskList
-                taskId={t.id}
-                initialSubtasks={t.subtasks}
-                onSubtasksChange={onSubtasksChange}
-              />
-            )}
-            {/* Delegieren + Erinnerung — nur fuer Mail-Tasks, nicht Hero. */}
-            {t.source === "mail" && tab !== "infos" && (
-              <DelegateRemindForm
-                taskId={t.id}
-                currentAssignedTo={t.assigned_to}
-                currentRemindAt={t.remind_at}
-                onUpdated={onDelegationChange}
-                taskTitle={t.title}
-                taskBody={t.body ?? null}
-                senderEmail={t.sender ?? null}
-                heroProjectId={t.hero_project_id ?? null}
-              />
-            )}
+            {/* Subtask-Checkliste ("In Schritte zerlegen") + Delegieren bewusst
+             *  deaktiviert — Fokus auf direktes Antworten. */}
             {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern.
              *  - Mail-Task: KI-Antwort + Outlook-Reply + Notiz + Zwischenablage
              *  - Hero-Task: KI-Logbuch-Eintrag + In-Hero-Oeffnen + Notiz + Zwischenablage
@@ -2978,13 +2955,25 @@ function ActionButtons({
        */}
       {task.source_email_web_link ? (
         <>
-          <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
+          {mailto && (
+            <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
+              <a
+                href={mailto}
+                onClick={(e) => e.stopPropagation()}
+                title="Sofort auf die eingehende Mail antworten — öffnet einen vorbereiteten Antwort-Entwurf an den Absender"
+              >
+                <Reply size={13} />
+                Antworten
+              </a>
+            </Button>
+          )}
+          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
             <a
               href={task.source_email_web_link}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              title="Öffnet die Original-Mail in Outlook (neuer Tab) — von dort eingebauter Knopf zum Desktop-Sprung"
+              title="Öffnet die Original-Mail in Outlook (neuer Tab)"
             >
               <Reply size={13} />
               Mail öffnen
