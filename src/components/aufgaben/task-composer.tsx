@@ -520,7 +520,10 @@ export function TaskComposer({
         .replace(/outlook\.cloud\.microsoft/i, "outlook.office.com")
         .replace(/\/mail\/deeplink\/read\/[^?]+\?/i, "/owa/?");
       const webUrl = /viewmodel=/i.test(h) ? h : h + "&viewmodel=ReadMessageItem";
-      window.open(webUrl, "_blank"); // immer im Browser
+      // Fester Fenster-Name → wiederverwendet denselben Outlook-Tab statt
+      // bei jedem Klick einen neuen zu öffnen. Outlook bootet so nur EINMAL
+      // und bleibt für die nächsten Mails warm (kein erneuter Web-Kaltstart).
+      window.open(webUrl, "owaReply"); // immer im Browser, ein wiederverwendeter Tab
       flashOk(
         autoDone ? "Outlook wird geöffnet + erledigt" : "Outlook wird geöffnet",
       );

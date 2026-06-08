@@ -34,6 +34,12 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
+      <head>
+        {/* Outlook-Web früh anbinden, damit der „Per Outlook antworten"-Tab
+         *  schneller lädt (DNS/TLS/Connection stehen schon vorher). */}
+        <link rel="preconnect" href="https://outlook.office.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://outlook.office.com" />
+      </head>
       <body className="antialiased font-sans">
         <ThemeProvider
           attribute="class"
