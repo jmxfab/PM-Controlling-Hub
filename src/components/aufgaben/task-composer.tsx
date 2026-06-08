@@ -63,6 +63,8 @@ interface Props {
   source: "mail" | "hero";
   /** Bei „Per Outlook antworten" (nur source='mail'). Null wenn kein Sender. */
   mailto: string | null;
+  /** Web-Link der Original-Mail (OWA). Für „Per Outlook antworten" (Web). */
+  outlookWebLink?: string | null;
   /** Bei „In Hero oeffnen" (nur source='hero'). Deep-Link zum Projekt. */
   heroProjectHref?: string | null;
   /** Wenn gesetzt: aktiviert „Im Hero-Logbuch eintragen"-Button.
@@ -96,6 +98,7 @@ export function TaskComposer({
   taskId,
   source,
   mailto,
+  outlookWebLink,
   heroProjectHref,
   heroProjectLinked,
   taskTitle,
@@ -493,29 +496,31 @@ export function TaskComposer({
   }
 
   async function sendViaOutlook() {
-    if (!mailto) {
-      setError("Kein Absender — Outlook-Reply nicht möglich");
-      return;
-    }
-    const body = text.trim();
-    if (!body) {
-      setError("Mail-Text ist leer");
+    if (!outlookWebLink) {
+      setError("Kein Outlook-Link verfügbar");
       return;
     }
     setBusy("mail");
     setError(null);
     try {
-      // mailto-Link um body erweitern. Wenn der Caller bereits ?subject= etc.
-      // mitgegeben hat, append wir &body=… (URL-encoded).
-      const separator = mailto.includes("?") ? "&" : "?";
-      const finalLink = `${mailto}${separator}body=${encodeURIComponent(body)}`;
-      // Notiz als 'mailto' kind speichern fuer History
-      await fetch(`/api/mail-tasks/${taskId}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, kind: "mailto" }),
-      }).catch(() => {});
-      window.location.href = finalLink;
+      const body = text.trim();
+      if (body) {
+        // Text in Zwischenablage legen, damit er in der OWA-Antwort eingefügt
+        // werden kann, und als Notiz fuer die History speichern.
+        await navigator.clipboard?.writeText(body).catch(() => {});
+        await fetch(`/api/mail-tasks/${taskId}/notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body, kind: "mailto" }),
+        }).catch(() => {});
+      }
+      // Ziel-URL immer auf Web-Outlook normalisieren (kein Desktop, kein
+      // haengender cloud.microsoft-Deeplink).
+      const h = outlookWebLink
+        .replace(/outlook\.cloud\.microsoft/i, "outlook.office.com")
+        .replace(/\/mail\/deeplink\/read\/[^?]+\?/i, "/owa/?");
+      const webUrl = /viewmodel=/i.test(h) ? h : h + "&viewmodel=ReadMessageItem";
+      window.open(webUrl, "_blank"); // immer im Browser
       flashOk(
         autoDone ? "Outlook wird geöffnet + erledigt" : "Outlook wird geöffnet",
       );
@@ -810,14 +815,14 @@ export function TaskComposer({
           {/* Per Outlook antworten — bei Mail-Tasks immer sichtbar wenn Absender da ist.
            *  Bei Hero-verknuepften Tasks: Outline-Variante neben dem primaeren Logbuch-Button.
            *  Sonst: primaere Variante (Default-Style). */}
-          {source === "mail" && mailto && (
+          {source === "mail" && outlookWebLink && (
             <Button
               size="sm"
               variant={heroProjectLinked ? "outline" : "default"}
               className="h-8 gap-1.5"
               onClick={sendViaOutlook}
-              disabled={busy !== null || text.trim().length === 0}
-              title="Öffnet Outlook mit dem Text als Antwort"
+              disabled={busy !== null}
+              title="Öffnet die Mail im Web-Outlook zum Antworten (Text liegt in der Zwischenablage)"
             >
               {busy === "mail" ? (
                 <>

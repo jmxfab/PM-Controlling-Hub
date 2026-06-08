@@ -14,7 +14,6 @@ import {
   X,
   Mail,
   ChevronDown,
-  Reply,
   Check,
   Clock3,
   CalendarDays,
@@ -27,7 +26,6 @@ import {
   Search,
   Sparkles,
   Sun,
-  Flame,
   ArrowRight,
   Eye,
   EyeOff,
@@ -96,7 +94,6 @@ const HeizlastView = dynamic(
   },
 );
 import { SenderHistoryDialog } from "@/components/aufgaben/sender-history-dialog";
-import { ProjectHistoryPanel } from "@/components/aufgaben/project-history-panel";
 import { TaskComposer } from "@/components/aufgaben/task-composer";
 import { SortableTaskCard } from "@/components/aufgaben/sortable-task-card";
 import {
@@ -597,15 +594,6 @@ export function AufgabenView({
           <span className="flex-1 text-left">Inbox</span>
           <CountPill value={counts.inbox} highlight={counts.inbox > 0} />
         </TabsTrigger>
-        <TabsTrigger
-          value="rechnungen"
-          title="Rechnungen & Bestellungen"
-          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-        >
-          <Euro size={14} />
-          <span className="flex-1 text-left">Rechnungen</span>
-          <CountPill value={counts.rechnungen} />
-        </TabsTrigger>
         {/* Aufgeschoben: immer sichtbar (User-Wunsch) */}
         <TabsTrigger
           value="aufgeschoben"
@@ -625,15 +613,6 @@ export function AufgabenView({
           <Users2 size={14} />
           <span className="flex-1 text-left">Controlling</span>
           <CountPill value={counts.controlling} tone="teal" />
-        </TabsTrigger>
-        <TabsTrigger
-          value="heizlast"
-          title="Heizlast — Hero-Projekte im Heizlastberechnungs-Step"
-          className="justify-start gap-2 rounded-lg data-[state=active]:shadow-sm"
-        >
-          <Flame size={14} />
-          <span className="flex-1 text-left">Heizlast</span>
-          <CountPill value={heizlastProjects.length} />
         </TabsTrigger>
       </TabsList>
       </div>
@@ -673,13 +652,6 @@ export function AufgabenView({
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
-      <TabsContent value="rechnungen">
-        <MailTab
-          initial={{ entries: [], total: 0 }}
-          filter="rechnungen"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-        />
-      </TabsContent>
       <TabsContent value="aufgeschoben">
         <MailTab
           initial={{ entries: [], total: 0 }}
@@ -701,12 +673,6 @@ export function AufgabenView({
         <MailTab
           initial={{ entries: [], total: 0 }}
           filter="controlling"
-          heroProjectLinkTemplate={heroProjectLinkTemplate}
-        />
-      </TabsContent>
-      <TabsContent value="heizlast">
-        <HeizlastView
-          projects={heizlastProjects}
           heroProjectLinkTemplate={heroProjectLinkTemplate}
         />
       </TabsContent>
@@ -2094,28 +2060,15 @@ function MailTab({
                         <Check size={14} />
                         {selectedTask.status === "done" ? "Wieder offen" : "Erledigt"}
                       </Button>
-                      {selectedTask.source_email_web_link ? (
-                        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-                          <a
-                            href={selectedTask.source_email_web_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Original-Mail in Outlook öffnen"
-                          >
-                            <Reply size={14} /> Mail
-                          </a>
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5"
-                          onClick={() => snoozeBy(selectedTask, 3 * 60 * 60 * 1000)}
-                          title="3 Stunden zurückstellen"
-                        >
-                          <Clock3 size={14} /> +3 Std
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5"
+                        onClick={() => snoozeBy(selectedTask, 3 * 60 * 60 * 1000)}
+                        title="3 Stunden zurückstellen"
+                      >
+                        <Clock3 size={14} /> +3 Std
+                      </Button>
                     </div>
                   )}
                   </>
@@ -2755,15 +2708,6 @@ function TaskCard({
                 </div>
               );
             })()}
-            {/* Projektverlauf: laedt Logbuch + KI-Analyse auf Klick (lazy).
-             *  Ersetzt den alten ProjectActivityStrip (der auto-lud). */}
-            {t.hero_project_id && (
-              <ProjectHistoryPanel
-                taskId={t.id}
-                projectNumber={t.hero_project_number ?? null}
-                projectName={t.hero_project_name ?? null}
-              />
-            )}
             {/* Subtask-Checkliste ("In Schritte zerlegen") + Delegieren bewusst
              *  deaktiviert — Fokus auf direktes Antworten. */}
             {/* Composer: Antwort tippen / KI-Entwurf / Notiz speichern.
@@ -2775,6 +2719,7 @@ function TaskCard({
                 taskId={t.id}
                 source={t.source}
                 mailto={mailto}
+                outlookWebLink={t.source_email_web_link ?? null}
                 heroProjectHref={
                   t.hero_project_id && heroProjectLinkTemplate
                     ? heroProjectLinkTemplate.replace(
@@ -2943,67 +2888,8 @@ function ActionButtons({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Primaer-Aktion: Mail oeffnen
-       * Strategie fuer Mac M365 (neues Outlook):
-       * 1. webLink ist 100% zuverlaessig — oeffnet die exakte Mail im
-       *    neuen Browser-Tab in OWA. Das neue Mac-Outlook IST OWA-basiert,
-       *    also funktional dasselbe wie Desktop-App.
-       * 2. In OWA gibt es oben rechts den "In Outlook oeffnen"-Button
-       *    der den User korrekt zur Mac-Desktop-App weiterleitet.
-       * 3. Optional: ms-outlook:// Desktop-Link daneben (funktioniert auf
-       *    Windows mit Click-to-Run, auf Mac wackelig).
-       */}
-      {task.source_email_web_link ? (
-        <>
-          {mailto && (
-            <Button asChild size="sm" variant="default" className="h-8 gap-1.5">
-              <a
-                href={mailto}
-                onClick={(e) => e.stopPropagation()}
-                title="Sofort auf die eingehende Mail antworten — öffnet einen vorbereiteten Antwort-Entwurf an den Absender"
-              >
-                <Reply size={13} />
-                Antworten
-              </a>
-            </Button>
-          )}
-          <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-            <a
-              href={task.source_email_web_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title="Öffnet die Original-Mail in Outlook (neuer Tab)"
-            >
-              <Reply size={13} />
-              Mail öffnen
-            </a>
-          </Button>
-          {desktopLink && (
-            <a
-              href={desktopLink}
-              onClick={(e) => e.stopPropagation()}
-              className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline self-center"
-              title="Direkt im Outlook Desktop oeffnen (funktioniert nur wenn ms-outlook:// Protocol-Handler registriert ist)"
-            >
-              Desktop ↗
-            </a>
-          )}
-        </>
-      ) : mailto ? (
-        <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-          <a
-            href={mailto}
-            onClick={(e) => e.stopPropagation()}
-            title="Alte Task ohne Outlook-Link — öffnet neuen Mail-Entwurf"
-          >
-            <Reply size={13} />
-            Antworten (mailto)
-          </a>
-        </Button>
-      ) : null}
-
-      <div className="h-5 w-px bg-border" />
+      {/* Mail-/Antwort-Buttons hier bewusst entfernt — Antworten läuft über
+       *  den Composer („Im Logbuch antworten" / „Per Outlook antworten"). */}
 
       {/* Status-Toggle: bei Infos = "Gelesen", sonst "Erledigt" */}
       <Button
