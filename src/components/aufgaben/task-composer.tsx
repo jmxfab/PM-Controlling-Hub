@@ -532,33 +532,6 @@ export function TaskComposer({
     }
   }
 
-  /** Sofort-Variante: öffnet den nativen Mail-Client (Outlook Desktop / Mail)
-   *  per mailto-Reply — kein Web-Boot, praktisch instant. */
-  async function sendViaNative() {
-    if (!mailto) {
-      setError("Kein Absender — nativer Reply nicht möglich");
-      return;
-    }
-    setError(null);
-    try {
-      const body = text.trim();
-      const finalLink = body
-        ? `${mailto}${mailto.includes("?") ? "&" : "?"}body=${encodeURIComponent(body)}`
-        : mailto;
-      if (body) {
-        await fetch(`/api/mail-tasks/${taskId}/notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body, kind: "mailto" }),
-        }).catch(() => {});
-      }
-      window.location.href = finalLink;
-      if (autoDone) onActionCompleted?.();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Fehler beim Öffnen");
-    }
-  }
-
   return (
     <div
       className="rounded-xl border bg-card/50 p-3 space-y-2"
@@ -861,19 +834,6 @@ export function TaskComposer({
                 </>
               )}
             </Button>
-          )}
-
-          {/* Sofort-Variante: nativer Mail-Client (instant, kein Web-Boot). */}
-          {source === "mail" && mailto && (
-            <button
-              type="button"
-              onClick={sendViaNative}
-              disabled={busy !== null}
-              className="self-center text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-50"
-              title="Sofort im nativen Mail-Programm (Outlook Desktop / Mail) antworten — kein Web-Laden"
-            >
-              Desktop ↗
-            </button>
           )}
         </div>
 
